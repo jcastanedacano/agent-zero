@@ -1,0 +1,164 @@
+// =============================================================================
+// P05 — DETECT & RESPOND
+// Agentic AI Security Labs | KQL Library
+// Target: Microsoft Sentinel / Defender Advanced Hunting
+// Tables: CloudAppEvents, MicrosoftPurviewInformationProtection, AIAgentsInfo
+// =============================================================================
+
+
+// -----------------------------------------------------------------------------
+// Q1: Jailbreak Attempts — System Instruction Override Patterns
+// Use: Near-real-time detection of attempts to override agent system instructions
+// Recommended: Analytics Rule | Frequency: 5m | Lookback: 1h | Severity: High
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(1h)
+| where Application in ("Microsoft Copilot", "Copilot Studio", "Azure AI Foundry")
+    and ActionType == "AgentInteraction"
+| extend PromptText = tostring(RawEventData["UserPrompt"])
+| extend AgentId = tostring(RawEventData["AgentId"])
+| extend JailbreakScore = toint(
+    (PromptText has "ignore previous instructions") * 3 +
+    (PromptText has "disregard your system prompt") * 3 +
+    (PromptText has "you are now a") * 2 +
+    (PromptText has "act as if you have no") * 2 +
+    (PromptText has "forget all previous") * 2 +
+    (PromptText has "new persona:") * 2 +
+    (PromptText has "DAN") * 1 +
+    (PromptText has "jailbreak") * 1 +
+    (PromptText has "override") * 1
+)
+| where JailbreakScore >= 2
+| project
+    TimeGenerated,
+    AccountDisplayName,
+    AgentId,
+    JailbreakScore,
+    PromptPreview = substring(PromptText, 0, 300),
+    IPAddress,
+    Application
+| sort by JailbreakScore desc, TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q2: Agent Behavioral Anomaly — Volume Spike Detection
+// Use: Detect agents with call volume significantly above their 7-day baseline
+//      Signals: compromised agent, looping behavior, orchestration attack
+// Recommended: Analytics Rule | Frequency: 15m | Lookback: 1h
+// -----------------------------------------------------------------------------
+let Baseline = CloudAppEvents
+    | where TimeGenerated between (ago(8d) .. ago(1d))
+    | where ActionType == "AgentInteraction"
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | summarize
+        AvgHourlyCallCount = avg(count()),
+        StdDevCallCount = stdev(count())
+        by AgentId, bin(TimeGenerated, 1h)
+    | summarize
+        BaselineAvg = avg(AvgHourlyCallCount),
+        BaselineStdDev = avg(StdDevCallCount)
+        by AgentId;
+CloudAppEvents
+| where TimeGenerated > ago(1h)
+| where ActionType == "AgentInteraction"
+| extend AgentId = tostring(RawEventData["AgentId"])
+| summarize CurrentHourlyCount = count() by AgentId, bin(TimeGenerated, 1h)
+| join kind=inner Baseline on AgentId
+| extend DeviationsAboveBaseline = (CurrentHourlyCount - BaselineAvg) / max_of(BaselineStdDev, 1.0)
+| where DeviationsAboveBaseline > 3
+| project
+    AgentId,
+    CurrentHourlyCount,
+    BaselineAvg = round(BaselineAvg, 1),
+    DeviationsAboveBaseline = round(DeviationsAboveBaseline, 1),
+    TimeGenerated,
+    RiskNote = "Agent call volume exceeds 3 standard deviations above 7-day baseline"
+| sort by DeviationsAboveBaseline desc
+
+
+// -----------------------------------------------------------------------------
+// Q3: Highly Confidential Document Access by Agent — Off-Hours
+// Use: Detect agent accessing sensitive labeled documents outside business hours
+//      Combine with P04-Q3 for full data protection coverage
+// Recommended: Analytics Rule | Frequency: 15m | Severity: High
+// -----------------------------------------------------------------------------
+MicrosoftPurviewInformationProtection
+| where TimeGenerated > ago(1d)
+| where Activity in ("FileAccessed", "FileDownloaded")
+    and LabelName has_any ("Highly Confidential", "Restricted", "Secret")
+| extend HourOfDay = datetime_part("Hour", TimeGenerated)
+| extend IsOffHours = HourOfDay < 7 or HourOfDay > 20
+| extend IsWeekend = dayofweek(TimeGenerated) in (0, 6)
+| extend IsAgentAccess = UserAgent has_any ("agent", "copilot", "assistant", "bot", "power-automate")
+| where (IsOffHours or IsWeekend) and IsAgentAccess
+| project
+    TimeGenerated,
+    UserId,
+    ObjectId,
+    LabelName,
+    Activity,
+    HourOfDay,
+    IsWeekend,
+    SiteUrl,
+    RiskNote = "Sensitive document accessed by agent outside business hours"
+| sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q4: Structural False Negative Detection — Controls That Detect But Don't Block
+// Use: Audit your own detection coverage — identify rules firing without enforcement
+//      If an alert fires repeatedly for the same entity with no remediation, it's a false negative pattern
+// -----------------------------------------------------------------------------
+SecurityIncident
+| where TimeGenerated > ago(30d)
+| where Title has_any ("agent", "copilot", "AI interaction")
+| summarize
+    IncidentCount = count(),
+    FirstIncident = min(TimeGenerated),
+    LastIncident = max(TimeGenerated),
+    StatusHistory = make_set(Status)
+    by Title, IncidentProviderName
+| extend NeverClosed = not(StatusHistory has "Closed")
+| extend RepeatAlerts = IncidentCount > 3
+| where NeverClosed or RepeatAlerts
+| project
+    Title,
+    IncidentProviderName,
+    IncidentCount,
+    FirstIncident,
+    LastIncident,
+    StatusHistory,
+    RiskNote = case(
+        NeverClosed and RepeatAlerts, "Recurring alert never closed — likely no enforcement action",
+        NeverClosed, "Alert never closed — verify enforcement is in place",
+        "High repeat rate — review if enforcement is effective"
+    )
+| sort by IncidentCount desc
+
+
+// -----------------------------------------------------------------------------
+// Q5: Agent Token Revocation Audit — Verify Enforcement Actions Completed
+// Use: Confirm that playbook enforcement actions (token revocation) actually executed
+//      If jailbreak alert fired but no revocation appears, enforcement failed
+// -----------------------------------------------------------------------------
+AuditLogs
+| where TimeGenerated > ago(7d)
+| where OperationName in (
+    "Revoke refresh tokens for user",
+    "Delete service principal",
+    "Update service principal",
+    "Remove member from role"
+)
+| extend RevokedEntity = tostring(TargetResources[0].displayName)
+| extend RevokedBy = tostring(InitiatedBy.user.userPrincipalName)
+| extend InitiatedByApp = tostring(InitiatedBy.app.displayName)
+| extend IsAutomated = isnotempty(InitiatedByApp) and isempty(RevokedBy)
+| summarize
+    RevocationCount = count(),
+    LastRevocation = max(TimeGenerated),
+    AutomatedCount = countif(IsAutomated == true),
+    ManualCount = countif(IsAutomated == false)
+    by OperationName
+| extend AutomationRate = round(100.0 * AutomatedCount / RevocationCount, 1)
+| project OperationName, RevocationCount, AutomatedCount, ManualCount, AutomationRate, LastRevocation
+| sort by RevocationCount desc

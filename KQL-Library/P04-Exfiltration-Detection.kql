@@ -1,0 +1,138 @@
+// =============================================================================
+// P04 — PROTECT DATA
+// Agentic AI Security Labs | KQL Library
+// Target: Microsoft Sentinel / Defender Advanced Hunting
+// Tables: CloudAppEvents, MicrosoftPurviewInformationProtection, OfficeActivity
+// =============================================================================
+
+
+// -----------------------------------------------------------------------------
+// Q1: High-Volume Agent Access to SharePoint — Potential Bulk Data Retrieval
+// Use: Detect agents reading large volumes of files in short windows
+//      Threshold: >100 operations in 10 minutes (adjust per baseline)
+// Recommended: Use as Analytics Rule with 10-minute frequency
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(1d)
+| where Application == "Microsoft SharePoint Online"
+    and ActionType in ("FileDownloaded", "FileAccessed", "FilePreviewed")
+| extend UserAgent = tostring(RawEventData["UserAgent"])
+| where UserAgent has_any ("agent", "copilot", "assistant", "power-automate")
+| summarize
+    OperationCount = count(),
+    FileList = make_set(ObjectName, 20),
+    FirstEvent = min(TimeGenerated),
+    LastEvent = max(TimeGenerated)
+    by AccountDisplayName, bin(TimeGenerated, 10m)
+| where OperationCount > 100
+| extend DurationSeconds = datetime_diff('second', LastEvent, FirstEvent)
+| project
+    AccountDisplayName,
+    OperationCount,
+    DurationSeconds,
+    FileList,
+    FirstEvent,
+    LastEvent,
+    RiskNote = "Agent bulk access — verify against expected retrieval scope"
+
+
+// -----------------------------------------------------------------------------
+// Q2: Sensitive Data in Agent Prompts — DLP Policy Matches
+// Use: Identify prompts containing sensitive information types (SIT)
+//      Requires Purview DLP policy with AI interactions workload enabled
+// -----------------------------------------------------------------------------
+MicrosoftPurviewInformationProtection
+| where TimeGenerated > ago(7d)
+| where Activity == "DLPRuleMatch"
+    and Workload == "AIInteractions"
+| extend SensitiveTypes = tostring(SensitiveInfoTypeData)
+| extend PolicyName = tostring(PolicyDetails[0].PolicyName)
+| extend MatchedRule = tostring(PolicyDetails[0].Rules[0].RuleName)
+| summarize
+    MatchCount = count(),
+    LastMatch = max(TimeGenerated),
+    AffectedUsers = dcount(UserId)
+    by SensitiveTypes, PolicyName, MatchedRule
+| sort by MatchCount desc
+| project PolicyName, MatchedRule, SensitiveTypes, MatchCount, AffectedUsers, LastMatch
+
+
+// -----------------------------------------------------------------------------
+// Q3: Agent Access to Unlabeled Documents — Corpus Without Classification
+// Use: Find agents reading documents without sensitivity labels applied
+//      These are oversharing candidates — data the agent should not index
+// -----------------------------------------------------------------------------
+MicrosoftPurviewInformationProtection
+| where TimeGenerated > ago(7d)
+| where Activity in ("FileAccessed", "FileDownloaded")
+| where isempty(LabelId) or LabelName == ""
+| extend AccessedBy = tostring(UserId)
+| extend IsAgentAccess = UserAgent has_any ("agent", "copilot", "assistant", "bot")
+| where IsAgentAccess == true
+| summarize
+    UnlabeledAccesses = count(),
+    DocumentList = make_set(ObjectId, 10),
+    LastAccess = max(TimeGenerated)
+    by AccessedBy, SiteUrl
+| sort by UnlabeledAccesses desc
+| project AccessedBy, SiteUrl, UnlabeledAccesses, DocumentList, LastAccess
+
+
+// -----------------------------------------------------------------------------
+// Q4: External Connector Data Egress — Agent Sending Data Out
+// Use: Detect agents sending data to external endpoints via connectors
+//      This is the "silent exfiltration" vector — HTTPS to legitimate-looking endpoints
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(7d)
+| where Application == "Microsoft Power Platform"
+    and ActionType == "ConnectorActionExecuted"
+| extend ConnectorName = tostring(RawEventData["ConnectorName"])
+| extend TargetEndpoint = tostring(RawEventData["TargetUrl"])
+| extend PayloadSize = toint(RawEventData["ResponseSizeBytes"])
+| where isnotempty(TargetEndpoint)
+    and TargetEndpoint !has "microsoft.com"
+    and TargetEndpoint !has "azure.com"
+| summarize
+    EgressEvents = count(),
+    TotalPayloadBytes = sum(PayloadSize),
+    EndpointList = make_set(TargetEndpoint, 10),
+    LastEgress = max(TimeGenerated)
+    by ConnectorName, AccountDisplayName
+| sort by TotalPayloadBytes desc
+| extend TotalPayloadMB = round(toreal(TotalPayloadBytes) / 1048576, 2)
+| project ConnectorName, AccountDisplayName, EgressEvents, TotalPayloadMB, EndpointList, LastEgress
+
+
+// -----------------------------------------------------------------------------
+// Q5: Prompt Injection Indicators — Repeated Anomalous Prompt Patterns
+// Use: Identify patterns consistent with prompt injection in agent interactions
+//      Focus: unusual instruction sequences, role override attempts
+// Note: Pattern list is indicative — tune to your environment's prompt baseline
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(7d)
+| where Application in ("Microsoft Copilot", "Copilot Studio")
+    and ActionType == "AgentInteraction"
+| extend PromptText = tostring(RawEventData["UserPrompt"])
+| extend HasInjectionPattern = PromptText has_any (
+    "ignore previous instructions",
+    "disregard your system prompt",
+    "you are now",
+    "act as if",
+    "forget all previous",
+    "new instructions:",
+    "override:",
+    "system:",
+    "[[",
+    "]]"
+)
+| where HasInjectionPattern == true
+| summarize
+    InjectionAttempts = count(),
+    FirstAttempt = min(TimeGenerated),
+    LastAttempt = max(TimeGenerated),
+    PromptSamples = make_set(substring(PromptText, 0, 200), 3)
+    by AccountDisplayName, IPAddress
+| sort by InjectionAttempts desc
+| project AccountDisplayName, IPAddress, InjectionAttempts, FirstAttempt, LastAttempt, PromptSamples
