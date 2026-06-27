@@ -145,9 +145,8 @@ Verificar que ningún sistema externo siga usando las keys antes de revocar.
 - [ ] API keys anteriores invalidadas
 - [ ] Test de llamada exitoso con nuevo auth mode
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Subscription {workspace-name}: `{subscription-id}` | RG: {resource-group} | centralus
-- Key Vault `{kv-name}` disponible para secretos que no puedan eliminarse aún
-- `{service-principal}` ya usa managed identity — usar como referencia de implementación
-- Lokka-Microsoft MCP: puede gestionar role assignments ARM (`2022-04-01`) pero no managed identity creation — usar Azure CLI
+- La creación de managed identities requiere Azure CLI o Bicep/ARM — Graph API no soporta la creación directa de managed identities de usuario asignado
+- Para migrar de client secret a managed identity: crear la MI, asignar los roles equivalentes, actualizar la configuración del agente, verificar funcionamiento y luego revocar el secret — nunca revocar antes de verificar
+- `sp-*` (service principals con secret) deben ser reemplazados progresivamente; priorizar los que tienen permisos de escritura sobre `Mail`, `Files` o `Directory`

@@ -131,11 +131,9 @@ y `PurviewAuditLog`.
 - [ ] Documentos de output de agentes muestran label aplicado
 - [ ] Watermark visible en documentos etiquetados
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Workbook Purview Compliance en {workspace-name} para monitorear cobertura de labels
-- Graph API beta endpoint para labels: `/beta/informationProtection/policy/labels`
-  — verificar disponibilidad antes de usar en producción
-- Auto-labeling puede tardar hasta 24h en procesar archivos existentes
-- Para demo: crear documento de prueba con datos sintéticos tipo tarjeta de crédito
-  y verificar que auto-labeling lo clasifica correctamente
+- Graph API beta endpoint para labels: `/beta/informationProtection/policy/labels` — verificar disponibilidad y estabilidad antes de usar en scripts de producción
+- Auto-labeling puede tardar hasta 24 horas en procesar archivos existentes en SharePoint — no asumir cobertura inmediata al activar la policy
+- Para validar auto-labeling: crear un documento de prueba con datos sintéticos tipo tarjeta de crédito y confirmar que la label se aplica automáticamente dentro de las 24h
+- Priorizar el etiquetado manual de sitios SharePoint usados como fuentes de conocimiento de agentes antes de habilitar retrieval

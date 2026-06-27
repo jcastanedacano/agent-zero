@@ -153,12 +153,9 @@ Logic App → Add action → Approvals → Start and wait for an approval
 - [ ] Notificación llega al canal Teams AISOC-Alertas
 - [ ] Log de acciones de contención disponible en Logic App run history
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Lokka-Microsoft MCP puede ejecutar el Graph API de revocación y bloqueo de SP
-- Power Platform API para deshabilitar agentes Copilot Studio requiere token de PP Admin
-- Para el canal Teams: crear `AISOC-Alertas` en el equipo de seguridad de contoso.com
-- La Logic App debe tener managed identity con los roles:
-  - Graph API: `Application.ReadWrite.All` (para deshabilitar SP)
-  - Sentinel: `Microsoft Sentinel Responder`
-- Usar `{storage-account}` para preservar evidencia forense si se requiere retención > 90 días
+- La Logic App necesita una managed identity con los siguientes roles asignados: `Application.ReadWrite.All` en Graph API (para deshabilitar el SP del agente) y `Microsoft Sentinel Responder` en el workspace
+- Power Platform Admin API requiere token de servicio separado para deshabilitar agentes de Copilot Studio — no reutilizar el token de Graph API
+- Para el canal de notificaciones: crear un canal Teams dedicado para alertas AISOC antes de desplegar el playbook
+- Preservar evidencia forense en un storage account con retención mínima de 90 días antes de revocar tokens — la revocación elimina la posibilidad de auditar sesiones activas

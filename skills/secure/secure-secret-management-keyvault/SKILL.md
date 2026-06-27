@@ -129,10 +129,9 @@ O via Event Grid + Logic App para notificación al equipo de seguridad.
 - [ ] Fechas de expiración configuradas en todos los secretos
 - [ ] Alerta de rotación configurada
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- `{kv-name}` disponible — usar para agentes del lab
-- API version Key Vault ARM: `2023-07-01` (validada con Lokka-Microsoft MCP)
-- `enable-rbac-authorization` debe estar en true para usar role assignments;
-  si el KV usa access policies (modelo legacy), migrar antes
-- Lokka-Microsoft MCP funciona para ARM CRUD sobre Key Vault
+- API version Key Vault ARM recomendada: `2023-07-01`
+- `enable-rbac-authorization` debe estar en `true` para usar role assignments en el Key Vault; si el KV usa access policies (modelo legacy), migrar al modelo RBAC antes de asignar roles a agentes
+- La rotación automática de secrets requiere que el agente use la URL de versión neutra (sin `-{version}` al final) para que Key Vault resuelva siempre a la versión activa más reciente
+- Usar la convención de nombres `{agente}-{ambiente}-{tipo}` para secrets: ej. `sales-agent-prod-graph-secret`

@@ -126,11 +126,8 @@ Monitorear durante primera semana con queries en Sentinel.
 - [ ] Alertas de compliance configuradas para el equipo de seguridad
 - [ ] Endpoint DLP activo si los agentes depositan en dispositivos locales
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Workbook Purview Compliance disponible para monitorear DLP matches
-- Para demo: crear archivo con datos sintéticos de tarjeta de crédito en SharePoint
-  y verificar que la policy bloquea compartición externa
-- Endpoint DLP requiere MDE onboarded — verificar estado de dispositivos en {workspace-name}
-- La Regla 3 (volumen alto) puede generar falsos positivos en usuarios que hacen
-  búsquedas amplias — ajustar umbral según baseline del tenant
+- Endpoint DLP requiere dispositivos onboarded en Microsoft Defender for Endpoint (MDE) — verificar estado de onboarding antes de habilitar este vector de protección
+- La regla de volumen alto puede generar falsos positivos en usuarios que realizan búsquedas amplias — ajustar el umbral de `FileCount > 50` según el baseline de actividad normal del tenant
+- Para validar la policy: crear un archivo con datos sintéticos (ej. número de tarjeta de crédito ficticio) en SharePoint y verificar que la policy genera alert en DLP Alerts antes de activar el modo Block

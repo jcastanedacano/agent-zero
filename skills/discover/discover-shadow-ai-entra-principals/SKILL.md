@@ -83,8 +83,8 @@ App roles (sin usuario) son más peligrosos que delegated — el agente actúa s
 - [ ] Owners de aplicaciones documentados
 - [ ] SPs sin actividad reciente marcados para revisión
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Tenant contoso.com — usar Lokka-Microsoft MCP para Graph API calls directos
-- AuditLogs-EntraID conector activo en {workspace-name} — aprovechar para correlación
-- Sign-in logs disponibles en Sentinel para detectar SPs con actividad anómala
+- Usar Graph Explorer (graph.microsoft.com) o una aplicación con `Application.Read.All` para ejecutar las llamadas de API de este workflow
+- El conector de AuditLogs de Entra ID debe estar activo en Sentinel para la correlación de eventos de creación de SPs
+- Sign-in logs de SPs están disponibles en `AADServicePrincipalSignInLogs` en Sentinel — usar para detectar actividad anómala post-inventario

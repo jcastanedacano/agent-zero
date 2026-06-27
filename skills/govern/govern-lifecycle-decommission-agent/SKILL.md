@@ -113,9 +113,8 @@ Registrar en log:
 - [ ] Service principal eliminado (GET retorna 404)
 - [ ] Entrada en log de governance creada
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- En contoso.com: no eliminar SPs de producción del lab — usar agentes de prueba
-- Lokka-Microsoft MCP funciona para DELETE en Graph API service principals
-- Verificar que el SP no sea compartido con otras aplicaciones antes de eliminar
-- El Workbook AI Agents Governance Dashboard v2.0 puede mostrar agentes inactivos
+- No eliminar SPs de producción durante pruebas — usar agentes de prueba dedicados para validar el proceso de descomisión
+- Verificar que el SP no sea compartido con otras aplicaciones antes de eliminarlo: `GET /servicePrincipals/{id}/appRoleAssignedTo` para ver todas las asignaciones
+- Graph API `DELETE /servicePrincipals/{id}` elimina el SP inmediatamente — el proceso es irreversible; documentar el estado antes de proceder

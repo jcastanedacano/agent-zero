@@ -127,13 +127,9 @@ Esto aplica las políticas IB a SharePoint y OneDrive además de Teams.
 - [ ] IB habilitado en SharePoint/OneDrive
 - [ ] Monitoreo activo en Sentinel
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- IB requiere licencia M365 E5 Compliance — verificar disponibilidad en contoso.com
-- **Limitación crítica de Lokka-Microsoft MCP**: no alcanza Security & Compliance
-  PowerShell endpoints — IB debe configurarse con PowerShell directo
-- Los segmentos de agentes AI requieren que los SPs tengan atributos de Entra
-  que permitan filtrarlos (DisplayName convention o extensión de directorio)
-- IB en SharePoint puede tardar hasta 24h en propagarse completamente
-- Para demo sin licencia E5: mostrar la arquitectura y PowerShell commands
-  sin ejecutar en el tenant de lab
+- Information Barriers requiere licencia M365 E5 Compliance o Microsoft 365 E5 — verificar disponibilidad antes de comenzar la implementación
+- IB en SharePoint puede tardar hasta 24 horas en propagarse completamente después de habilitar la policy — planificar la ventana de implementación con anticipación
+- Los segmentos de agentes AI requieren que los SPs tengan atributos de Entra que permitan filtrarlos — usar convención de nombres en `DisplayName` o extensiones de directorio para identificarlos
+- Information Barriers no se puede configurar via Graph API en todos los escenarios — usar Security & Compliance PowerShell para la configuración inicial

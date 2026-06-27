@@ -128,10 +128,9 @@ Content-Type: application/json
 - [ ] Sign-in logs muestran bloqueos desde IPs externas
 - [ ] Sin impacto en accesos legítimos de agentes
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Error conocido `AADSTS500011`: resource principal no existe en el tenant —
-  verificar SP con GET antes de crear la policy
-- En contoso.com: mantener CA de agentes en report-only en el lab salvo demo explícita
-- Blueprint-level CA (aplicar a grupos de SPs) escala mejor que per-instance
-- Lokka-Microsoft MCP: funciona para Graph API CRUD de CA policies
+- Error conocido `AADSTS500011`: el resource principal no existe en el tenant — verificar que el SP del agente existe con `GET /servicePrincipals/{id}` antes de crear la policy de CA
+- Mantener las CA policies de agentes en modo report-only durante al menos 7 días para identificar falsos positivos antes de pasar a enforce
+- Blueprint-level CA (aplicar a grupos de SPs via `includeAgentIdServicePrincipals`) escala mejor que per-instance — usar este patrón desde el inicio
+- `grantControls: mfa` es inválido para identidades de agente — usar únicamente `block` o `sessionControls`

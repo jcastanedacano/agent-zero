@@ -113,10 +113,8 @@ PurviewAuditLog
 - [ ] Al menos una política de AI Hub creada
 - [ ] Eventos visibles en Sentinel (`PurviewAuditLog` tiene filas recientes)
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Conector Purview activo en {workspace-name} — verificar que `PurviewAuditLog` tiene datos
-- Workbook "Purview Compliance" disponible en {workspace-name} para visualización
-- AI Hub es preview — funcionalidades pueden cambiar; validar contra MS Learn antes de documentar
-- Si AI Hub no está disponible en el tenant: usar `MicrosoftDataLossPrevention` table
-  como proxy para interacciones con datos sensibles
+- Verificar que el conector de Purview Audit esté activo en Sentinel — sin él, `PurviewAuditLog` no tendrá datos para las queries de monitoreo
+- AI Hub está en preview — validar las funcionalidades contra la documentación de Microsoft Learn antes de documentarlas en runbooks de producción, ya que pueden cambiar entre versiones
+- Si AI Hub no está disponible en el tenant: usar `MicrosoftDataLossPrevention` como tabla alternativa para correlacionar interacciones con datos sensibles

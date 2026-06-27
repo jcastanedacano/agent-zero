@@ -89,9 +89,8 @@ Ejecutar queries en `queries/sentinel-inventory.kql`.
 - [ ] Clasificación de riesgo por agente
 - [ ] Agentes con acceso a datos sensibles identificados
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Conector CopilotStudio activo en {workspace-name} — usar Query 1 en `queries/`
-- Conector Foundry_Agents también activo — ver skill `discover-enumerate-foundry-agents`
-- Workbook "AI Agents Governance Dashboard v2.0" disponible para visualizar resultados
-- Agent Builder agents no aparecen en Requests — verificar siempre en PP Admin directamente
+- Activar el conector de Copilot Studio en Sentinel para que las queries de inventario retornen datos en tiempo real
+- Los agentes creados via Agent Builder (M365 Copilot) no aparecen en Copilot Studio Requests — verificar siempre directamente en Power Platform Admin center para tener el inventario completo
+- Combinar esta skill con `discover-enumerate-foundry-agents` para cubrir el landscape completo de agentes cloud

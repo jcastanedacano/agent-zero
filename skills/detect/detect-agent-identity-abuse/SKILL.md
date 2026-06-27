@@ -101,11 +101,9 @@ información del risk register del Pilar 1.
 - [ ] Incident de prueba: autenticar SP desde IP externa y verificar alerta
 - [ ] Agent spawning: crear SP manualmente desde contexto de SP y verificar detección
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- `AADServicePrincipalSignInLogs` requiere Entra ID P2 o Sentinel data connector activo
-- Conector AuditLogs-EntraID activo en {workspace-name} — usar para agent spawning detection
-- Para impossible travel: los SPs de agentes en Azure rara vez tienen IPs variables —
-  cualquier cambio de IP es sospechoso por definición
-- Agent spawning es el vector de mayor riesgo en arquitecturas multi-agent:
-  un agente comprometido puede crear sub-agentes persistentes
+- `AADServicePrincipalSignInLogs` requiere Entra ID P2 o el data connector de Entra ID activo en Sentinel
+- Para impossible travel en service principals: los SPs de agentes en Azure rara vez tienen IPs variables — cualquier cambio de IP geolocation es sospechoso por definición
+- Agent spawning es el vector de mayor riesgo en arquitecturas multi-agent: un agente comprometido puede crear sub-agentes persistentes con permisos heredados
+- Correlacionar con `AuditLogs` en Sentinel para detectar creación de nuevos SPs en el mismo intervalo que el agente comprometido

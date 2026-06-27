@@ -100,9 +100,8 @@ Habilitar auditoría de prompts para correlación con Sentinel.
 - [ ] Alertas de compliance configuradas
 - [ ] AI Hub habilitado (si licencia disponible)
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Purview connector activo en {workspace-name} — DLP events visibles en Sentinel
-- La creación de auto-labeling policies vía API tiene limitaciones; usar Compliance Portal para configuración inicial
-- Para demo: usar datos sintéticos en formato de tarjeta de crédito para trigger de DLP
-- Workbook Purview Compliance disponible en {workspace-name} para visualizar policy matches
+- El conector de Purview en Sentinel debe estar activo para que los eventos DLP sean visibles en las queries KQL
+- La creación de auto-labeling policies vía API tiene limitaciones en preview — usar el Compliance Portal para la configuración inicial y luego gestionar via API para actualizaciones
+- Para validar la policy DLP sin datos reales: usar datos sintéticos en formato de tarjeta de crédito en un prompt de prueba — confirmar que la policy genera el evento en DLP Alerts antes de pasar a producción

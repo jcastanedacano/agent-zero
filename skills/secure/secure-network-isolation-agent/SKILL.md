@@ -155,11 +155,8 @@ Menos control de red pero más pragmático sin licencias adicionales.
 - [ ] Test de llamada al endpoint exitoso desde dentro de VNet
 - [ ] Test de llamada desde internet falla (expected)
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- {workspace-name} lab: VNet puede no estar configurada — crear si es necesario para demo
-- `allow_only_approved_outbound` puede tardar hasta 30 minutos en propagarse
-- Private Endpoint requiere DNS privado zone para resolver correctamente:
-  `privatelink.api.azureml.ms` y `privatelink.notebooks.azure.net`
-- Para demo sin VNet real: mostrar la config de `publicNetworkAccess: Disabled`
-  y documentar el private endpoint como control a implementar
+- `allow_only_approved_outbound` en Azure AI Foundry puede tardar hasta 30 minutos en propagarse — verificar el estado antes de asumir que el control está activo
+- Private Endpoint requiere zona DNS privada para resolver correctamente: `privatelink.api.azureml.ms` y `privatelink.notebooks.azure.net`
+- En entornos sin VNet configurada: comenzar con `publicNetworkAccess: Disabled` en los recursos de Foundry como primer paso, y planificar la VNet y Private Endpoints como implementación posterior

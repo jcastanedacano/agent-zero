@@ -107,10 +107,9 @@ UEBA genera `BehaviorAnalytics` table con scores de anomalía por entidad.
 - [ ] Test: modificar artificialmente el volumen de llamadas de un agente de prueba
   y verificar que genera incident
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- `BehaviorAnalytics` table requiere UEBA habilitado en Sentinel — verificar configuración
-- Para agentes con poco historial: usar lookback de 7 días en lugar de 14
-- Las reglas de anomalía tienen tasa de falsos positivos más alta que las de firma —
-  ajustar umbrales según el comportamiento real del tenant
-- Si Foundry Agents no tiene suficientes datos: aplicar solo a CopilotStudio_CL inicialmente
+- `BehaviorAnalytics` (UEBA) requiere habilitación explícita en Sentinel — verificar en Settings → UEBA antes de usar la tabla
+- Para agentes con poco historial (< 7 días de datos): usar lookback de 7 días en lugar de 14 para el baseline
+- Las reglas de anomalía tienen tasa de falsos positivos más alta que las de firma — ajustar umbrales contra el comportamiento real del tenant antes de pasar de Test a Enforced
+- Comenzar con un solo tipo de agente (ej. Copilot Studio) para validar el baseline antes de extender a todos los agentes

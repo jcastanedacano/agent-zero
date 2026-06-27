@@ -111,8 +111,8 @@ hayan eludido el proceso. Cualquier discrepancia = incidente de shadow AI.
 - [ ] Proceso operacional documentado en runbook
 - [ ] Auditoría mensual calendarizada
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- En contoso.com: Agent 365 puede no estar completamente configurado en lab — verificar
-- Para demo: mostrar gap Registry vs Requests con agente de prueba creado via Agent Builder
-- Power Platform DLP es el control más efectivo para Agent Builder en entornos enterprise
+- Verificar que Agent 365 esté configurado en el tenant antes de habilitar el flujo de aprobación — el registro central no está activo por defecto en todos los tenants M365
+- Para demostrar el gap del bypass de Agent Builder: crear un agente via Agent Builder y comparar su estado en Agent 365 Registry vs. Copilot Studio Requests — no aparecerá en el flujo de aprobación
+- Power Platform DLP es el control compensatorio más efectivo para mitigar el bypass de Agent Builder en entornos enterprise donde no se puede restringir la licencia

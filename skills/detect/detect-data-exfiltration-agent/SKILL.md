@@ -92,13 +92,9 @@ Purview AI Hub → Policies → Create policy
 - [ ] Incident de prueba generado con acceso masivo simulado
 - [ ] Playbook de contención vinculado a las reglas (ver skill siguiente)
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- PurviewAuditLog conector activo — usar para correlación DLP en Query 4
-- Para simular exfiltración: crear carpeta de prueba en SharePoint con 60+ archivos
-  y acceder todos via script en < 30 minutos
-- El vector de email relay requiere que el SP del agente tenga Mail.Send asignado;
-  verificar en skill `secure-least-privilege-agent-identity` que ese permiso
-  esté revocado si no es necesario
-- Si connector HTTP no tiene logging: el Vector 3 no es detectable — usar NSG flow
-  logs como proxy (ver skill `secure-network-isolation-agent`)
+- Activar el conector de Purview Audit en Sentinel para habilitar la correlación DLP en las queries de exfiltración
+- Para simular exfiltración en un tenant de prueba: crear una carpeta en SharePoint con 60+ archivos de prueba y accederlos todos en < 30 minutos para disparar la regla de volumen
+- El vector de email relay requiere que el SP del agente tenga `Mail.Send` asignado — verificar con la skill `secure-least-privilege-agent-identity` que ese permiso esté revocado si no es necesario
+- Si el conector HTTP del agente no tiene logging habilitado: usar NSG flow logs como proxy para detectar egress (ver skill `secure-network-isolation-agent`)

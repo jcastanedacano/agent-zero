@@ -79,8 +79,8 @@ Orden de prioridad:
 - [ ] Conectores HTTP genéricos con URL destino documentada (o sin documentar = riesgo Alto)
 - [ ] Input listo para skill de govern/protect
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- En contoso.com los agentes de demo usan conectores limitados — tabla puede ser pequeña
-- Para demo real: importar datos de cliente desde CSV y usar como lookup table en KQL
-- Purview AI Hub (si habilitado) puede proveer clasificación automática de datos accedidos
+- En tenants con pocos agentes de demo, la tabla de conectores puede tener datos limitados — usar datos reales de producción o datos sintéticos importados via CSV como lookup table en KQL
+- Purview AI Hub (si habilitado en el tenant) puede proveer clasificación automática de los datos accedidos por conectores — complementa este inventario
+- Priorizar la clasificación de conectores externos (HTTP genérico, webhooks) sobre los conectores internos de Microsoft que ya tienen cobertura DLP nativa

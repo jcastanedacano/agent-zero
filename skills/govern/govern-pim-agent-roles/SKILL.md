@@ -102,10 +102,8 @@ como alternativa a PIM nativo.
 - [ ] Alerta en Sentinel para activaciones fuera de horario configurada
 - [ ] Test de activación realizado exitosamente
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Entra ID P2 disponible en contoso.com MVP sponsorship — PIM habilitado
-- Para Workload ID Premium: verificar si está incluido en el sponsorship
-- Lokka-Microsoft MCP: puede gestionar role assignments pero PIM eligible
-  assignments requieren endpoint específico (`/roleManagement/directory/roleEligibilityScheduleRequests`)
-- Para demo: mostrar diferencia entre assignment permanente y activación JIT
+- PIM para identidades de workload (Workload ID Premium) requiere licencia separada de Entra ID P2 — verificar disponibilidad en el tenant antes de diseñar el flujo JIT
+- PIM eligible assignments para service principals usan el endpoint `/roleManagement/directory/roleEligibilityScheduleRequests` — diferente al endpoint de assignment permanente
+- Para demo de valor JIT: mostrar la diferencia entre un agente con rol permanente (siempre activo) vs. un agente con rol eligible (activo solo durante la ventana aprobada)

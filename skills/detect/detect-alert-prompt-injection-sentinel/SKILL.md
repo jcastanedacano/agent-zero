@@ -122,9 +122,9 @@ Si no hay tráfico real, inyectar evento de prueba via DCR:
 - [ ] Playbook ejecuta sin errores en modo test
 - [ ] Tiempo de detección < 10 minutos desde evento
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Conector CopilotStudio activo (bundle David Alonso) — verificar tabla antes del deploy
-- Conector Foundry_Agents también activo — incluir en la unión
-- Sentinel API version: `2022-12-01-preview` para SecurityInsights
-- Workbook AI Agents Governance Dashboard v2.0 para visualizar incidents
+- Verificar que las tablas `CopilotStudio_CL` y `FoundryAgents_CL` existen y tienen datos antes de crear la regla de analítica — una regla sobre una tabla vacía genera errores de deployment
+- Sentinel API version recomendada: `2022-12-01-preview` para recursos SecurityInsights
+- Incident grouping por `UserId` + `AgentName` reduce ruido significativamente en entornos con múltiples usuarios probando el mismo agente
+- En producción: ajustar `JailbreakScore` mínimo según la tasa de falsos positivos observada en los primeros 30 días

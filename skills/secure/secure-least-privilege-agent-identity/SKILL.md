@@ -116,10 +116,9 @@ Monitorear errores de autorización en los primeros 3-5 días.
 - [ ] Funcionalidad del agente verificada
 - [ ] Monitoreo de errores de autorización activo (3-5 días post-cambio)
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- Lokka-Microsoft MCP funciona para Graph API GET/DELETE/POST en permissions
-- `Sites.Selected` requiere que el Graph SP de SharePoint Online esté disponible en el tenant
-- Para obtener el `appRoleId` de `Sites.Selected`:
-  `GET /servicePrincipals?$filter=displayName eq 'SharePoint'&$select=appRoles`
-- Cambios en permisos pueden tardar hasta 60 minutos en propagarse
+- `Sites.Selected` es la alternativa de least privilege a `Sites.ReadWrite.All` para agentes que solo necesitan acceder a sitios específicos de SharePoint — implementar por defecto en agentes nuevos
+- Para obtener el `appRoleId` de `Sites.Selected`: `GET /servicePrincipals?$filter=displayName eq 'SharePoint'&$select=appRoles`
+- Los cambios en permisos de Graph API pueden tardar hasta 60 minutos en propagarse — no asumir aplicación inmediata en pipelines de CI/CD
+- Usar Graph Explorer (graph.microsoft.com) para validar el scope mínimo necesario antes de asignar permisos en producción

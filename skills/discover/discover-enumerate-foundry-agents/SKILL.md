@@ -84,8 +84,8 @@ Ejecutar `queries/sentinel-foundry.kql` para ver actividad de inferencia recient
 - [ ] Managed identity status por endpoint
 - [ ] Endpoints con `auth_mode: key` marcados para remediación
 
-## Notas {workspace-name}
+## Notas de implementación
 
-- RG {resource-group} en centralus — todos los recursos del lab
-- Conector Foundry_Agents activo en Sentinel — usar queries/ para correlación
-- Si no hay proyectos Foundry activos en {workspace-name}, usar datos sintéticos via Custom Log
+- Si no hay proyectos de Azure AI Foundry activos en el tenant: usar datos sintéticos via Custom Log ingestion para validar las queries antes de desplegar en producción
+- El conector de Foundry en Sentinel debe estar activo para que las queries KQL retornen datos — verificar en Data Connectors antes de crear analytics rules
+- Los proyectos de Foundry heredan permisos del resource group — revisar los role assignments a nivel de RG además de los del proyecto
