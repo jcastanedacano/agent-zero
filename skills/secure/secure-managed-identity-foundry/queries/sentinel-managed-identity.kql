@@ -1,0 +1,50 @@
+// skill: secure-managed-identity-foundry
+// workspace: {workspace-name} | conectores: AzureActivity, FoundryAgents_CL
+
+// ── Query 1: Llamadas a endpoints Foundry con auth type (key vs token) ────────
+let lookback = 7d;
+FoundryAgents_CL
+| where TimeGenerated > ago(lookback)
+| summarize
+    CallCount   = count(),
+    KeyAuthCalls  = countif(AuthMode_s == "key"),
+    TokenAuthCalls = countif(AuthMode_s == "aad_token")
+  by AgentId_s, EndpointName_s
+| extend KeyAuthPct = round(100.0 * KeyAuthCalls / CallCount, 1)
+| where KeyAuthCalls > 0
+| extend Risk = "Endpoint con llamadas via API key — migrar a managed identity"
+| order by KeyAuthCalls desc
+
+// ── Query 2: Role assignments recientes en managed identities de agentes ───────
+AzureActivity
+| where TimeGenerated > ago(lookback)
+| where OperationNameValue has "roleAssignments/write"
+| where ActivityStatusValue == "Success"
+| extend
+    AssignedPrincipal = tostring(parse_json(Properties).requestbody),
+    Scope             = tostring(parse_json(Properties).resource)
+| where AssignedPrincipal has_any ("mi-agent", "managedidentit")
+| project TimeGenerated, Caller, Scope, AssignedPrincipal
+| order by TimeGenerated desc
+
+// ── Query 3: Accesos a Storage / Key Vault por managed identity ───────────────
+AzureActivity
+| where TimeGenerated > ago(lookback)
+| where ResourceProviderValue in ("MICROSOFT.STORAGE", "MICROSOFT.KEYVAULT")
+| where ActivityStatusValue == "Success"
+| where Caller has "managedidentity" or Caller has "@contoso.com" == false
+| summarize
+    AccessCount = count(),
+    Operations  = make_set(OperationNameValue, 5)
+  by Caller, ResourceProviderValue, Resource
+| order by AccessCount desc
+
+// ── Query 4: Detección de secretos potencialmente hardcoded en logs ───────────
+// Buscar patrones de API keys en campos de log (falsos positivos probables — revisar manualmente)
+FoundryAgents_CL
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties_s) matches regex @"[Aa]pi[_-]?[Kk]ey|APIKEY|api-key"
+    or tostring(Headers_s) matches regex @"Ocp-Apim-Subscription-Key"
+| project TimeGenerated, AgentId_s, EndpointName_s
+| extend Alert = "Posible API key en headers — verificar manualmente"
+| order by TimeGenerated desc

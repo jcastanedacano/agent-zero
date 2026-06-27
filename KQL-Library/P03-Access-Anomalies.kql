@@ -1,0 +1,119 @@
+// =============================================================================
+// P03 — SECURE ACCESS
+// Agentic AI Security Labs | KQL Library
+// Target: Microsoft Sentinel / Defender Advanced Hunting
+// Tables: CloudAppEvents, AADServicePrincipalSignInLogs, AuditLogs
+// =============================================================================
+
+
+// -----------------------------------------------------------------------------
+// Q1: Agents Accessing Resources Outside Their Declared Scope
+// Use: Detect permission scope expansion — agents accessing more than intended
+// -----------------------------------------------------------------------------
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(7d)
+| where ServicePrincipalName has "agent" or AppDisplayName has "agent"
+| summarize
+    ResourcesAccessed = make_set(ResourceDisplayName),
+    AccessCount = count(),
+    LastAccess = max(TimeGenerated)
+    by ServicePrincipalId, ServicePrincipalName, AppId
+| extend ResourceCount = array_length(ResourcesAccessed)
+| where ResourceCount > 3   // Adjust threshold based on expected agent scope
+| sort by ResourceCount desc
+| project ServicePrincipalName, AppId, ResourceCount, ResourcesAccessed, AccessCount, LastAccess
+
+
+// -----------------------------------------------------------------------------
+// Q2: Identity Laundering — Actions Attributed to User Instead of Agent
+// Use: Find operations where an agent acted under user identity
+//      Audit trail shows user, but request originated from agent process
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(7d)
+| where ActionType in ("FileDownloaded", "FileAccessed", "FileCopied", "SensitiveFileRead")
+| extend UserAgent = tostring(RawEventData["UserAgent"])
+| extend RequestSource = tostring(RawEventData["RequestSource"])
+| where UserAgent has_any ("agent", "copilot", "assistant", "bot")
+    and AccountType == "Regular"   // Logged as human user, not service principal
+| project
+    TimeGenerated,
+    AccountDisplayName,
+    ActionType,
+    ObjectName,
+    UserAgent,
+    RequestSource,
+    IPAddress,
+    RiskNote = "Action attributed to user account but originated from agent process"
+| sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q3: Unreviewed OAuth Consent Grants — Agents Accumulating Permissions
+// Use: Identify OAuth consent grants to agent service principals without review
+// -----------------------------------------------------------------------------
+AuditLogs
+| where TimeGenerated > ago(30d)
+| where OperationName == "Consent to application"
+| extend ConsentedApp = tostring(TargetResources[0].displayName)
+| extend ConsentedBy = tostring(InitiatedBy.user.userPrincipalName)
+| extend ScopesGranted = tostring(TargetResources[0].modifiedProperties[0].newValue)
+| extend IsHighPrivilege = ScopesGranted has_any (
+    "Files.ReadWrite.All",
+    "Mail.ReadWrite",
+    "Directory.ReadWrite.All",
+    "Sites.FullControl.All",
+    "User.ReadWrite.All"
+)
+| where IsHighPrivilege == true
+| project
+    TimeGenerated,
+    ConsentedApp,
+    ConsentedBy,
+    ScopesGranted,
+    IsHighPrivilege,
+    RiskNote = "High-privilege OAuth consent — verify agent scope is intentional"
+| sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q4: Agent Sign-ins from Unexpected Locations or Times
+// Use: Baseline deviation — agents operating outside normal parameters
+// Note: Adjust expected hours and locations for your environment
+// -----------------------------------------------------------------------------
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(7d)
+| where ServicePrincipalName has "agent" or AppDisplayName has "agent"
+| extend HourOfDay = datetime_part("Hour", TimeGenerated)
+| extend IsOffHours = HourOfDay < 6 or HourOfDay > 22
+| where IsOffHours == true
+| summarize
+    OffHoursSignIns = count(),
+    EarliestSignIn = min(TimeGenerated),
+    LatestSignIn = max(TimeGenerated),
+    LocationSet = make_set(Location)
+    by ServicePrincipalName, AppId
+| sort by OffHoursSignIns desc
+| project ServicePrincipalName, AppId, OffHoursSignIns, EarliestSignIn, LatestSignIn, LocationSet
+
+
+// -----------------------------------------------------------------------------
+// Q5: PIM Activation Patterns for Agent Roles — Anomalous Elevation
+// Use: Detect unusual PIM activation patterns for agent-associated privileged roles
+// -----------------------------------------------------------------------------
+AuditLogs
+| where TimeGenerated > ago(7d)
+| where OperationName == "Add member to role in PIM requested (permanent)"
+    or OperationName == "Add member to role completed (PIM activation)"
+| extend ActivatedRole = tostring(TargetResources[0].displayName)
+| extend ActivatedBy = tostring(InitiatedBy.user.userPrincipalName)
+| extend TargetPrincipal = tostring(TargetResources[1].displayName)
+| where TargetPrincipal has "agent"
+    or ActivatedRole has_any ("Global Admin", "Privileged Role", "Security Admin")
+| project
+    TimeGenerated,
+    ActivatedRole,
+    TargetPrincipal,
+    ActivatedBy,
+    OperationName
+| sort by TimeGenerated desc

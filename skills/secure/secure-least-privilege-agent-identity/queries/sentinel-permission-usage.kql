@@ -1,0 +1,54 @@
+// skill: secure-least-privilege-agent-identity
+// workspace: {workspace-name} | conectores: AuditLogs-EntraID, AADServicePrincipalSignInLogs
+
+// ── Query 1: Recursos accedidos por SP (verificar permisos realmente usados) ──
+let lookback = 30d;
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(lookback)
+| where ResultType == 0
+| summarize
+    CallCount     = count(),
+    LastAccess    = max(TimeGenerated),
+    UniqueScopes  = make_set(Scopes, 20)
+  by ServicePrincipalName, ResourceDisplayName
+| order by CallCount desc
+
+// ── Query 2: SPs con permisos .All que solo acceden a recursos específicos ────
+// Candidatos claros a reducción de privilegio
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(lookback)
+| where ResultType == 0
+| where Scopes has ".All"
+| summarize
+    ResourcesAccessed = dcount(ResourceDisplayName),
+    Resources         = make_set(ResourceDisplayName, 5),
+    CallCount         = count()
+  by ServicePrincipalName, Scopes
+| where ResourcesAccessed <= 2  // accede a muy pocos recursos a pesar del .All
+| extend Recommendation = "Candidato a scope reduction — usa permiso .All pero accede a recursos limitados"
+| order by CallCount desc
+
+// ── Query 3: Errores de autorización post-reducción de permisos ───────────────
+// Usar después de revocar permisos para detectar funcionalidad rota
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(3d)
+| where ResultType in (65001, 65004, 70011, 90094)  // consent / permission errors
+| project
+    TimeGenerated,
+    ServicePrincipalName,
+    ResourceDisplayName,
+    ResultType,
+    ResultDescription
+| order by TimeGenerated desc
+
+// ── Query 4: Consent grants otorgados en los últimos 90 días (auditoría) ──────
+AuditLogs
+| where TimeGenerated > ago(90d)
+| where OperationName has "Consent to application"
+| extend
+    ConsentedApp  = tostring(TargetResources[0].displayName),
+    ConsentedBy   = tostring(InitiatedBy.user.userPrincipalName),
+    Scopes        = tostring(AdditionalDetails)
+| project TimeGenerated, ConsentedApp, ConsentedBy, Scopes
+| extend HasWriteScopes = Scopes has_any ("Write", "ReadWrite", "Manage")
+| order by HasWriteScopes desc, TimeGenerated desc

@@ -1,0 +1,51 @@
+// skill: discover-inventory-agents-copilot-studio
+// workspace: {workspace-name} | tenant: contoso.com
+// prerequisito: verificar que CopilotStudio_CL tiene datos antes de ejecutar
+//   union CopilotStudio_CL | summarize count() — debe retornar > 0
+
+// ── Query 1: Agentes creados en los últimos 30 días ──────────────────────────
+let lookback = 30d;
+CopilotStudio_CL
+| where TimeGenerated > ago(lookback)
+| where EventType_s in ("AgentCreated", "BotCreated")
+    or OperationName has "CreateBot"
+| extend Props = parse_json(Properties_s)
+| project
+    TimeGenerated,
+    AgentName      = tostring(Props.displayName),
+    CreatedBy      = tostring(Props.createdBy.user.email),
+    EnvironmentId  = tostring(Props.environmentId),
+    HasConnectors  = isnotempty(tostring(Props.connections))
+| extend RiskLevel = case(
+    HasConnectors == true,                   "Alto",
+    CreatedBy !endswith "@contoso.com",      "Alto",
+    "Medio"
+)
+| order by TimeGenerated desc
+
+// ── Query 2: Consentimientos recientes (proxies de nuevos agentes) ────────────
+AuditLogs
+| where TimeGenerated > ago(lookback)
+| where OperationName has_any ("Consent to application", "Add service principal")
+| where TargetResources has_any ("CopilotStudio", "PowerVirtualAgents", "Copilot")
+| project
+    TimeGenerated,
+    InitiatedBy = tostring(InitiatedBy.user.userPrincipalName),
+    TargetApp   = tostring(TargetResources[0].displayName),
+    OperationName
+| order by TimeGenerated desc
+
+// ── Query 3: Shadow AI — agentes sin evento de aprobación correlacionado ─────
+// Requiere tabla de agentes aprobados exportada de Agent 365 → Requests
+// Sustituir los valores de ejemplo por los reales del tenant
+let approved_agents = datatable(ApprovedName: string)[
+    // Poblar desde export de Agent 365 Requests tab
+    "__placeholder__"
+];
+CopilotStudio_CL
+| where TimeGenerated > ago(lookback)
+| where EventType_s == "AgentCreated"
+| extend AgentName = tostring(parse_json(Properties_s).displayName)
+| join kind=leftanti approved_agents on $left.AgentName == $right.ApprovedName
+| project TimeGenerated, AgentName, CreatedBy = tostring(parse_json(Properties_s).createdBy.user.email)
+| extend Classification = "Shadow AI — sin aprobación documentada"

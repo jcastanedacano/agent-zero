@@ -1,0 +1,65 @@
+// skill: protect-sensitivity-labels-ai-outputs
+// workspace: {workspace-name} | conectores: Purview, MicrosoftDataLossPrevention
+
+// ── Query 1: Archivos etiquetados por auto-labeling policy en últimos 30 días ─
+let lookback = 30d;
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where OperationName has_any ("SensitivityLabelApplied", "SensitivityLabelUpdated", "FileSensitivityLabelApplied")
+| extend
+    FileName  = tostring(parse_json(AuditData).SourceFileName),
+    Label     = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelId),
+    AppliedBy = tostring(parse_json(AuditData).UserId),
+    Site      = tostring(parse_json(AuditData).SiteUrl)
+| project TimeGenerated, FileName, Label, AppliedBy, Site
+| order by TimeGenerated desc
+
+// ── Query 2: Archivos sin label en ubicaciones donde operan agentes ───────────
+// Proxy: archivos modificados recientemente por SPs de agentes sin label
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where OperationName has_any ("FileModified", "FileUploaded")
+| where UserId has_any ("ServicePrincipal", "@contoso.com") == false  // ajustar para SPs de agentes
+| extend HasLabel = isnotempty(tostring(parse_json(AuditData).SensitivityLabelEventData))
+| where HasLabel == false
+| summarize UnlabeledCount = count() by tostring(parse_json(AuditData).SiteUrl)
+| order by UnlabeledCount desc
+
+// ── Query 3: Distribución de labels en contenido tocado por agentes ───────────
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where OperationName has "SensitivityLabel"
+| extend LabelName = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelName)
+| where isnotempty(LabelName)
+| summarize Count = count() by LabelName
+| order by Count desc
+
+// ── Query 4: Archivos con label Highly Confidential accedidos por agentes ──────
+// Alta prioridad — agentes no deberían acceder a HC sin aprobación explícita
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where OperationName has_any ("FileAccessed", "FileDownloaded")
+| extend
+    LabelName = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelName),
+    AccessedBy = tostring(parse_json(AuditData).UserId)
+| where LabelName has_any ("Highly Confidential", "HC")
+| where AccessedBy has_any ("bot", "agent", "copilot", "sp-")  // ajustar según naming del tenant
+| project TimeGenerated, LabelName, AccessedBy,
+    FileName = tostring(parse_json(AuditData).SourceFileName)
+| extend Alert = "Agente accedió a contenido Highly Confidential — revisar"
+| order by TimeGenerated desc
+
+// ── Query 5: Tendencia de cobertura de labels (% de archivos etiquetados) ──────
+let total_files = PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where OperationName has_any ("FileModified", "FileUploaded", "FileAccessed")
+| summarize Total = count() by bin(TimeGenerated, 1d);
+let labeled_files = PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where OperationName has "SensitivityLabel"
+| summarize Labeled = count() by bin(TimeGenerated, 1d);
+total_files
+| join kind=leftouter labeled_files on TimeGenerated
+| extend CoveragePct = round(100.0 * Labeled / Total, 1)
+| project TimeGenerated, Total, Labeled, CoveragePct
+| order by TimeGenerated asc

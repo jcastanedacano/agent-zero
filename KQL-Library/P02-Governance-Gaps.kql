@@ -1,0 +1,109 @@
+// =============================================================================
+// P02 — GOVERN & CONTROL
+// Agentic AI Security Labs | KQL Library
+// Target: Microsoft Sentinel / Defender Advanced Hunting
+// Tables: AIAgentsInfo, AuditLogs, CloudAppEvents
+// =============================================================================
+
+
+// -----------------------------------------------------------------------------
+// Q1: Agents Without Entra Agent ID — Identity Orphans
+// Use: Find agents running without a dedicated Entra identity (identity laundering risk)
+// -----------------------------------------------------------------------------
+AIAgentsInfo
+| where TimeGenerated > ago(30d)
+| where isempty(EntraAgentId) or EntraAgentId == "Inherited"
+| distinct AgentId, AgentName, AgentType, Platform, TechnicalOwner, ManagementStatus
+| extend RiskNote = "Agent operates under user identity — no dedicated Entra Agent ID assigned"
+| sort by AgentType asc
+
+
+// -----------------------------------------------------------------------------
+// Q2: Agents Published Without Approval Flow — Copilot Studio Bypass
+// Use: Detect agents activated via Agent Builder (M365 Copilot) bypassing
+//      Copilot Studio Requests approval flow
+// Note: Agent Builder agents appear immediately without approval events
+// -----------------------------------------------------------------------------
+AuditLogs
+| where TimeGenerated > ago(30d)
+| where OperationName == "AgentPublished"
+| extend AgentSource = tostring(AdditionalDetails["AgentSource"])
+| extend ApprovalStatus = tostring(AdditionalDetails["ApprovalStatus"])
+| where AgentSource == "AgentBuilder"
+    or ApprovalStatus == "Bypassed"
+    or isempty(ApprovalStatus)
+| project
+    TimeGenerated,
+    AgentId = tostring(TargetResources[0].id),
+    AgentName = tostring(TargetResources[0].displayName),
+    PublishedBy = tostring(InitiatedBy.user.userPrincipalName),
+    AgentSource,
+    ApprovalStatus
+| sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q3: Agents Without Lifecycle Review — Stale in Production
+// Use: Identify agents in production without activity in the review window
+//      Signals candidates for decommission review
+// -----------------------------------------------------------------------------
+AIAgentsInfo
+| where TimeGenerated > ago(90d)
+| summarize LastActivity = max(TimeGenerated) by AgentId, AgentName, AgentType, TechnicalOwner
+| extend DaysSinceActivity = datetime_diff('day', now(), LastActivity)
+| where DaysSinceActivity > 60
+| extend LifecycleRisk = case(
+    DaysSinceActivity > 180, "Critical — exceeds 6-month review window",
+    DaysSinceActivity > 90,  "High — exceeds 3-month review window",
+    "Medium — approaching review threshold"
+)
+| sort by DaysSinceActivity desc
+| project AgentId, AgentName, AgentType, TechnicalOwner, DaysSinceActivity, LifecycleRisk
+
+
+// -----------------------------------------------------------------------------
+// Q4: Graph Drift Detection — Agents With Accumulating Permissions
+// Use: Identify agents whose permission scope has expanded over time
+//      without corresponding approval events
+// -----------------------------------------------------------------------------
+AuditLogs
+| where TimeGenerated > ago(30d)
+| where OperationName in ("Add delegated permission grant", "Add app role assignment to service principal")
+| extend AgentObjectId = tostring(TargetResources[0].id)
+| extend NewPermission = tostring(TargetResources[0].modifiedProperties[0].newValue)
+| extend GrantedBy = tostring(InitiatedBy.user.userPrincipalName)
+| join kind=leftouter (
+    // Check if there's a corresponding approval event
+    AuditLogs
+    | where OperationName == "AgentPermissionApproved"
+    | distinct CorrelationId
+) on CorrelationId
+| where isempty(CorrelationId1)   // Permission added without approval correlation
+| project
+    TimeGenerated,
+    AgentObjectId,
+    NewPermission,
+    GrantedBy,
+    RiskNote = "Permission granted without corresponding approval event"
+| sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q5: Maker Activity — Power Platform Agents Without DLP Policy Coverage
+// Use: Detect agents created by makers using connectors outside DLP boundaries
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(30d)
+| where Application == "Microsoft Power Platform"
+    and ActionType == "AgentConnectorAdded"
+| extend ConnectorName = tostring(RawEventData["ConnectorName"])
+| extend ConnectorClassification = tostring(RawEventData["DLPClassification"])
+| where ConnectorClassification == "NonBusiness"
+    or isempty(ConnectorClassification)
+| summarize
+    ConnectorUses = count(),
+    LastUsed = max(TimeGenerated),
+    Makers = make_set(AccountDisplayName)
+    by ConnectorName, ConnectorClassification
+| sort by ConnectorUses desc
+| project ConnectorName, ConnectorClassification, ConnectorUses, LastUsed, Makers

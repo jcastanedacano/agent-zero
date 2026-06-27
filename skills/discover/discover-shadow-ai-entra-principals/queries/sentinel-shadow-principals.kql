@@ -1,0 +1,56 @@
+// skill: discover-shadow-ai-entra-principals
+// workspace: {workspace-name} | conector requerido: AuditLogs-EntraID
+
+// ── Query 1: Service principals creados recientemente ────────────────────────
+let lookback = 30d;
+AuditLogs
+| where TimeGenerated > ago(lookback)
+| where OperationName in ("Add service principal", "Add application")
+| extend
+    SPName      = tostring(TargetResources[0].displayName),
+    SPId        = tostring(TargetResources[0].id),
+    InitiatedBy = tostring(InitiatedBy.user.userPrincipalName),
+    AppId       = tostring(TargetResources[0].modifiedProperties[0].newValue)
+| project TimeGenerated, SPName, SPId, InitiatedBy, AppId
+| order by TimeGenerated desc
+
+// ── Query 2: OAuth consent grants con permisos sensibles ─────────────────────
+let sensitive_permissions = dynamic([
+    "Mail.ReadWrite", "Mail.Send", "Mail.Read",
+    "Files.ReadWrite.All", "Files.Read.All",
+    "Directory.ReadWrite.All", "Directory.Read.All",
+    "Calendars.ReadWrite", "Contacts.ReadWrite",
+    "User.ReadWrite.All", "Group.ReadWrite.All"
+]);
+AuditLogs
+| where TimeGenerated > ago(lookback)
+| where OperationName has "Consent to application"
+| extend
+    ConsentedApp = tostring(TargetResources[0].displayName),
+    Permissions  = tostring(AdditionalDetails)
+| where Permissions has_any (sensitive_permissions)
+| extend RiskLevel = case(
+    Permissions has "ReadWrite.All", "Alto",
+    Permissions has "Mail.Send",     "Alto",
+    "Medio"
+)
+| project TimeGenerated, ConsentedApp, Permissions, RiskLevel,
+    ConsentedBy = tostring(InitiatedBy.user.userPrincipalName)
+| order by RiskLevel asc, TimeGenerated desc
+
+// ── Query 3: SPs con actividad de sign-in reciente (confirmar uso activo) ────
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(lookback)
+| summarize
+    LastSignIn    = max(TimeGenerated),
+    SignInCount   = count(),
+    UniqueIPs     = dcount(IPAddress),
+    Resources     = make_set(ResourceDisplayName, 10)
+  by ServicePrincipalName, ServicePrincipalId
+| extend DaysSinceLastSignIn = datetime_diff("day", now(), LastSignIn)
+| extend Status = case(
+    DaysSinceLastSignIn > 30, "Inactivo — revisar para descomisión",
+    UniqueIPs > 5,            "Activo — múltiples IPs de origen",
+    "Activo — normal"
+)
+| order by DaysSinceLastSignIn desc

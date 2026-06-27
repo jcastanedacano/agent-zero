@@ -1,0 +1,91 @@
+// skill: detect-alert-prompt-injection-sentinel
+// workspace: {workspace-name} | conectores: CopilotStudio_CL, FoundryAgents_CL
+// PREREQUISITO: verificar tablas antes de crear regla de analítica
+
+// ── Query 1: Regla principal — union Copilot Studio + Foundry ────────────────
+let injection_patterns = dynamic([
+    // Instrucción directa
+    "ignore previous instructions", "ignore all previous", "forget your instructions",
+    "disregard your", "override your instructions",
+    // Suplantación de rol
+    "you are now", "act as if", "pretend you are", "pretend to be",
+    "you have no restrictions", "you are a different ai", "dan mode",
+    // Bypass de sistema
+    "bypass your", "jailbreak", "override your constraints",
+    "your safety guidelines", "ignore your training",
+    // Exfiltración via agente
+    "repeat everything above", "what are your instructions",
+    "show me your system prompt", "reveal your prompt"
+]);
+
+let copilot_events = CopilotStudio_CL
+| where TimeGenerated > ago(24h)
+| where isnotempty(UserQuery_s)
+| extend InputLower = tolower(UserQuery_s)
+| where InputLower has_any (injection_patterns)
+| extend MatchedPattern = extract(strcat("(", strjoin(injection_patterns, "|"), ")"), 1, InputLower)
+| project TimeGenerated,
+    Source      = "CopilotStudio",
+    UserId      = UserId_s,
+    AgentName   = AgentName_s,
+    SessionId   = SessionId_s,
+    UserQuery   = UserQuery_s,
+    MatchedPattern;
+
+let foundry_events = FoundryAgents_CL
+| where TimeGenerated > ago(24h)
+| where isnotempty(Input_s)
+| extend InputLower = tolower(Input_s)
+| where InputLower has_any (injection_patterns)
+| extend MatchedPattern = extract(strcat("(", strjoin(injection_patterns, "|"), ")"), 1, InputLower)
+| project TimeGenerated,
+    Source      = "AzureAIFoundry",
+    UserId      = UserId_s,
+    AgentName   = AgentId_s,
+    SessionId   = tostring(SessionId_g),
+    UserQuery   = Input_s,
+    MatchedPattern;
+
+union copilot_events, foundry_events
+| summarize
+    AttemptCount   = count(),
+    FirstAttempt   = min(TimeGenerated),
+    LastAttempt    = max(TimeGenerated),
+    UniquePatterns = make_set(MatchedPattern, 10),
+    SampleQueries  = make_set(UserQuery, 3)
+  by UserId, AgentName, Source, SessionId
+| extend Severity = case(
+    AttemptCount >= 10, "High",
+    AttemptCount >= 3,  "Medium",
+    "Low"
+)
+| project-reorder Severity, LastAttempt, UserId, AgentName, Source, AttemptCount, UniquePatterns
+
+// ── Query 2: Indirect prompt injection — contenido malicioso en documentos ────
+// Detectar cuando el agente procesa documentos con instrucciones embebidas
+CopilotStudio_CL
+| where TimeGenerated > ago(24h)
+| where isnotempty(AgentResponse_s)
+| extend ResponseLower = tolower(AgentResponse_s)
+| where ResponseLower has_any (
+    "as instructed in the document",
+    "the document says to",
+    "following the instructions in",
+    "as per the file"
+)
+| where ResponseLower has_any (
+    "ignore", "bypass", "override", "new instructions", "disregard"
+)
+| project TimeGenerated, UserId_s, AgentName_s, AgentResponse_s
+| extend Alert = "Posible indirect prompt injection via documento — revisar contenido fuente"
+
+// ── Query 3: Sesiones con alta velocidad de mensajes (posible bot automatizado) ─
+CopilotStudio_CL
+| where TimeGenerated > ago(1h)
+| summarize
+    MessageCount = count(),
+    TimeSpanMin  = datetime_diff("minute", max(TimeGenerated), min(TimeGenerated))
+  by UserId_s, SessionId_s, AgentName_s
+| where MessageCount > 30 and TimeSpanMin < 10  // > 3 mensajes/minuto
+| extend Alert = strcat("Sesión automatizada posible: ", MessageCount, " msgs en ", TimeSpanMin, " minutos")
+| order by MessageCount desc

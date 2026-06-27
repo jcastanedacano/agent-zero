@@ -1,0 +1,104 @@
+// =============================================================================
+// P01 — DISCOVER & PRIORITIZE
+// Agentic AI Security Labs | KQL Library
+// Target: Microsoft Sentinel / Defender Advanced Hunting
+// Tables: AIAgentsInfo, CloudAppEvents, OfficeActivity
+// =============================================================================
+
+
+// -----------------------------------------------------------------------------
+// Q1: Full Agent Inventory by Type and Management Status
+// Use: Baseline visibility — what agents exist and which are unmanaged
+// -----------------------------------------------------------------------------
+AIAgentsInfo
+| where TimeGenerated > ago(30d)
+| summarize
+    LastSeen = max(TimeGenerated),
+    AgentCount = dcount(AgentId)
+    by AgentType, Platform, ManagementStatus, AgentName
+| extend RiskLevel = case(
+    ManagementStatus == "Unmanaged", "High",
+    ManagementStatus == "PartiallyManaged", "Medium",
+    "Low"
+)
+| sort by RiskLevel asc, LastSeen desc
+| project AgentName, AgentType, Platform, ManagementStatus, RiskLevel, AgentCount, LastSeen
+
+
+// -----------------------------------------------------------------------------
+// Q2: Unmanaged Agents — No Owner, No Registration
+// Use: Identify shadow AI — agents operating without formal registration
+// -----------------------------------------------------------------------------
+AIAgentsInfo
+| where TimeGenerated > ago(30d)
+| where ManagementStatus == "Unmanaged"
+    or isempty(TechnicalOwner)
+| distinct AgentId, AgentName, AgentType, Platform, CreatedTime, TechnicalOwner
+| extend DaysSinceCreation = datetime_diff('day', now(), CreatedTime)
+| sort by DaysSinceCreation desc
+| project AgentId, AgentName, AgentType, Platform, TechnicalOwner, DaysSinceCreation
+
+
+// -----------------------------------------------------------------------------
+// Q3: Local AI Agents on Endpoints
+// Use: Detect agents invisible to cloud inventory (Claude Code, MCP servers, etc.)
+// Note: Requires MDE endpoint connector active
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(7d)
+| where ActionType == "AgentProcessDetected"
+    or ApplicationId has_any ("mcp-server", "claude-code", "openai-api-local")
+| summarize
+    LastActivity = max(TimeGenerated),
+    ActivityCount = count()
+    by DeviceName, AccountDisplayName, ApplicationId, IPAddress
+| sort by ActivityCount desc
+| project DeviceName, AccountDisplayName, ApplicationId, ActivityCount, LastActivity, IPAddress
+
+
+// -----------------------------------------------------------------------------
+// Q4: SharePoint Sites Accessed by Agents Without Sensitivity Labels
+// Use: Identify knowledge sources with data exposure risk before retrieval activation
+// -----------------------------------------------------------------------------
+OfficeActivity
+| where TimeGenerated > ago(7d)
+| where RecordType == "SharePointFileOperation"
+    and UserAgent has "agent"
+| join kind=leftouter (
+    // Approximate: sites without label events in the same window
+    MicrosoftPurviewInformationProtection
+    | where TimeGenerated > ago(7d)
+    | where Activity == "LabelApplied"
+    | distinct ObjectId
+) on $left.ObjectId == $right.ObjectId
+| where isempty(ObjectId1)   // No label event found for this object
+| summarize
+    AgentAccesses = count(),
+    LastAccess = max(TimeGenerated)
+    by SiteUrl, OfficeObjectId, UserId
+| sort by AgentAccesses desc
+| project SiteUrl, OfficeObjectId, AgentAccesses, LastAccess, UserId
+
+
+// -----------------------------------------------------------------------------
+// Q5: New Agents Deployed in Last 24 Hours — Alert Candidate
+// Use: Near-real-time detection of new agent registrations
+// Recommended: Schedule as Analytics Rule, frequency 1h, lookback 1d
+// -----------------------------------------------------------------------------
+AIAgentsInfo
+| where TimeGenerated > ago(1d)
+| where CreatedTime > ago(1d)
+| project
+    AgentId,
+    AgentName,
+    AgentType,
+    Platform,
+    TechnicalOwner,
+    ManagementStatus,
+    CreatedTime
+| extend AlertDetail = strcat(
+    "New agent registered: ", AgentName,
+    " | Type: ", AgentType,
+    " | Owner: ", iff(isempty(TechnicalOwner), "UNASSIGNED", TechnicalOwner)
+)
+| sort by CreatedTime desc

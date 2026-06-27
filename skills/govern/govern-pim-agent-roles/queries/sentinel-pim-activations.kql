@@ -1,0 +1,62 @@
+// skill: govern-pim-agent-roles
+// workspace: {workspace-name} | conector requerido: AuditLogs-EntraID
+
+// ── Query 1: Activaciones PIM de service principals (agentes) ────────────────
+AuditLogs
+| where TimeGenerated > ago(30d)
+| where OperationName has_any (
+    "Add eligible member to role",
+    "Add member to role completed (PIM activation)",
+    "Activate role assignment request"
+)
+| extend
+    PrincipalName = tostring(InitiatedBy.user.userPrincipalName),
+    TargetSP      = tostring(TargetResources[0].displayName),
+    RoleName      = tostring(TargetResources[1].displayName),
+    Justification = tostring(AdditionalDetails)
+| project TimeGenerated, PrincipalName, TargetSP, RoleName, Justification
+| order by TimeGenerated desc
+
+// ── Query 2: Activaciones fuera de horario laboral (posible anomalía) ─────────
+let business_hours_start = 8;
+let business_hours_end   = 20;
+AuditLogs
+| where TimeGenerated > ago(30d)
+| where OperationName has "PIM activation"
+| extend HourUTC = datetime_part("Hour", TimeGenerated)
+| where HourUTC < business_hours_start or HourUTC > business_hours_end
+| extend
+    PrincipalName = tostring(InitiatedBy.user.userPrincipalName),
+    RoleName      = tostring(TargetResources[1].displayName)
+| project TimeGenerated, HourUTC, PrincipalName, RoleName
+| extend Alert = "Activación PIM fuera de horario — revisar"
+| order by TimeGenerated desc
+
+// ── Query 3: Service principals con roles Azure RBAC directos (sin PIM) ───────
+// Detectar assignments permanentes que deberían ser elegibles
+AuditLogs
+| where TimeGenerated > ago(90d)
+| where OperationName has "Create role assignment"
+| where TargetResources has_any ("ServicePrincipal")
+| extend
+    AssignedTo   = tostring(TargetResources[0].displayName),
+    RoleAssigned = tostring(parse_json(tostring(AdditionalDetails)).roleDefinitionName),
+    Scope        = tostring(parse_json(tostring(AdditionalDetails)).scope)
+| where RoleAssigned in ("Owner", "Contributor", "User Access Administrator")
+| project TimeGenerated, AssignedTo, RoleAssigned, Scope
+| extend Risk = "Rol de alto privilegio asignado permanentemente — evaluar migración a PIM"
+| order by TimeGenerated desc
+
+// ── Query 4: Duración de activaciones PIM (detectar activaciones largas) ──────
+AuditLogs
+| where TimeGenerated > ago(30d)
+| where OperationName has "PIM activation"
+| extend
+    ActivationStart = TimeGenerated,
+    Duration        = toint(tostring(AdditionalDetails))  // horas si disponible
+| summarize
+    ActivationCount = count(),
+    AvgDurationHrs  = avg(Duration)
+  by tostring(InitiatedBy.user.userPrincipalName)
+| where ActivationCount > 5
+| order by ActivationCount desc

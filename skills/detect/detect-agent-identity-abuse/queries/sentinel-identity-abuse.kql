@@ -1,0 +1,113 @@
+// skill: detect-agent-identity-abuse
+// workspace: {workspace-name} | conectores: AADServicePrincipalSignInLogs, AuditLogs-EntraID
+
+// ── Query 1: SP de agente autenticando desde IP desconocida ──────────────────
+let corporate_prefixes = dynamic(["10.", "172.16.", "192.168.", "20.190."]);  // ajustar
+let known_agent_sps = dynamic([]);  // poblar desde watchlist o hardcodear
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(1h)
+| where ResultType == 0  // solo exitosas — las fallidas son menos preocupantes
+| where not(IPAddress has_any (corporate_prefixes))
+| where ServicePrincipalName has_any ("agent", "bot", "copilot", "sp-agent")
+    or ServicePrincipalId in (known_agent_sps)
+| project
+    TimeGenerated,
+    ServicePrincipalName,
+    ServicePrincipalId,
+    IPAddress,
+    Location,
+    ResourceDisplayName,
+    ConditionalAccessStatus
+| extend Alert = strcat("SP de agente autenticó desde IP externa: ", IPAddress, " (", Location, ")")
+| extend Severity = iff(ConditionalAccessStatus == "success", "High", "Medium")
+| order by TimeGenerated desc
+
+// ── Query 2: Agent spawning — SP creando nuevas aplicaciones o SPs ───────────
+AuditLogs
+| where TimeGenerated > ago(24h)
+| where OperationName has_any (
+    "Add application",
+    "Add service principal",
+    "Create application"
+)
+| extend
+    InitiatorType = tostring(InitiatedBy.app.displayName)
+| where isnotempty(InitiatorType)  // iniciado por una app (no por un usuario humano)
+| where InitiatorType has_any ("agent", "bot", "copilot", "sp-", "PowerVirtual")
+    or tostring(InitiatedBy.user.userPrincipalName) == ""  // sin usuario humano
+| extend
+    NewEntityName = tostring(TargetResources[0].displayName),
+    NewEntityType = tostring(TargetResources[0].type),
+    InitiatedByApp = tostring(InitiatedBy.app.displayName)
+| project TimeGenerated, InitiatedByApp, NewEntityName, NewEntityType
+| extend Alert = strcat("AGENT SPAWNING: '", InitiatedByApp, "' creó nuevo SP/App '", NewEntityName, "'")
+| extend Severity = "Critical"
+| order by TimeGenerated desc
+
+// ── Query 3: Escalada de privilegios — rol asignado a SP de agente ────────────
+AuditLogs
+| where TimeGenerated > ago(24h)
+| where OperationName has_any (
+    "Add member to role",
+    "Create role assignment",
+    "Add eligible member to role"
+)
+| extend
+    AssignedTo   = tostring(TargetResources[0].displayName),
+    RoleAssigned = tostring(TargetResources[1].displayName),
+    AssignedBy   = tostring(InitiatedBy.user.userPrincipalName)
+| where AssignedTo has_any ("agent", "bot", "sp-", "copilot")
+| extend RiskLevel = case(
+    RoleAssigned has_any ("Global Administrator", "Privileged Role Administrator",
+        "Application Administrator", "Owner", "Contributor"), "Critical",
+    RoleAssigned has_any ("Security Administrator", "Exchange Administrator",
+        "SharePoint Administrator"), "High",
+    "Medium"
+)
+| project TimeGenerated, AssignedTo, RoleAssigned, AssignedBy, RiskLevel
+| extend Alert = strcat("Rol '", RoleAssigned, "' asignado al agente '", AssignedTo, "'")
+| order by RiskLevel asc, TimeGenerated desc
+
+// ── Query 4: Impossible travel para service principals de agentes ─────────────
+let detection_window = 2h;
+let travel_minutes   = 60;
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(detection_window)
+| where ResultType == 0
+| where ServicePrincipalName has_any ("agent", "bot", "sp-", "copilot")
+| project TimeGenerated, ServicePrincipalName, IPAddress, Location
+| join kind=inner (
+    AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(detection_window)
+    | where ResultType == 0
+    | project TimeGenerated2 = TimeGenerated, ServicePrincipalName,
+        IPAddress2 = IPAddress, Location2 = Location
+) on ServicePrincipalName
+| where Location != Location2
+| where abs(datetime_diff("minute", TimeGenerated, TimeGenerated2)) < travel_minutes
+| where IPAddress != IPAddress2
+| project
+    ServicePrincipalName,
+    FirstAuth  = TimeGenerated,  Location1 = Location,  IP1 = IPAddress,
+    SecondAuth = TimeGenerated2, Location2, IP2 = IPAddress2,
+    MinutesBetween = abs(datetime_diff("minute", TimeGenerated, TimeGenerated2))
+| where MinutesBetween > 0  // eliminar duplicados
+| extend Alert = strcat("Impossible travel: ", Location, " → ", Location2, " en ", MinutesBetween, " min")
+| order by MinutesBetween asc
+
+// ── Query 5: CA policy bypass — autenticación de SP que debería estar bloqueada ─
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(24h)
+| where ResultType == 0  // éxito
+| extend Policies = parse_json(tostring(ConditionalAccessPolicies))
+| mv-expand Policy = Policies
+| where tostring(Policy.result) has_any ("failure", "reportOnlyFailure")
+    and ResultType == 0  // CA falló pero el sign-in fue exitoso = bypass
+| project
+    TimeGenerated,
+    ServicePrincipalName,
+    IPAddress,
+    PolicyName = tostring(Policy.displayName),
+    PolicyResult = tostring(Policy.result)
+| extend Alert = strcat("CA policy '", PolicyName, "' falló pero sign-in exitoso — posible bypass")
+| order by TimeGenerated desc

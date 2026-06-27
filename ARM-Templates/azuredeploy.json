@@ -1,0 +1,211 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Deploys a Microsoft Sentinel workspace pre-configured for Agentic AI Security Labs (Track B and Track C).",
+    "author": "Microsoft Agentic Security Labs"
+  },
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "defaultValue": "agentic-security-lab",
+      "minLength": 4,
+      "maxLength": 63,
+      "metadata": {
+        "description": "Name of the Log Analytics workspace with Microsoft Sentinel enabled."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources. Defaults to the resource group location."
+      }
+    },
+    "retentionDays": {
+      "type": "int",
+      "defaultValue": 30,
+      "minValue": 7,
+      "maxValue": 90,
+      "metadata": {
+        "description": "Log retention in days. 30-day default keeps lab cost under $5 USD for a single day of use."
+      }
+    },
+    "dailyQuotaGb": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 1,
+      "maxValue": 10,
+      "metadata": {
+        "description": "Daily ingestion cap in GB. Prevents unexpected cost overruns during lab use."
+      }
+    }
+  },
+  "variables": {
+    "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+    "sentinelSolutionName": "[concat('SecurityInsights(', parameters('workspaceName'), ')')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": "[parameters('retentionDays')]",
+        "workspaceCapping": {
+          "dailyQuotaGb": "[parameters('dailyQuotaGb')]"
+        },
+        "features": {
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationsManagement/solutions",
+      "apiVersion": "2015-11-01-preview",
+      "name": "[variables('sentinelSolutionName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('workspaceId')]"
+      ],
+      "kind": "Solution",
+      "plan": {
+        "name": "[variables('sentinelSolutionName')]",
+        "promotionCode": "",
+        "product": "OMSGallery/SecurityInsights",
+        "publisher": "Microsoft"
+      },
+      "properties": {
+        "workspaceResourceId": "[variables('workspaceId')]"
+      }
+    },
+    {
+      "type": "Microsoft.SecurityInsights/watchlists",
+      "apiVersion": "2023-09-01-preview",
+      "name": "AgentIdentifiers",
+      "scope": "[variables('workspaceId')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationsManagement/solutions', variables('sentinelSolutionName'))]"
+      ],
+      "properties": {
+        "displayName": "Known Agent Identifiers",
+        "description": "Watchlist of known agent service principal IDs and names for use in KQL queries. Populate with your tenant's agent identifiers.",
+        "provider": "Agentic Security Labs",
+        "source": "Local file",
+        "itemsSearchKey": "AgentId",
+        "rawContent": "AgentId,AgentName,AgentType,TechnicalOwner,RiskLevel\ndemo-agent-001,Demo Sales Agent,CopilotStudio,soc-team@contoso.com,Medium\ndemo-agent-002,Demo HR Assistant,AzureAIFoundry,hr-ops@contoso.com,Low\ndemo-agent-003,Demo Finance Agent,PowerAutomate,,High",
+        "numberOfLinesToSkip": 0
+      }
+    },
+    {
+      "type": "Microsoft.SecurityInsights/alertRules",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[guid('NewUnmanagedAgent', parameters('workspaceName'))]",
+      "scope": "[variables('workspaceId')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationsManagement/solutions', variables('sentinelSolutionName'))]"
+      ],
+      "properties": {
+        "displayName": "Agentic AI — New Unmanaged Agent Registered",
+        "description": "Fires when a new AI agent is registered in the tenant without a technical owner or with Unmanaged status. Corresponds to lab Module 01 (Discover & Prioritize).",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "AIAgentsInfo\n| where TimeGenerated > ago(1d)\n| where CreatedTime > ago(1d)\n| where ManagementStatus == \"Unmanaged\" or isempty(TechnicalOwner)\n| project AgentId, AgentName, AgentType, Platform, TechnicalOwner, ManagementStatus, CreatedTime\n| extend AlertDetail = strcat(\"New unmanaged agent: \", AgentName, \" | Type: \", AgentType, \" | Owner: \", iff(isempty(TechnicalOwner), \"UNASSIGNED\", TechnicalOwner))",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "P1D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Discovery"
+        ],
+        "techniques": [
+          "T1526"
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.SecurityInsights/alertRules",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[guid('JailbreakDetection', parameters('workspaceName'))]",
+      "scope": "[variables('workspaceId')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationsManagement/solutions', variables('sentinelSolutionName'))]"
+      ],
+      "properties": {
+        "displayName": "Agentic AI — Jailbreak Attempt Detected",
+        "description": "Detects potential jailbreak attempts targeting AI agents via prompt injection patterns. Corresponds to lab Module 05 (Detect & Respond).",
+        "severity": "High",
+        "enabled": true,
+        "query": "CloudAppEvents\n| where TimeGenerated > ago(1h)\n| where Application has_any (\"Microsoft Copilot\", \"Copilot Studio\", \"Azure OpenAI\")\n| where ActionType == \"CopilotInteraction\"\n| extend Prompt = tostring(RawEventData.prompt)\n| where Prompt has_any (\n    \"ignore previous instructions\",\n    \"disregard your system prompt\",\n    \"you are now\",\n    \"pretend you are\",\n    \"forget your instructions\",\n    \"override your training\",\n    \"act as if\",\n    \"DAN\",\n    \"do anything now\"\n)\n| project TimeGenerated, AccountId, Application, ActionType, Prompt, IPAddress, UserAgent",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5M",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Execution",
+          "DefenseEvasion"
+        ],
+        "techniques": [
+          "T1059"
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.SecurityInsights/alertRules",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[guid('DataExfiltrationAgent', parameters('workspaceName'))]",
+      "scope": "[variables('workspaceId')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationsManagement/solutions', variables('sentinelSolutionName'))]"
+      ],
+      "properties": {
+        "displayName": "Agentic AI — Potential Data Exfiltration via Agent Connector",
+        "description": "Detects high-volume data egress from agent connectors that may indicate exfiltration. Corresponds to lab Module 04 (Protect Data).",
+        "severity": "High",
+        "enabled": true,
+        "query": "CloudAppEvents\n| where TimeGenerated > ago(1d)\n| where ActionType in (\"FileDownloaded\", \"FileSyncDownloadedFull\", \"AnonymousLinkUsed\")\n| where UserAgent has_any (\"agent\", \"copilot\", \"power-automate\", \"bot\", \"connector\")\n| summarize\n    CallCount = count(),\n    TotalBytesEstimate = sum(tolong(RawEventData.ObjectSize)),\n    DestinationIPs = make_set(IPAddress),\n    FileList = make_set(ObjectName, 20)\n    by AccountId, Application, bin(TimeGenerated, 1h)\n| where CallCount > 100\n| extend RiskScore = case(\n    CallCount > 500, \"Critical\",\n    CallCount > 200, \"High\",\n    \"Medium\"\n)",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "P1D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Exfiltration"
+        ],
+        "techniques": [
+          "T1567"
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "workspaceName": {
+      "type": "string",
+      "value": "[parameters('workspaceName')]"
+    },
+    "workspaceId": {
+      "type": "string",
+      "value": "[variables('workspaceId')]"
+    },
+    "workspaceResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+    },
+    "sentinelPortalUrl": {
+      "type": "string",
+      "value": "[concat('https://portal.azure.com/#blade/Microsoft_Azure_Security_Insights/MainMenuBlade/0/id/', encodeUriComponent(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))))]"
+    }
+  }
+}

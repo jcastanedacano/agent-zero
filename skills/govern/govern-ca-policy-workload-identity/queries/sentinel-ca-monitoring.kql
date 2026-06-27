@@ -1,0 +1,45 @@
+// skill: govern-ca-policy-workload-identity
+// workspace: {workspace-name} | conector requerido: AuditLogs-EntraID
+
+// ── Query 1: Sign-ins bloqueados por CA policy de agentes ────────────────────
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(7d)
+| where ConditionalAccessStatus == "failure"
+    or tostring(ConditionalAccessPolicies) has "block"
+| extend
+    PolicyName = tostring(parse_json(tostring(ConditionalAccessPolicies))[0].displayName),
+    Result     = tostring(parse_json(tostring(ConditionalAccessPolicies))[0].result)
+| where PolicyName has "AISEC"
+| project TimeGenerated, ServicePrincipalName, IPAddress, Location, PolicyName, Result
+| order by TimeGenerated desc
+
+// ── Query 2: Report-only — accesos que serían bloqueados (pre-enforcement) ───
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(7d)
+| extend Policies = parse_json(tostring(ConditionalAccessPolicies))
+| mv-expand Policy = Policies
+| where tostring(Policy.result) == "reportOnlyBlock"
+| project
+    TimeGenerated,
+    ServicePrincipalName,
+    IPAddress,
+    Location,
+    PolicyName = tostring(Policy.displayName)
+| summarize
+    BlockedAttempts = count(),
+    UniqueIPs       = dcount(IPAddress),
+    Locations       = make_set(Location, 5)
+  by ServicePrincipalName, PolicyName
+| order by BlockedAttempts desc
+
+// ── Query 3: Accesos exitosos desde IPs fuera de rango corporativo ───────────
+// Usar para validar Named Location antes de enforcement
+let corporate_prefixes = dynamic(["10.", "172.16.", "192.168."]);
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(7d)
+| where ResultType == 0  // success
+| where not(IPAddress has_any (corporate_prefixes))
+| project TimeGenerated, ServicePrincipalName, IPAddress, Location, ResourceDisplayName
+| summarize Count = count(), Resources = make_set(ResourceDisplayName, 5)
+    by ServicePrincipalName, IPAddress, Location
+| order by Count desc

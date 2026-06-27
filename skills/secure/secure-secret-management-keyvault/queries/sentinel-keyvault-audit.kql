@@ -1,0 +1,51 @@
+// skill: secure-secret-management-keyvault
+// workspace: {workspace-name} | conector: AzureActivity + KeyVaultData (si diagnósticos activos)
+
+// ── Query 1: Accesos a secretos de Key Vault en últimas 24h ──────────────────
+AzureDiagnostics
+| where TimeGenerated > ago(24h)
+| where ResourceProvider == "MICROSOFT.KEYVAULT"
+| where OperationName in ("SecretGet", "SecretList", "SecretSet", "SecretDelete")
+| extend
+    CallerIP    = tostring(CallerIPAddress),
+    SecretName  = tostring(id_s),
+    ResultCode  = tostring(resultCode_d)
+| project TimeGenerated, Resource, OperationName, CallerIdentity, CallerIP, SecretName, ResultCode
+| order by TimeGenerated desc
+
+// ── Query 2: Accesos denegados a Key Vault (posible misconfiguration o ataque) ─
+AzureDiagnostics
+| where TimeGenerated > ago(7d)
+| where ResourceProvider == "MICROSOFT.KEYVAULT"
+| where resultCode_d == 403 or resultType_s == "Failure"
+| summarize
+    DeniedCount = count(),
+    Operations  = make_set(OperationName, 5),
+    LastDenied  = max(TimeGenerated)
+  by CallerIdentity, Resource
+| order by DeniedCount desc
+
+// ── Query 3: Secretos próximos a expirar (requiere Key Vault Events via Event Grid) ─
+// Si no hay Event Grid configurado, usar como referencia para auditoría manual
+AzureDiagnostics
+| where TimeGenerated > ago(90d)
+| where ResourceProvider == "MICROSOFT.KEYVAULT"
+| where OperationName == "SecretSet"
+| extend ExpiryDate = todatetime(parse_json(tostring(properties_s)).attributes.exp)
+| where isnotempty(ExpiryDate)
+| extend DaysUntilExpiry = datetime_diff("day", ExpiryDate, now())
+| where DaysUntilExpiry between (0 .. 30)
+| project Resource, SecretName = id_s, ExpiryDate, DaysUntilExpiry
+| extend Urgency = case(DaysUntilExpiry <= 7, "Crítico", DaysUntilExpiry <= 15, "Alto", "Medio")
+| order by DaysUntilExpiry asc
+
+// ── Query 4: Accesos fuera de horario (posible uso no autorizado de secreto) ──
+AzureDiagnostics
+| where TimeGenerated > ago(7d)
+| where ResourceProvider == "MICROSOFT.KEYVAULT"
+| where OperationName == "SecretGet"
+| extend HourUTC = datetime_part("Hour", TimeGenerated)
+| where HourUTC < 6 or HourUTC > 22
+| project TimeGenerated, HourUTC, Resource, CallerIdentity, CallerIPAddress
+| extend Alert = "Acceso a secreto fuera de horario — revisar si es acceso automatizado esperado"
+| order by TimeGenerated desc
