@@ -1,0 +1,54 @@
+// skill: secure-network-isolation-agent
+// workspace: {workspace-name} | conectores: AzureActivity, FoundryAgents_CL, AzureNetworkAnalytics_CL
+
+// ── Query 1: Flujos de red desde subnet de agentes hacia internet ─────────────
+AzureNetworkAnalytics_CL
+| where TimeGenerated > ago(24h)
+| where SubType_s == "FlowLog"
+| where FlowDirection_s == "O"  // Outbound
+| where DestPublicIPs_s != ""   // tiene destino público
+| where SrcIP_s startswith "10."  // desde red interna
+| summarize
+    BytesSent   = sum(OutboundBytes_d),
+    FlowCount   = count(),
+    Destinations = make_set(DestPublicIPs_s, 10)
+  by SrcIP_s, VM_s, NSGList_s
+| extend RiskLevel = case(BytesSent > 10000000, "Alto", BytesSent > 1000000, "Medio", "Bajo")
+| order by BytesSent desc
+
+// ── Query 2: Llamadas a endpoints externos desde agentes Foundry ──────────────
+let lookback = 7d;
+FoundryAgents_CL
+| where TimeGenerated > ago(lookback)
+| where isnotempty(TargetUrl_s)
+| extend Domain = tostring(parse_url(TargetUrl_s).Host)
+| where Domain !has "azure.com"
+    and Domain !has "microsoft.com"
+    and Domain !has "windows.net"
+| summarize CallCount = count(), LastCall = max(TimeGenerated)
+    by AgentId_s, Domain
+| extend Risk = "Llamada externa no Azure — verificar si es destino aprobado"
+| order by CallCount desc
+
+// ── Query 3: Cambios en NSG rules (detectar apertura de reglas) ───────────────
+AzureActivity
+| where TimeGenerated > ago(7d)
+| where ResourceProviderValue == "MICROSOFT.NETWORK"
+| where OperationNameValue has "networkSecurityGroups/securityRules"
+| where ActivityStatusValue == "Success"
+| extend
+    RuleName = tostring(parse_json(Properties).resource),
+    Action   = tostring(parse_json(Properties).requestbody)
+| where Action has "Allow" and Action has "Internet"
+| project TimeGenerated, Caller, RuleName, Action
+| extend Alert = "NSG rule Allow Internet creada — verificar si es intencional"
+| order by TimeGenerated desc
+
+// ── Query 4: Private Endpoint — estado de conexiones ─────────────────────────
+AzureActivity
+| where TimeGenerated > ago(30d)
+| where ResourceProviderValue == "MICROSOFT.NETWORK"
+| where OperationNameValue has "privateEndpoints"
+| where ActivityStatusValue == "Success"
+| project TimeGenerated, Caller, ResourceGroup, OperationNameValue, Resource
+| order by TimeGenerated desc

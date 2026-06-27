@@ -1,0 +1,102 @@
+// skill: detect-data-exfiltration-agent
+// workspace: {workspace-name} | conectores: PurviewAuditLog, CopilotStudio_CL, MicrosoftDataLossPrevention
+
+// ── Query 1: Acceso masivo a archivos via agente en ventana corta ─────────────
+let detection_window = 2h;
+let bulk_threshold   = 50;
+PurviewAuditLog
+| where TimeGenerated > ago(detection_window)
+| where Workload has_any ("SharePoint", "OneDrive")
+| where OperationName has_any ("FileAccessed", "FileDownloaded")
+// Filtrar operaciones iniciadas en contexto de agente (ajustar según naming del tenant)
+| extend
+    InitiatedByAgent = tostring(parse_json(AuditData).UserAgent) has_any
+        ("CopilotStudio", "PowerVirtualAgents", "bot", "agent"),
+    UserId           = tostring(parse_json(AuditData).UserId),
+    FileName         = tostring(parse_json(AuditData).SourceFileName),
+    SiteUrl          = tostring(parse_json(AuditData).SiteUrl)
+| summarize
+    FileCount    = dcount(FileName),
+    SitesAccessed = dcount(SiteUrl),
+    TimeSpanMin  = datetime_diff("minute", max(TimeGenerated), min(TimeGenerated)),
+    SampleFiles  = make_set(FileName, 5)
+  by UserId, bin(TimeGenerated, 30m)
+| where FileCount > bulk_threshold
+| extend Alert = strcat("Acceso masivo: ", FileCount, " archivos únicos en ", TimeSpanMin, " minutos")
+| extend Severity = case(FileCount > 200, "High", FileCount > 100, "Medium", "Low")
+| order by FileCount desc
+
+// ── Query 2: Agente enviando email a dominios externos ────────────────────────
+let lookback = 24h;
+let internal_domain = "contoso.com";  // ajustar al tenant
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where Workload == "Exchange"
+| where OperationName has_any ("Send", "SendAs", "SendOnBehalf")
+| extend
+    Recipients  = tostring(parse_json(AuditData).RecipientAddress),
+    Subject     = tostring(parse_json(AuditData).Subject),
+    SentAs      = tostring(parse_json(AuditData).SendAsUPN)
+| where Recipients !has internal_domain  // email externo
+| where SentAs has_any ("agent", "bot", "sp-") or
+    tostring(parse_json(AuditData).ClientInfoString) has_any ("CopilotStudio", "PowerAutomate")
+| project TimeGenerated, SentAs, Recipients, Subject
+| extend Alert = "Agente envió email a dominio externo — posible exfiltración"
+| order by TimeGenerated desc
+
+// ── Query 3: Llamadas HTTP salientes desde Foundry a URLs no Azure ─────────────
+FoundryAgents_CL
+| where TimeGenerated > ago(24h)
+| where isnotempty(TargetUrl_s)
+| extend Domain = tostring(parse_url(TargetUrl_s).Host)
+| where Domain !has_any ("azure.com", "microsoft.com", "windows.net",
+    "azurewebsites.net", "openai.com")
+| summarize
+    CallCount    = count(),
+    LastCall     = max(TimeGenerated),
+    UniqueAgents = dcount(AgentId_s)
+  by Domain
+| where CallCount > 5
+| extend Risk = case(
+    Domain has_any ("pastebin", "ngrok", "webhook.site", "requestbin"), "Alto — destino sospechoso",
+    "Revisar — destino externo no catalogado"
+)
+| order by CallCount desc
+
+// ── Query 4: Correlación agente + DLP match (exfiltración con datos sensibles) ─
+let agent_activity = PurviewAuditLog
+| where TimeGenerated > ago(24h)
+| where Workload has_any ("SharePoint", "OneDrive", "Exchange")
+| where OperationName has_any ("FileAccessed", "FileDownloaded", "Send")
+| extend UserId = tostring(parse_json(AuditData).UserId)
+| project TimeGenerated, UserId, OperationName, ObjectId = tostring(parse_json(AuditData).ObjectId);
+let dlp_matches = MicrosoftDataLossPrevention
+| where TimeGenerated > ago(24h)
+| extend UserId = UserId
+| project TimeGenerated, UserId, PolicyName = tostring(parse_json(PolicyDetails)[0].PolicyName),
+    SITs = tostring(SensitiveInfoTypeData);
+agent_activity
+| join kind=inner dlp_matches on UserId
+| where abs(datetime_diff("minute", TimeGenerated, TimeGenerated1)) < 5  // misma ventana
+| project
+    TimeGenerated,
+    UserId,
+    Operation     = OperationName,
+    PolicyMatched = PolicyName,
+    SensitiveData = SITs,
+    Object        = ObjectId
+| extend Alert = "Actividad de agente coincide con DLP match — posible exfiltración de datos sensibles"
+| order by TimeGenerated desc
+
+// ── Query 5: Volumen de datos por agente (KB) — detectar transferencias masivas ─
+FoundryAgents_CL
+| where TimeGenerated > ago(24h)
+| summarize
+    TotalInputTokens  = sum(InputTokens_d),
+    TotalOutputTokens = sum(OutputTokens_d),
+    RequestCount      = count()
+  by AgentId_s, EndpointName_s
+| extend EstimatedKB = (TotalInputTokens + TotalOutputTokens) * 0.75 / 1024  // aprox 0.75 bytes/token
+| where EstimatedKB > 10000  // > 10 MB procesado hoy
+| extend Alert = strcat("Alto volumen procesado: ", round(EstimatedKB/1024, 1), " MB estimado")
+| order by EstimatedKB desc

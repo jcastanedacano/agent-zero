@@ -1,0 +1,61 @@
+// skill: govern-dlp-policy-copilot-prompts
+// workspace: {workspace-name} | conector requerido: Purview (MicrosoftDataLossPrevention)
+
+// ── Query 1: DLP policy matches en Copilot en últimos 7 días ─────────────────
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(7d)
+| where Workload has_any ("CopilotExperiences", "Copilot", "Teams")
+| extend
+    PolicyName   = tostring(parse_json(PolicyDetails)[0].PolicyName),
+    RuleName     = tostring(parse_json(PolicyDetails)[0].Rules[0].RuleName),
+    ActionsTaken = tostring(parse_json(PolicyDetails)[0].Rules[0].Actions)
+| project
+    TimeGenerated,
+    UserId,
+    Workload,
+    PolicyName,
+    RuleName,
+    ActionsTaken,
+    SensitiveInfoTypes = tostring(SensitiveInfoTypeData)
+| order by TimeGenerated desc
+
+// ── Query 2: Usuarios con más violaciones DLP (posibles exfiltración) ─────────
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(30d)
+| where Workload has_any ("CopilotExperiences", "Copilot")
+| summarize
+    ViolationCount = count(),
+    UniqueRules    = dcount(tostring(parse_json(PolicyDetails)[0].Rules[0].RuleName)),
+    LastViolation  = max(TimeGenerated)
+  by UserId
+| where ViolationCount >= 3
+| extend RiskLevel = case(
+    ViolationCount >= 10, "Alto",
+    ViolationCount >= 5,  "Medio",
+    "Bajo"
+)
+| order by ViolationCount desc
+
+// ── Query 3: Tipos de información sensible detectados en prompts ──────────────
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(7d)
+| where Workload has_any ("CopilotExperiences", "Copilot")
+| extend SITs = parse_json(SensitiveInfoTypeData)
+| mv-expand SIT = SITs
+| extend
+    SITName  = tostring(SIT.SensitiveInfoTypeName),
+    SITCount = toint(SIT.Count)
+| summarize TotalDetections = sum(SITCount) by SITName
+| order by TotalDetections desc
+
+// ── Query 4: Acciones bloqueadas vs solo auditadas ────────────────────────────
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(7d)
+| extend Actions = tostring(parse_json(PolicyDetails)[0].Rules[0].Actions)
+| extend ActionType = case(
+    Actions has "BlockAccess",   "Bloqueado",
+    Actions has "GenerateAlert", "Solo alerta",
+    "Auditado"
+)
+| summarize Count = count() by ActionType, Workload
+| order by Count desc

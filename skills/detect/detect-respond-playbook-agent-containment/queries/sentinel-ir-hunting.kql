@@ -1,0 +1,90 @@
+// skill: detect-respond-playbook-agent-containment
+// workspace: {workspace-name}
+// Uso: queries de hunting durante IR y para preservación forense
+
+// ── Query 1: Timeline completo de actividad de un agente (últimas 72h) ────────
+// Usar durante IR — sustituir {agent-name} y {agent-sp-id}
+let agent_name = "{agent-name}";      // displayName del agente
+let agent_sp   = "{agent-sp-id}";     // object ID del service principal
+let ir_window  = 72h;
+union
+    // Conversaciones y queries del agente
+    (CopilotStudio_CL
+    | where TimeGenerated > ago(ir_window)
+    | where AgentName_s == agent_name
+    | project TimeGenerated, Source = "CopilotStudio",
+        Event = "Conversation", Detail = UserQuery_s, User = UserId_s),
+    // Sign-ins del SP
+    (AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(ir_window)
+    | where ServicePrincipalId == agent_sp
+    | project TimeGenerated, Source = "EntraSignIn",
+        Event = strcat("SignIn-", ResultType), Detail = ResourceDisplayName, User = IPAddress),
+    // Operaciones en AuditLogs
+    (AuditLogs
+    | where TimeGenerated > ago(ir_window)
+    | where tostring(InitiatedBy.app.servicePrincipalId) == agent_sp
+    | project TimeGenerated, Source = "AuditLog",
+        Event = OperationName, Detail = tostring(TargetResources[0].displayName), User = "SP"),
+    // Acceso a archivos SharePoint
+    (PurviewAuditLog
+    | where TimeGenerated > ago(ir_window)
+    | where tostring(parse_json(AuditData).UserId) has agent_name
+    | project TimeGenerated, Source = "SharePoint",
+        Event = OperationName, Detail = tostring(parse_json(AuditData).SourceFileName), User = tostring(parse_json(AuditData).UserId))
+| order by TimeGenerated asc
+
+// ── Query 2: Todos los recursos accedidos por el agente (scope de impacto) ────
+let agent_sp = "{agent-sp-id}";
+let ir_window = 72h;
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(ir_window)
+| where ServicePrincipalId == agent_sp
+| where ResultType == 0
+| summarize
+    FirstAccess = min(TimeGenerated),
+    LastAccess  = max(TimeGenerated),
+    CallCount   = count(),
+    UniqueIPs   = make_set(IPAddress, 10)
+  by ResourceDisplayName
+| order by CallCount desc
+
+// ── Query 3: Datos potencialmente exfiltrados (archivos accedidos post-compromise) ─
+let agent_name  = "{agent-name}";
+let compromise_time = datetime("{YYYY-MM-DDTHH:MM:SSZ}");  // sustituir por tiempo de compromiso
+PurviewAuditLog
+| where TimeGenerated > compromise_time
+| where tostring(parse_json(AuditData).UserId) has agent_name
+| where OperationName has_any ("FileAccessed", "FileDownloaded", "FileCopied")
+| project
+    TimeGenerated,
+    FileName    = tostring(parse_json(AuditData).SourceFileName),
+    SiteUrl     = tostring(parse_json(AuditData).SiteUrl),
+    LabelName   = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelName),
+    Operation   = OperationName
+| extend Sensitivity = iff(isnotempty(LabelName), LabelName, "Sin clasificar")
+| order by TimeGenerated asc
+
+// ── Query 4: Sub-agentes creados por el agente comprometido ──────────────────
+let agent_sp = "{agent-sp-id}";
+let ir_window = 72h;
+AuditLogs
+| where TimeGenerated > ago(ir_window)
+| where tostring(InitiatedBy.app.servicePrincipalId) == agent_sp
+| where OperationName has_any ("Add application", "Add service principal", "Create application")
+| project
+    TimeGenerated,
+    CreatedEntity = tostring(TargetResources[0].displayName),
+    EntityType    = tostring(TargetResources[0].type),
+    EntityId      = tostring(TargetResources[0].id)
+| extend Alert = "Sub-agente creado por agente comprometido — revocar inmediatamente"
+
+// ── Query 5: Verificar contención — actividad post-bloqueo del SP ─────────────
+let agent_sp      = "{agent-sp-id}";
+let containment_time = datetime("{YYYY-MM-DDTHH:MM:SSZ}");  // tiempo de contención
+AADServicePrincipalSignInLogs
+| where TimeGenerated > containment_time
+| where ServicePrincipalId == agent_sp
+| project TimeGenerated, ResultType, ResultDescription, IPAddress
+| extend Status = iff(ResultType == 0, "⚠️ Acceso exitoso post-contención — revisar", "✅ Bloqueado")
+| order by TimeGenerated desc

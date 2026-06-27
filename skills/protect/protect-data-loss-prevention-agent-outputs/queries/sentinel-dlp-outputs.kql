@@ -1,0 +1,65 @@
+// skill: protect-data-loss-prevention-agent-outputs
+// workspace: {workspace-name} | conector: MicrosoftDataLossPrevention, PurviewAuditLog
+
+// ── Query 1: DLP matches sobre contenido AI-Generated en últimos 7 días ───────
+let lookback = 7d;
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(lookback)
+| where Workload has_any ("SharePoint", "OneDrive", "Exchange")
+| extend
+    PolicyName   = tostring(parse_json(PolicyDetails)[0].PolicyName),
+    RuleName     = tostring(parse_json(PolicyDetails)[0].Rules[0].RuleName),
+    ActionTaken  = tostring(parse_json(PolicyDetails)[0].Rules[0].Actions),
+    SensLabel    = tostring(parse_json(SensitiveInfoTypeData))
+| where PolicyName has "AI" or RuleName has "AI" or SensLabel has "AI-Generated"
+| project TimeGenerated, UserId, Workload, PolicyName, RuleName, ActionTaken, ObjectId
+| order by TimeGenerated desc
+
+// ── Query 2: Intentos de compartición externa bloqueados ──────────────────────
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(lookback)
+| where Workload has_any ("SharePoint", "OneDrive")
+| where tostring(parse_json(PolicyDetails)[0].Rules[0].Actions) has "BlockAccess"
+| extend
+    SharedWith = tostring(parse_json(tostring(ExchangeMetaData)).RecipientStatus)
+| project TimeGenerated, UserId, ObjectId, SharedWith,
+    PolicyName = tostring(parse_json(PolicyDetails)[0].PolicyName)
+| order by TimeGenerated desc
+
+// ── Query 3: Volumen de archivos AI accedidos por usuario (detectar exfiltración) ─
+PurviewAuditLog
+| where TimeGenerated > ago(1d)
+| where Workload has_any ("SharePoint", "OneDrive")
+| where OperationName has_any ("FileAccessed", "FileDownloaded")
+| extend LabelName = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelName)
+| where LabelName has "AI-Generated"
+| summarize
+    FileCount      = count(),
+    UniqueFiles    = dcount(tostring(parse_json(AuditData).SourceFileName)),
+    TimeRange      = datetime_diff("minute", max(TimeGenerated), min(TimeGenerated))
+  by UserId, bin(TimeGenerated, 30m)
+| where FileCount > 20  // ajustar según baseline del tenant
+| extend Alert = strcat("Volumen anómalo: ", FileCount, " accesos a archivos AI en ", TimeRange, " minutos")
+| order by FileCount desc
+
+// ── Query 4: Emails con contenido AI-Generated enviados a dominios externos ───
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(lookback)
+| where Workload == "Exchange"
+| extend
+    Recipients = tostring(parse_json(tostring(ExchangeMetaData)).UniqueMessageRecipients),
+    LabelApplied = tostring(SensitiveInfoTypeData)
+| where Recipients has_any (".com", ".net", ".org") and Recipients !has "contoso.com"
+| where LabelApplied has "AI-Generated" or LabelApplied has "Confidential"
+| project TimeGenerated, UserId, Recipients, LabelApplied
+| extend Risk = "Email con contenido AI-Generated enviado externamente"
+| order by TimeGenerated desc
+
+// ── Query 5: Top archivos AI-Generated con más intentos de acceso denegado ─────
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(7d)
+| where tostring(parse_json(PolicyDetails)[0].Rules[0].Actions) has "Block"
+| summarize BlockCount = count(), UniqueUsers = dcount(UserId)
+    by ObjectId
+| order by BlockCount desc
+| take 20

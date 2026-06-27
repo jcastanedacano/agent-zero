@@ -1,0 +1,49 @@
+// skill: govern-lifecycle-decommission-agent
+// workspace: {workspace-name}
+
+// ── Query 1: Agentes Copilot Studio sin actividad en 30 días ─────────────────
+let inactive_threshold = 30d;
+CopilotStudio_CL
+| summarize LastActivity = max(TimeGenerated) by AgentName_s, AgentId_s
+| extend DaysInactive = datetime_diff("day", now(), LastActivity)
+| where DaysInactive > inactive_threshold
+| project AgentName_s, AgentId_s, LastActivity, DaysInactive
+| order by DaysInactive desc
+
+// ── Query 2: Agentes Foundry sin actividad en 30 días ────────────────────────
+FoundryAgents_CL
+| summarize LastActivity = max(TimeGenerated) by AgentId_s, EndpointName_s
+| extend DaysInactive = datetime_diff("day", now(), LastActivity)
+| where DaysInactive > inactive_threshold
+| project AgentId_s, EndpointName_s, LastActivity, DaysInactive
+| order by DaysInactive desc
+
+// ── Query 3: Service principals sin sign-in en 30 días ───────────────────────
+AADServicePrincipalSignInLogs
+| summarize LastSignIn = max(TimeGenerated) by ServicePrincipalName, ServicePrincipalId
+| extend DaysSinceSignIn = datetime_diff("day", now(), LastSignIn)
+| where DaysSinceSignIn > inactive_threshold
+| join kind=inner (
+    // Filtrar solo SPs relacionados con agentes AI (ajustar tags según tenant)
+    AuditLogs
+    | where OperationName has "Add service principal"
+    | where TargetResources has_any ("Copilot", "PowerVirtualAgents", "AIFoundry")
+    | project SPId = tostring(TargetResources[0].id)
+) on $left.ServicePrincipalId == $right.SPId
+| project ServicePrincipalName, ServicePrincipalId, LastSignIn, DaysSinceSignIn
+| order by DaysSinceSignIn desc
+
+// ── Query 4: Owners que abandonaron la org (UPN deshabilitado en Entra) ──────
+// Correlaciona creadores de agentes con estado de cuenta en Entra
+// Requiere que AuditLogs tenga el campo createdBy poblado
+CopilotStudio_CL
+| where EventType_s == "AgentCreated"
+| extend CreatedBy = tostring(parse_json(Properties_s).createdBy.user.email)
+| project AgentName = tostring(parse_json(Properties_s).displayName), CreatedBy, TimeGenerated
+| join kind=inner (
+    AuditLogs
+    | where OperationName has "Disable account"
+    | project DisabledUser = tostring(TargetResources[0].userPrincipalName)
+) on $left.CreatedBy == $right.DisabledUser
+| extend Risk = "Owner deshabilitado — agente huérfano"
+| project TimeGenerated, AgentName, CreatedBy, Risk

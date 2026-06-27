@@ -1,0 +1,61 @@
+// skill: protect-purview-ai-hub-monitoring
+// workspace: {workspace-name} | conector: Purview (PurviewAuditLog, MicrosoftDataLossPrevention)
+
+// ── Query 1: Volumen de interacciones por agente (últimos 30 días) ────────────
+let lookback = 30d;
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where Workload has_any ("Copilot", "CopilotStudio", "AIHub")
+| summarize
+    InteractionCount = count(),
+    UniqueUsers      = dcount(UserId),
+    LastActivity     = max(TimeGenerated)
+  by OperationName, Workload
+| order by InteractionCount desc
+
+// ── Query 2: Usuarios con mayor volumen de interacciones con AI ───────────────
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where Workload has_any ("Copilot", "CopilotStudio")
+| summarize
+    TotalInteractions = count(),
+    UniqueAgents      = dcount(tostring(parse_json(AuditData).AgentId)),
+    LastSeen          = max(TimeGenerated)
+  by UserId
+| top 20 by TotalInteractions
+
+// ── Query 3: Sensitive information types detectados en interacciones ───────────
+MicrosoftDataLossPrevention
+| where TimeGenerated > ago(lookback)
+| where Workload has_any ("CopilotExperiences", "Copilot", "AIHub")
+| extend SITs = parse_json(SensitiveInfoTypeData)
+| mv-expand SIT = SITs
+| extend
+    SITName      = tostring(SIT.SensitiveInfoTypeName),
+    SITCount     = toint(SIT.Count),
+    Confidence   = tostring(SIT.Confidence)
+| where Confidence in ("High", "Medium")
+| summarize
+    TotalDetections = sum(SITCount),
+    AffectedUsers   = dcount(UserId)
+  by SITName
+| order by TotalDetections desc
+
+// ── Query 4: Interacciones con agentes fuera de horario laboral ───────────────
+PurviewAuditLog
+| where TimeGenerated > ago(7d)
+| where Workload has_any ("Copilot", "CopilotStudio")
+| extend HourUTC = datetime_part("Hour", TimeGenerated)
+| where HourUTC < 6 or HourUTC > 22
+| summarize
+    OffHoursCount = count(),
+    UniqueUsers   = dcount(UserId)
+  by bin(TimeGenerated, 1h), Workload
+| order by TimeGenerated desc
+
+// ── Query 5: Tendencia diaria de interacciones (baseline de actividad normal) ──
+PurviewAuditLog
+| where TimeGenerated > ago(30d)
+| where Workload has_any ("Copilot", "CopilotStudio")
+| summarize DailyCount = count() by bin(TimeGenerated, 1d)
+| order by TimeGenerated asc

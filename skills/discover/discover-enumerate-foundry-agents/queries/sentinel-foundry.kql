@@ -1,0 +1,38 @@
+// skill: discover-enumerate-foundry-agents
+// workspace: {workspace-name} | conector requerido: Foundry_Agents (bundle David Alonso)
+
+// ── Query 1: Endpoints activos con volumen de inferencia ─────────────────────
+let lookback = 7d;
+FoundryAgents_CL
+| where TimeGenerated > ago(lookback)
+| summarize
+    RequestCount  = count(),
+    UniqueUsers   = dcount(UserId_s),
+    LastActivity  = max(TimeGenerated),
+    AvgLatency    = avg(LatencyMs_d)
+  by AgentId_s, EndpointName_s, ProjectName_s
+| extend DaysSinceActivity = datetime_diff("day", now(), LastActivity)
+| order by RequestCount desc
+
+// ── Query 2: Endpoints con auth mode key (riesgo alto) ───────────────────────
+FoundryAgents_CL
+| where TimeGenerated > ago(lookback)
+| where AuthMode_s == "key"
+| summarize CallCount = count() by AgentId_s, EndpointName_s, CallerIP = IPAddress_s
+| extend RiskLevel = "Alto — auth sin Entra ID"
+| order by CallCount desc
+
+// ── Query 3: Volumen inusual de inferencia (anomalía) ────────────────────────
+let baseline_window = 14d;
+let alert_window = 1d;
+let baseline = FoundryAgents_CL
+| where TimeGenerated between (ago(baseline_window) .. ago(alert_window))
+| summarize AvgDailyRequests = count() / 13.0 by AgentId_s;
+FoundryAgents_CL
+| where TimeGenerated > ago(alert_window)
+| summarize TodayRequests = count() by AgentId_s
+| join kind=inner baseline on AgentId_s
+| extend Ratio = TodayRequests / AvgDailyRequests
+| where Ratio > 3  // más del triple del promedio
+| extend Alert = strcat("Volumen anómalo: ", round(Ratio, 1), "x baseline")
+| order by Ratio desc

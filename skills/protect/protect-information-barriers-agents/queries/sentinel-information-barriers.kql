@@ -1,0 +1,65 @@
+// skill: protect-information-barriers-agents
+// workspace: {workspace-name} | conector: PurviewAuditLog, MicrosoftDataLossPrevention
+
+// ── Query 1: Violations de Information Barriers en últimos 7 días ─────────────
+let lookback = 7d;
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where OperationName has_any (
+    "InformationBarrierPolicyViolation",
+    "IBPolicyViolation",
+    "CrossSegmentAccess"
+)
+| extend
+    Segment1  = tostring(parse_json(AuditData).Segment1),
+    Segment2  = tostring(parse_json(AuditData).Segment2),
+    Workload  = tostring(parse_json(AuditData).Workload),
+    BlockedBy = tostring(parse_json(AuditData).PolicyName)
+| project TimeGenerated, UserId, Segment1, Segment2, Workload, BlockedBy
+| order by TimeGenerated desc
+
+// ── Query 2: Intentos de acceso cross-segment en SharePoint ──────────────────
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where Workload has "SharePoint"
+| where OperationName has_any ("FileAccessed", "FileDownloaded", "SiteCollectionAdminAdded")
+| extend
+    SiteUrl    = tostring(parse_json(AuditData).SiteUrl),
+    AccessedBy = tostring(parse_json(AuditData).UserId)
+| where SiteUrl has_any ("finance", "legal", "trading", "research")  // ajustar a naming del tenant
+| summarize
+    AccessCount = count(),
+    Operations  = make_set(OperationName, 5)
+  by AccessedBy, SiteUrl
+| extend CrossSegmentRisk = case(
+    // Detectar cuando el patrón del user no corresponde al segmento del site
+    AccessedBy has "finance" and SiteUrl has "legal", "Alto",
+    AccessedBy has "legal" and SiteUrl has "finance", "Alto",
+    "Revisar"
+)
+| where CrossSegmentRisk == "Alto"
+| order by AccessCount desc
+
+// ── Query 3: Agentes AI accediendo a segmentos no autorizados ────────────────
+// Requiere convención de naming para SPs de agentes (ej: "agent-" prefix)
+PurviewAuditLog
+| where TimeGenerated > ago(lookback)
+| where tostring(parse_json(AuditData).UserId) has_any ("agent-", "sp-agent", "bot-")
+| extend
+    AgentId  = tostring(parse_json(AuditData).UserId),
+    SiteUrl  = tostring(parse_json(AuditData).SiteUrl),
+    Resource = tostring(parse_json(AuditData).SourceFileName)
+| project TimeGenerated, AgentId, SiteUrl, Resource, OperationName
+| order by TimeGenerated desc
+
+// ── Query 4: Estado de aplicación de políticas IB (admin events) ─────────────
+PurviewAuditLog
+| where TimeGenerated > ago(30d)
+| where OperationName has_any (
+    "InformationBarrierPoliciesApplication",
+    "NewInformationBarrierPolicy",
+    "SetInformationBarrierPolicy"
+)
+| project TimeGenerated, UserId, OperationName,
+    PolicyName = tostring(parse_json(AuditData).PolicyName)
+| order by TimeGenerated desc

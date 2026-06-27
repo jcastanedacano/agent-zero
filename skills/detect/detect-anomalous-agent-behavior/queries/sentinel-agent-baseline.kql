@@ -1,0 +1,84 @@
+// skill: detect-anomalous-agent-behavior
+// workspace: {workspace-name} | conectores: CopilotStudio_CL, FoundryAgents_CL, BehaviorAnalytics
+
+// ── Query 1: Calcular baseline diario por agente (últimos 14 días) ────────────
+let baseline_window = 14d;
+let alert_window    = 1d;
+CopilotStudio_CL
+| where TimeGenerated between (ago(baseline_window) .. ago(alert_window))
+| summarize DailyCount = count() by AgentName_s, bin(TimeGenerated, 1d)
+| summarize
+    AvgDailyRequests = avg(DailyCount),
+    StdDev           = stdev(DailyCount),
+    MaxDaily         = max(DailyCount),
+    DataDays         = dcount(bin(TimeGenerated, 1d))
+  by AgentName_s
+| where DataDays >= 7  // solo agentes con historial suficiente
+| extend Threshold3x = AvgDailyRequests * 3
+
+// ── Query 2: Volumen anómalo — agentes sobre 3x baseline hoy ─────────────────
+let baseline_window = 14d;
+let alert_window    = 1d;
+let baseline = CopilotStudio_CL
+| where TimeGenerated between (ago(baseline_window) .. ago(alert_window))
+| summarize DailyCount = count() by AgentName_s, bin(TimeGenerated, 1d)
+| summarize AvgDailyRequests = avg(DailyCount) by AgentName_s;
+CopilotStudio_CL
+| where TimeGenerated > ago(alert_window)
+| summarize TodayRequests = count() by AgentName_s
+| join kind=inner baseline on AgentName_s
+| extend
+    Ratio     = round(TodayRequests / AvgDailyRequests, 2),
+    Threshold = AvgDailyRequests * 3
+| where TodayRequests > Threshold
+| extend Alert = strcat("Volumen anómalo: ", Ratio, "x sobre baseline (", round(AvgDailyRequests,0), " avg)")
+| project-reorder Alert, AgentName_s, TodayRequests, AvgDailyRequests, Ratio
+
+// ── Query 3: Acceso a recursos nunca vistos antes (primeras ocurrencias) ──────
+let history_window = 30d;
+let detection_window = 1d;
+let known_resources = AADServicePrincipalSignInLogs
+| where TimeGenerated between (ago(history_window) .. ago(detection_window))
+| summarize by ServicePrincipalName, ResourceDisplayName;
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(detection_window)
+| where ResultType == 0
+| join kind=leftanti known_resources
+    on ServicePrincipalName, ResourceDisplayName
+| project TimeGenerated, ServicePrincipalName, ResourceDisplayName, IPAddress
+| extend Alert = "Primer acceso a este recurso — sin precedente en 30 días"
+| order by TimeGenerated desc
+
+// ── Query 4: Operación fuera de horario habitual por agente ──────────────────
+let baseline_window = 14d;
+let detection_window = 1d;
+let agent_hours = CopilotStudio_CL
+| where TimeGenerated between (ago(baseline_window) .. ago(detection_window))
+| extend HourUTC = datetime_part("Hour", TimeGenerated)
+| summarize
+    MinHour = min(HourUTC),
+    MaxHour = max(HourUTC),
+    TypicalHours = make_set(HourUTC, 24)
+  by AgentName_s;
+CopilotStudio_CL
+| where TimeGenerated > ago(detection_window)
+| extend HourUTC = datetime_part("Hour", TimeGenerated)
+| join kind=inner agent_hours on AgentName_s
+| where not(set_has_element(TypicalHours, HourUTC))
+| summarize OffHoursCount = count(), Hours = make_set(HourUTC) by AgentName_s
+| extend Alert = strcat("Actividad fuera de horario habitual: horas ", tostring(Hours))
+| order by OffHoursCount desc
+
+// ── Query 5: UEBA scores para service principals de agentes ──────────────────
+BehaviorAnalytics
+| where TimeGenerated > ago(1d)
+| where UserPrincipalName has_any ("agent", "sp-", "bot", "copilot")
+    or AccountDisplayName has_any ("agent", "bot")
+| where ActivityInsights has "Anomalous"
+| project TimeGenerated,
+    AgentIdentity    = UserPrincipalName,
+    InvestigationPriority,
+    ActivityType,
+    ActivityInsights,
+    AnomalyDetails = tostring(ExtendedProperties)
+| order by InvestigationPriority desc
