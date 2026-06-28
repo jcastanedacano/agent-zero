@@ -2,7 +2,10 @@
 // P02 — GOVERN & CONTROL
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: AIAgentsInfo, AuditLogs, CloudAppEvents
+// Tables: AgentsInfo, AuditLogs, CloudAppEvents
+// MIGRATED: AIAgentsInfo → AgentsInfo (deprecated July 1, 2026)
+//   ManagementStatus → LifecycleStatus | TechnicalOwner → Owners (dynamic)
+//   CreatedTime → CreatedDateTime
 // =============================================================================
 
 
@@ -10,10 +13,11 @@
 // Q1: Agents Without Entra Agent ID — Identity Orphans
 // Use: Find agents running without a dedicated Entra identity (identity laundering risk)
 // -----------------------------------------------------------------------------
-AIAgentsInfo
+AgentsInfo
 | where TimeGenerated > ago(30d)
 | where isempty(EntraAgentId) or EntraAgentId == "Inherited"
-| distinct AgentId, AgentName, AgentType, Platform, TechnicalOwner, ManagementStatus
+| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
+| distinct AgentId, AgentName, AgentType, Platform, OwnerDisplay, LifecycleStatus
 | extend RiskNote = "Agent operates under user identity — no dedicated Entra Agent ID assigned"
 | sort by AgentType asc
 
@@ -47,9 +51,10 @@ AuditLogs
 // Use: Identify agents in production without activity in the review window
 //      Signals candidates for decommission review
 // -----------------------------------------------------------------------------
-AIAgentsInfo
+AgentsInfo
 | where TimeGenerated > ago(90d)
-| summarize LastActivity = max(TimeGenerated) by AgentId, AgentName, AgentType, TechnicalOwner
+| summarize LastActivity = max(TimeGenerated) by AgentId, AgentName, AgentType, Owners
+| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
 | extend DaysSinceActivity = datetime_diff('day', now(), LastActivity)
 | where DaysSinceActivity > 60
 | extend LifecycleRisk = case(
@@ -58,7 +63,7 @@ AIAgentsInfo
     "Medium — approaching review threshold"
 )
 | sort by DaysSinceActivity desc
-| project AgentId, AgentName, AgentType, TechnicalOwner, DaysSinceActivity, LifecycleRisk
+| project AgentId, AgentName, AgentType, OwnerDisplay, DaysSinceActivity, LifecycleRisk
 
 
 // -----------------------------------------------------------------------------

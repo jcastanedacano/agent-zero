@@ -2,41 +2,46 @@
 // P01 — DISCOVER & PRIORITIZE
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: AIAgentsInfo, CloudAppEvents, OfficeActivity
+// Tables: AgentsInfo, CloudAppEvents, OfficeActivity
+// MIGRATED: AIAgentsInfo → AgentsInfo (deprecated July 1, 2026)
+//   ManagementStatus → LifecycleStatus | TechnicalOwner → Owners (dynamic)
+//   CreatedTime → CreatedDateTime | new: PublishedStatus, McpServers, DeclaredTools, InstanceCount
 // =============================================================================
 
 
 // -----------------------------------------------------------------------------
-// Q1: Full Agent Inventory by Type and Management Status
+// Q1: Full Agent Inventory by Type and Lifecycle Status
 // Use: Baseline visibility — what agents exist and which are unmanaged
 // -----------------------------------------------------------------------------
-AIAgentsInfo
+AgentsInfo
 | where TimeGenerated > ago(30d)
 | summarize
     LastSeen = max(TimeGenerated),
     AgentCount = dcount(AgentId)
-    by AgentType, Platform, ManagementStatus, AgentName
+    by AgentType, Platform, LifecycleStatus, PublishedStatus, AgentName
 | extend RiskLevel = case(
-    ManagementStatus == "Unmanaged", "High",
-    ManagementStatus == "PartiallyManaged", "Medium",
+    LifecycleStatus == "Unmanaged", "High",
+    LifecycleStatus == "PartiallyManaged", "Medium",
+    PublishedStatus == "Inactive", "Medium",
     "Low"
 )
 | sort by RiskLevel asc, LastSeen desc
-| project AgentName, AgentType, Platform, ManagementStatus, RiskLevel, AgentCount, LastSeen
+| project AgentName, AgentType, Platform, LifecycleStatus, PublishedStatus, RiskLevel, AgentCount, LastSeen
 
 
 // -----------------------------------------------------------------------------
 // Q2: Unmanaged Agents — No Owner, No Registration
 // Use: Identify shadow AI — agents operating without formal registration
 // -----------------------------------------------------------------------------
-AIAgentsInfo
+AgentsInfo
 | where TimeGenerated > ago(30d)
-| where ManagementStatus == "Unmanaged"
-    or isempty(TechnicalOwner)
-| distinct AgentId, AgentName, AgentType, Platform, CreatedTime, TechnicalOwner
-| extend DaysSinceCreation = datetime_diff('day', now(), CreatedTime)
+| where LifecycleStatus == "Unmanaged"
+    or isempty(tostring(Owners))
+| distinct AgentId, AgentName, AgentType, Platform, CreatedDateTime, Owners
+| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
+| extend DaysSinceCreation = datetime_diff('day', now(), CreatedDateTime)
 | sort by DaysSinceCreation desc
-| project AgentId, AgentName, AgentType, Platform, TechnicalOwner, DaysSinceCreation
+| project AgentId, AgentName, AgentType, Platform, OwnerDisplay, DaysSinceCreation
 
 
 // -----------------------------------------------------------------------------
@@ -85,20 +90,52 @@ OfficeActivity
 // Use: Near-real-time detection of new agent registrations
 // Recommended: Schedule as Analytics Rule, frequency 1h, lookback 1d
 // -----------------------------------------------------------------------------
-AIAgentsInfo
+AgentsInfo
 | where TimeGenerated > ago(1d)
-| where CreatedTime > ago(1d)
+| where CreatedDateTime > ago(1d)
+| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
 | project
     AgentId,
     AgentName,
     AgentType,
     Platform,
-    TechnicalOwner,
-    ManagementStatus,
-    CreatedTime
+    OwnerDisplay,
+    LifecycleStatus,
+    PublishedStatus,
+    CreatedDateTime,
+    DeclaredTools,
+    McpServers
 | extend AlertDetail = strcat(
     "New agent registered: ", AgentName,
     " | Type: ", AgentType,
-    " | Owner: ", iff(isempty(TechnicalOwner), "UNASSIGNED", TechnicalOwner)
+    " | Owner: ", OwnerDisplay,
+    " | MCP servers: ", tostring(array_length(McpServers))
 )
-| sort by CreatedTime desc
+| sort by CreatedDateTime desc
+
+
+// -----------------------------------------------------------------------------
+// Q6: Agents With External MCP Servers or High Tool Count — Supply Chain Risk
+// Use: Surface agents whose declared toolset includes external MCP endpoints
+//      or anomalously large tool counts (potential permission sprawl)
+// New AgentsInfo columns: McpServers (dynamic), DeclaredTools (dynamic), InstanceCount
+// -----------------------------------------------------------------------------
+AgentsInfo
+| where TimeGenerated > ago(30d)
+| extend McpServerCount = array_length(McpServers)
+| extend DeclaredToolCount = array_length(DeclaredTools)
+| where McpServerCount > 0 or DeclaredToolCount > 10
+| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
+| extend RiskSignal = case(
+    McpServerCount > 0 and DeclaredToolCount > 10, "High — external MCP + large toolset",
+    McpServerCount > 0, "Medium — external MCP server(s) declared",
+    "Medium — large declared tool count"
+)
+| project
+    AgentName, AgentType, Platform,
+    OwnerDisplay, LifecycleStatus, PublishedStatus,
+    McpServerCount, McpServers,
+    DeclaredToolCount, DeclaredTools,
+    InstanceCount, RiskSignal,
+    LastSeen = TimeGenerated
+| sort by McpServerCount desc, DeclaredToolCount desc
