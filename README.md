@@ -2,7 +2,7 @@
 
 **Practical security workshops for AI agents on the Microsoft stack.**
 
-> Hands-on labs, instructional design, KQL queries, agent skills, and facilitator resources for securing agentic AI systems using Microsoft 365, Defender, Sentinel, Purview, and Entra.
+> A complete framework for securing agentic AI in enterprise Microsoft environments: 15 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 30+ production KQL queries, ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10 and aligned to MITRE ATLAS, NIST AI RMF, and NIST CSF 2.0.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fmicrosoft-agentic-security-labs%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
@@ -28,9 +28,9 @@ Three parallel tracks — pick the one that fits your role:
 
 | Track | Audience | Format | Duration | Output |
 |-------|----------|--------|----------|--------|
-| [**A — Executive**](./Track-A-Executive/README.md) | CISO / CTO / Director | Decision exercises, risk scenarios, roleplay | 4 hours | Risk Posture Map |
-| [**B — Architect**](./Track-B-Architect/README.md) | Security Architect / Consultant | Hands-on labs in M365 E5 demo tenant | 8 hours | Gap Assessment + 90-day roadmap |
-| [**C — SOC Engineer**](./Track-C-SOC-Engineer/README.md) | SOC Analyst / Security Engineer | KQL, Sentinel rules, Purview, Entra CA | 8 hours | Agentic incident response playbook |
+| [**A — Executive**](./Track-A-Executive/README.md) | CISO / CTO / Director | Decision exercises, risk scenarios, roleplay — no lab access required | 4 hours | Risk Posture Map |
+| [**B — Architect**](./Track-B-Architect/README.md) | Security Architect / Consultant | Hands-on labs in M365 E5 demo tenant + Azure AI Foundry | 8 hours | Gap Assessment + 90-day roadmap |
+| [**C — SOC Engineer**](./Track-C-SOC-Engineer/README.md) | SOC Analyst / Security Engineer | KQL labs, Sentinel analytics rules, Purview, Entra CA, Logic Apps | 8 hours | Agentic incident response playbook |
 
 ---
 
@@ -63,7 +63,7 @@ microsoft-agentic-security-labs/
 │   ├── Module-05-DetectRespond.md
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
-├── KQL-Library/                     ← 25 production-ready queries for Sentinel + Defender
+├── KQL-Library/                     ← 30+ production-ready queries for Sentinel + Defender
 │   ├── README.md
 │   ├── P01-Agent-Discovery.kql
 │   ├── P02-Governance-Gaps.kql
@@ -72,7 +72,7 @@ microsoft-agentic-security-labs/
 │   └── P05-Jailbreak-Detection.kql
 ├── skills/                          ← 30 agent skills (agentskills.io format, ATLAS + NIST mapped)
 │   ├── SCHEMA.md
-│   ├── discover/   (5 skills)
+│   ├── discover/   (6 skills)
 │   ├── govern/     (7 skills)
 │   ├── secure/     (5 skills)
 │   ├── protect/    (5 skills)
@@ -129,7 +129,7 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 | [04 Protect](./skills/protect/) | `protect-data-loss-prevention-agent-outputs` · `protect-sensitivity-labels-ai-outputs` · `protect-purview-ai-hub-monitoring` · `protect-information-barriers-agents` · `protect-insider-risk-management-agents` |
 | [05 Detect](./skills/detect/) | `detect-alert-prompt-injection-sentinel` · `detect-anomalous-agent-behavior` · `detect-data-exfiltration-agent` · `detect-agent-identity-abuse` · `detect-respond-playbook-agent-containment` · `detect-sentinel-mcp-server` · `detect-security-copilot-triage` |
 
-→ [Framework cross-reference](./skills/references/frameworks.md) — all 29 skills mapped to ATLAS, D3FEND, NIST AI RMF, and NIST CSF.
+→ [Framework cross-reference](./skills/references/frameworks.md) — all 30 skills mapped to ATLAS, D3FEND, NIST AI RMF, and NIST CSF.
 
 ---
 
@@ -159,11 +159,11 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 
 | Domain | Primary Controls |
 |--------|-----------------|
-| 01 Discover & Prioritize | Purview DSPM for AI · Defender AI Agent Inventory · Agent 365 · SharePoint Advanced Management |
-| 02 Govern & Control | Entra Agent ID · Copilot Studio governance · Foundry RBAC + API controls · Power Platform DLP |
-| 03 Secure Access | Entra CA for Agents · Entra ID Protection · PIM just-in-time · Defender for Cloud Apps |
-| 04 Protect Data | Purview DLP · Insider Risk Management · Sensitivity labels · SharePoint Advanced Management |
-| 05 Detect & Respond | Defender XDR · Microsoft Sentinel + native MCP server · Security Copilot · Purview Audit · Agent 365 |
+| 01 Discover & Prioritize | Purview DSPM for AI · Defender AI Agent Inventory · Agent 365 Registry · SharePoint Advanced Management · CloudAppEvents (third-party agent discovery) |
+| 02 Govern & Control | Entra Agent ID · Copilot Studio governance + approval flow · Foundry RBAC + API controls · Power Platform DLP · Tiered Autonomy (Logic Apps playbook tiers) |
+| 03 Secure Access | Entra CA for Agents (`clientApplications.includeAgentIdServicePrincipals`) · Entra ID Protection · PIM just-in-time · Defender for Cloud Apps · Foundry rate limiting (model extraction prevention) |
+| 04 Protect Data | Purview DLP (AI interactions workload) · Insider Risk Management · Sensitivity labels · SharePoint Advanced Management · Foundry RBAC (membership inference prevention) |
+| 05 Detect & Respond | Defender XDR · Microsoft Sentinel + native MCP server · Security Copilot agents · Purview Audit · Agent 365 · Logic Apps (tiered automated response) |
 
 ---
 
