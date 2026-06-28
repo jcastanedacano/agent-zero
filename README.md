@@ -2,7 +2,7 @@
 
 **Practical security workshops for AI agents on the Microsoft stack.**
 
-> A complete framework for securing agentic AI in enterprise Microsoft environments: 15 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 30+ production KQL queries, ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10 and aligned to MITRE ATLAS, NIST AI RMF, and NIST CSF 2.0.
+> A complete framework for securing agentic AI in enterprise Microsoft environments: 15 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 30+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10 and aligned to MITRE ATLAS, NIST AI RMF, and NIST CSF 2.0.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fmicrosoft-agentic-security-labs%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
@@ -63,7 +63,7 @@ microsoft-agentic-security-labs/
 │   ├── Module-05-DetectRespond.md
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
-├── KQL-Library/                     ← 30+ production-ready queries for Sentinel + Defender
+├── KQL-Library/                     ← 30+ production-ready queries for Sentinel + Defender XDR
 │   ├── README.md
 │   ├── P01-Agent-Discovery.kql
 │   ├── P02-Governance-Gaps.kql
@@ -104,7 +104,7 @@ az deployment group create \
   --parameters workspaceName=agentic-security-lab
 ```
 
-The ARM template deploys: Log Analytics workspace + Microsoft Sentinel + 3 pre-configured analytics rules (jailbreak detection, new unmanaged agent, data exfiltration) + agent watchlist.
+The ARM template deploys: Log Analytics workspace + Microsoft Sentinel + 3 pre-configured analytics rules (jailbreak detection, new agent without Entra identity or owner, data exfiltration) + agent watchlist.
 
 ### Start the workshop
 
@@ -130,6 +130,24 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 | [05 Detect](./skills/detect/) | `detect-alert-prompt-injection-sentinel` · `detect-anomalous-agent-behavior` · `detect-data-exfiltration-agent` · `detect-agent-identity-abuse` · `detect-respond-playbook-agent-containment` · `detect-sentinel-mcp-server` · `detect-security-copilot-triage` |
 
 → [Framework cross-reference](./skills/references/frameworks.md) — all 30 skills mapped to ATLAS, D3FEND, NIST AI RMF, and NIST CSF.
+
+---
+
+## KQL Library — Schema Validation Status
+
+All queries in the KQL Library have been validated against a live Microsoft 365 tenant (June 2026) using the Microsoft Graph Security `runHuntingQuery` API.
+
+| File | Tables | Last Validated | Notes |
+|------|--------|---------------|-------|
+| [P01-Agent-Discovery.kql](./KQL-Library/P01-Agent-Discovery.kql) | `AgentsInfo`, `CloudAppEvents`, `OfficeActivity` | 2026-06-28 | Migrated from `AIAgentsInfo` (deprecated July 1, 2026). Real column is `Name` (not `AgentName`). Q6 added: MCP server + tool count risk. |
+| [P02-Governance-Gaps.kql](./KQL-Library/P02-Governance-Gaps.kql) | `AgentsInfo`, `AuditLogs`, `CloudAppEvents` | 2026-06-28 | Migrated from `AIAgentsInfo`. `Owners` (dynamic) cast to string before grouping. |
+| [P03-Access-Anomalies.kql](./KQL-Library/P03-Access-Anomalies.kql) | `CloudAppEvents`, `EntraIdSpnSignInEvents`, `AuditLogs` | 2026-06-28 | Migrated from `AADSpnSignInEventsBeta` (deprecated Dec 2025). Field is `Country` (not `Location`). |
+| [P04-Exfiltration-Detection.kql](./KQL-Library/P04-Exfiltration-Detection.kql) | `CloudAppEvents`, `MicrosoftPurviewInformationProtection` | — | Sentinel tables — `TimeGenerated` correct. |
+| [P05-Jailbreak-Detection.kql](./KQL-Library/P05-Jailbreak-Detection.kql) | `CloudAppEvents`, `BehaviorAnalytics` | — | Sentinel tables — `TimeGenerated` correct. |
+
+**Live tenant findings (June 2026):** P01-Q2 returned shadow AI agents (Mural, Matter, 1Page, Teamflect, Priority Matrix) that had been operating for 951 days without an Entra Agent ID or assigned owner — validating the shadow AI detection logic.
+
+> **Migration note:** `AIAgentsInfo` is deprecated on **July 1, 2026**. All queries in this repository already use `AgentsInfo`. If you have saved queries outside Defender XDR that reference `AIAgentsInfo`, migrate them before that date.
 
 ---
 
