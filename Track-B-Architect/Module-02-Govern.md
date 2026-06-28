@@ -26,6 +26,8 @@ Al finalizar este módulo, el participante será capaz de diseñar un modelo de 
 
 4. **El ciclo de vida como control de seguridad activo:** La descomisión de un agente debe incluir: revocación de tokens, eliminación de permisos en Entra, cierre del registro en Agent 365, y archivo de la documentación de ownership. Un agente "abandonado" con permisos activos es un vector de ataque con identidad legítima.
 
+5. **Tiered Autonomy — cuándo el agente actúa solo y cuándo para:** Sin una definición explícita de niveles de autonomía, todo agente en producción opera por defecto en modo "full automation", que es el gap más frecuente. El marco de tres niveles: (1) *Automatización completa* para acciones de bajo riesgo, reversibles y con blast radius acotado; (2) *Aprobación humana* para acciones que afectan múltiples usuarios, sistemas externos o datos sensibles; (3) *Control humano* para acciones de alto riesgo — deshabilitación de cuentas, eliminación de datos, cambios de política. Cada agente debe tener su nivel documentado como parte del registro de gobernanza, no como supuesto implícito.
+
 ---
 
 **Ejercicio / Lab:**

@@ -30,6 +30,8 @@ Al finalizar este módulo, el participante será capaz de diseñar una arquitect
 
 6. **Multi-agent trust boundaries como vector de escalada:** Un agente comprometido que puede invocar otros agentes pivota a nuevos blast radii con permisos propios. El diseño arquitectónico correcto trata cada invocación agent-to-agent como una llamada no confiable: verificar autorización explícita del usuario y limitar permisos heredados entre agentes. Referencia: Anthropic Zero Trust for AI Agents.
 
+7. **Membership inference — privacidad sin exfiltración visible:** Si un modelo fue fine-tuneado con datos personales (PII de empleados, datos de clientes, registros médicos), un atacante puede inferir si un registro específico estuvo en el training set consultando sistemáticamente el modelo y analizando patrones de respuesta — sin necesidad de extraer el dato directamente. El riesgo es una violación de privacidad no detectable por DLP ni por Purview audit estándar. El control arquitectónico es: (a) no fine-tunear con PII sin anonimización diferencial, (b) usar Foundry RBAC para restringir quién puede consultar modelos fine-tuneados con datos sensibles, (c) monitorear volumen de inferencias por identidad. OWASP Agentic AG07.
+
 ---
 
 **Ejercicio / Lab:**

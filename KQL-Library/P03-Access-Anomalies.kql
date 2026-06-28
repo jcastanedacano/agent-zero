@@ -98,6 +98,46 @@ AADServicePrincipalSignInLogs
 
 
 // -----------------------------------------------------------------------------
+// Q6: Model Extraction via API — Anomalous Query Volume to AI Endpoints
+// Use: Detect attackers systematically querying Azure AI Foundry or Copilot
+//      endpoints to reconstruct the model through input/output pairs
+//      Threshold: >500 AI API calls per hour from a single identity (adjust per baseline)
+// Reference: OWASP Agentic AI AG06 — Model Extraction; Red Teaming AI Ch.6
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(7d)
+| where Application in ("Azure AI Foundry", "Azure OpenAI", "Microsoft Copilot", "Copilot Studio")
+    and ActionType in ("AIInference", "ModelInference", "AgentInteraction", "CompletionRequest")
+| extend CallerIdentity = coalesce(
+    tostring(RawEventData["CallerObjectId"]),
+    AccountObjectId,
+    AccountDisplayName
+)
+| extend ModelId = tostring(RawEventData["ModelId"])
+| extend EndpointUrl = tostring(RawEventData["EndpointUrl"])
+| summarize
+    QueryCount = count(),
+    DistinctPrompts = dcount(tostring(RawEventData["UserPrompt"])),
+    FirstQuery = min(TimeGenerated),
+    LastQuery = max(TimeGenerated)
+    by CallerIdentity, ModelId, EndpointUrl, bin(TimeGenerated, 1h)
+| where QueryCount > 500
+| extend QueriesPerMinute = round(toreal(QueryCount) / 60.0, 1)
+| extend ExtractionNote = "High-volume systematic queries — potential model extraction attempt"
+| project
+    CallerIdentity,
+    ModelId,
+    EndpointUrl,
+    QueryCount,
+    DistinctPrompts,
+    QueriesPerMinute,
+    FirstQuery,
+    LastQuery,
+    ExtractionNote
+| sort by QueryCount desc
+
+
+// -----------------------------------------------------------------------------
 // Q5: PIM Activation Patterns for Agent Roles — Anomalous Elevation
 // Use: Detect unusual PIM activation patterns for agent-associated privileged roles
 // -----------------------------------------------------------------------------

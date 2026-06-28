@@ -24,6 +24,18 @@ At the end of this module, you will be able to configure a Conditional Access po
 
 ---
 
+## Contenido core (puntos que el facilitador debe cubrir)
+
+1. **La trampa de `grantControls: mfa` para agentes:** Una política de CA con `mfa` como grant control sobre identidades de agente es silenciosamente inválida — no bloquea ni fuerza autenticación. Los agentes no pueden completar MFA interactivo y la política no genera ningún evento de enforcement en los logs. Solo `"block"` es válido para bloquear acceso de agentes con CA.
+
+2. **Blueprint-level CA como patrón de escala:** Una política de CA por instancia de agente no escala. El patrón correcto es un Blueprint-level CA que usa `clientApplications.includeAgentIdServicePrincipals` para cubrir todas las identidades de agente actuales y futuras derivadas del mismo blueprint.
+
+3. **OAuth consent drift como vector de acumulación silenciosa:** Sin restricciones en el consent flow, un agente puede acumular permisos adicionales sin aprobación explícita. La señal: `AuditLogs` → `Add delegated permission grant` sin correlación con un evento `AgentPermissionApproved`.
+
+4. **Model extraction via API — robo de modelo a través del endpoint:** Un atacante con acceso al endpoint de Azure AI Foundry puede reconstruir un modelo propietario mediante consultas sistemáticas (input/output pairs), sin acceso directo al modelo. El indicador es volumen masivo de inferencias desde una sola identidad con alta variedad de prompts. KQL Q6 de P03 detecta este patrón. Control: rate limiting por identidad en Foundry + CA policy bloqueando identidades no autorizadas. OWASP Agentic AG06.
+
+---
+
 ## Background
 
 ### The `grantControls: mfa` trap

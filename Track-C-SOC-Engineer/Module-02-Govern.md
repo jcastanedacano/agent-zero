@@ -36,6 +36,8 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 5. **Multi-agent trust boundaries:** En arquitecturas multi-agente, un agente puede invocar a otro (orquestador → sub-agente). Si el agente orquestador es comprometido, puede usar sus permisos para invocar sub-agentes con mayor blast radius. El principio de gobernanza correcto: cada invocación agent-to-agent debe tratarse como llamada no confiable. Cada agente necesita su propio Entra Agent ID — no pueden compartir identidad — y los permisos no se heredan entre agentes sin autorización explícita del usuario.
 
+6. **Tiered Autonomy — el nivel de autonomía como configuración de gobernanza:** Sin un nivel asignado explícitamente, todos los agentes en producción operan en "full automation" por defecto — el gap más frecuente. Para un SOC engineer, esto se traduce en: (1) *Full automation* → los analytics rules pueden ejecutar contención automática (aislar host, bloquear IP); (2) *Human approval* → el agente genera la recomendación y espera aprobación en el portal antes de ejecutar; (3) *Human-led* → el agente solo presenta evidencia, el analista toma toda la acción. Al crear analytics rules en Sentinel con Logic Apps, el nivel de autonomía debe ser un parámetro explícito del playbook — no un valor por defecto.
+
 ---
 
 ## Background

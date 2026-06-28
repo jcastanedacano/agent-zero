@@ -26,6 +26,8 @@ Al finalizar este módulo, el participante será capaz de diseñar una arquitect
 
 4. **OAuth consent como vector de acumulación silenciosa:** Un agente puede acumular permisos adicionales sin que ningún administrador lo apruebe explícitamente si el consent flow no está restringido. La señal está en `AuditLogs` bajo `Add delegated permission grant` — sin correlación con un evento de aprobación, es un indicador de deriva.
 
+5. **Model extraction via API como vector de robo de IP y evasión:** Un atacante con acceso a un endpoint de Azure AI Foundry puede reconstruir el modelo propietario mediante consultas sistemáticas (input/output pairs), sin necesidad de acceder al modelo directamente. Señales: >500 inferencias/hora desde una única identidad, alta tasa de prompts distintos, patrones de consulta en grilla (exploración del espacio de decisión). El control de acceso correcto: rate limiting por identidad en Foundry + monitoreo con Q6 de P03. Este vector corresponde a OWASP Agentic AG06 y es particularmente relevante cuando el modelo fue fine-tuneado con datos propietarios.
+
 ---
 
 **Ejercicio / Lab:**

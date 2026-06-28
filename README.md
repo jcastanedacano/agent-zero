@@ -70,7 +70,7 @@ microsoft-agentic-security-labs/
 │   ├── P03-Access-Anomalies.kql
 │   ├── P04-Exfiltration-Detection.kql
 │   └── P05-Jailbreak-Detection.kql
-├── skills/                          ← 29 agent skills (agentskills.io format, ATLAS + NIST mapped)
+├── skills/                          ← 30 agent skills (agentskills.io format, ATLAS + NIST mapped)
 │   ├── SCHEMA.md
 │   ├── discover/   (5 skills)
 │   ├── govern/     (7 skills)
@@ -117,13 +117,13 @@ The ARM template deploys: Log Analytics workspace + Microsoft Sentinel + 3 pre-c
 
 ## Skills Library
 
-29 agent skills in [agentskills.io](https://agentskills.io) format, mapped to MITRE ATLAS v5.4, D3FEND v1.3, NIST AI RMF, and NIST CSF 2.0.
+30 agent skills in [agentskills.io](https://agentskills.io) format, mapped to MITRE ATLAS v5.4, D3FEND v1.3, NIST AI RMF, and NIST CSF 2.0.
 
 Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappings, license and role requirements), step-by-step workflow, KQL queries, and verification checklist.
 
 | Pillar | Skills |
 |--------|--------|
-| [01 Discover](./skills/discover/) | `discover-inventory-agents-copilot-studio` · `discover-enumerate-foundry-agents` · `discover-shadow-ai-entra-principals` · `discover-classify-agent-connectors` · `discover-purview-dspm-ai` |
+| [01 Discover](./skills/discover/) | `discover-inventory-agents-copilot-studio` · `discover-enumerate-foundry-agents` · `discover-shadow-ai-entra-principals` · `discover-classify-agent-connectors` · `discover-purview-dspm-ai` · `discover-third-party-ai-risk` |
 | [02 Govern](./skills/govern/) | `govern-entra-agent-id` · `govern-agent365-approval-flow` · `govern-ca-policy-workload-identity` · `govern-dlp-policy-copilot-prompts` · `govern-lifecycle-decommission-agent` · `govern-pim-agent-roles` · `govern-foundry-rbac` |
 | [03 Secure](./skills/secure/) | `secure-least-privilege-agent-identity` · `secure-managed-identity-foundry` · `secure-network-isolation-agent` · `secure-secret-management-keyvault` · `secure-ca-policy-agents` |
 | [04 Protect](./skills/protect/) | `protect-data-loss-prevention-agent-outputs` · `protect-sensitivity-labels-ai-outputs` · `protect-purview-ai-hub-monitoring` · `protect-information-barriers-agents` · `protect-insider-risk-management-agents` |
@@ -175,17 +175,36 @@ Two concepts from Anthropic's [Zero Trust for AI Agents](https://www.anthropic.c
 
 **The "impossible vs. tedious" test** distinguishes real controls from friction. Ask of every mitigation: does this make an attack *impossible*, or just *tedious*? Rate limits, extra hops, and SMS-based MFA are tedious for a human attacker. An agentic adversary that can process thousands of steps per minute treats tedious controls as negligible overhead. Design for impossible first; treat tedious as a delay, not a defense.
 
+**Tiered Autonomy** defines when an agent may act unilaterally and when it must stop for human approval. Three tiers: (1) *Full automation* for low-risk, reversible actions with bounded blast radius; (2) *Human approval* for medium-risk actions affecting multiple users, external systems, or sensitive data; (3) *Human-led* for high-risk actions — account disablement, data deletion, policy changes. Without explicit tier assignment, every agent defaults to tier 1, which is the most common governance gap in production deployments.
+
+---
+
+## OWASP Top 10 for Agentic AI (2026) — Coverage Map
+
+| OWASP Category | This Framework | Primary Pillar |
+|----------------|---------------|----------------|
+| AG01 — Unsafe Agent Autonomy | Tiered Autonomy principle; CA policy enforcement; human-in-the-loop controls | 02 Govern |
+| AG02 — Prompt Injection | KQL P05 jailbreak detection; Track C Module-03 lab; Sentinel analytics rule | 05 Detect |
+| AG03 — Excessive Permissions | Least Agency; Entra Agent ID scoped permissions; PIM just-in-time | 03 Secure |
+| AG04 — Memory Poisoning | KQL Q5a memory/session poisoning; Track C Module-04 point 5 | 04 Protect |
+| AG05 — Supply Chain Compromise | KQL Q5c behavioral anomaly; Track C Module-04 point 6; model supply chain notes | 04 Protect |
+| AG06 — Model Extraction | KQL P03-Q6 endpoint query anomaly; Track B/C Module-03 | 03 Secure |
+| AG07 — Membership Inference | Track B/C Module-04; Purview audit log monitoring | 04 Protect |
+| AG08 — Multi-Agent Trust | KQL Q5b lateral movement; Track B/C Module-02/04; multi-agent trust boundaries | 02 Govern |
+| AG09 — Shadow AI / Ungoverned Agents | Discover pillar; Defender AI Inventory; Agent 365 Registry; KQL P01 | 01 Discover |
+| AG10 — Denial of AI Service | KQL P03-Q1 scope expansion; rate limit monitoring via Q6 | 03 Secure |
+
 ---
 
 ## Risk Vectors Covered
 
 | Domain | Vectors |
 |--------|---------|
-| 01 | Shadow AI · Identity exposure · Data exposure · Local AI agents without endpoint connector |
-| 02 | No technical owner · Makers without controls · No lifecycle · Graph drift · Multi-agent trust boundaries |
-| 03 | CA inherited from users · Over-permissioned agents · Uncontrolled OAuth consent · Identity laundering |
-| 04 | Prompt injection · Oversharing · API exfiltration · Corpus poisoning (SharePoint) · Model supply chain poisoning · Memory/session poisoning |
-| 05 | Jailbreak attempts · Agent anomaly · Structural false negatives |
+| 01 | Shadow AI · Identity exposure · Data exposure · Local AI agents without endpoint connector · Third-party agents (ISV plugins, MCP servers) |
+| 02 | No technical owner · Makers without controls · No lifecycle · Graph drift · Multi-agent trust boundaries · Unsafe agent autonomy (no tiered autonomy model) |
+| 03 | CA inherited from users · Over-permissioned agents · Uncontrolled OAuth consent · Identity laundering · Model extraction via API |
+| 04 | Prompt injection · Oversharing · API exfiltration · Corpus poisoning (SharePoint) · Model supply chain poisoning · Memory/session poisoning · Membership inference (privacy without exfiltration) |
+| 05 | Jailbreak attempts · Agent anomaly · Structural false negatives · Evasion at inference boundary |
 
 ---
 
@@ -240,4 +259,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 - [CISA — Careful Adoption of Agentic AI Services](https://www.cisa.gov/resources-tools/resources/careful-adoption-agentic-ai-services)
 - [Microsoft — Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)
 - [Anthropic — Zero Trust for AI Agents](https://www.anthropic.com/resources/zero-trust-for-ai-agents) — source of the "least agency" concept and the impossible vs. tedious design test
+- [OWASP Top 10 for Agentic AI Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-ai-applications-v1-0/) — agentic-specific vulnerability categories aligned to this framework's five pillars
+- [Red Teaming AI — Attacking & Defending Intelligent Systems](https://www.apress.com/9798868817328) (Philip A. Dursey, 2025) — model extraction, membership inference, and AI red teaming methodology
+- [AI Strategy and Security](https://link.springer.com/book/9798868817328) (Donnie W. Wendt, 2025) — securing agentic AI, supply chain, and drift analysis
 - [agentskills.io — Agent skill format reference](https://agentskills.io)

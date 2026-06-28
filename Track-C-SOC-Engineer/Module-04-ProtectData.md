@@ -40,6 +40,8 @@ At the end of this module, you will be able to configure a Purview DLP policy fo
 
 7. **Multi-agent trust boundaries:** Cuando un agente comprometido invoca otro agente, pivota a un segundo blast radius con permisos propios. Sin controles de trust boundary entre agentes, una cadena de compromisos puede escalar rápidamente. Q5b detecta invocaciones agent-to-agent no correlacionadas con autorización explícita del usuario.
 
+8. **Membership inference — privacidad sin exfiltración visible:** Un atacante puede inferir si un PII record específico estuvo en el fine-tuning de un modelo mediante consultas sistemáticas y análisis de patrones de respuesta — sin exfiltrar el dato directamente. No hay alerta DLP porque no hay transferencia de dato; no hay alerta Purview porque no hay acceso a archivo. La señal está en `CloudAppEvents` bajo volumen anómalo de inferencias sobre el mismo modelo desde una identidad, con alta variedad de prompts estructurados. El control: Foundry RBAC + rate limiting por identidad + no fine-tunear con PII sin anonimización diferencial. OWASP Agentic AG07.
+
 ---
 
 ## Background
