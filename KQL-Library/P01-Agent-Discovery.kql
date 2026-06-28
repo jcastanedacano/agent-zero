@@ -4,8 +4,9 @@
 // Target: Microsoft Sentinel / Defender Advanced Hunting
 // Tables: AgentsInfo, CloudAppEvents, OfficeActivity
 // MIGRATED: AIAgentsInfo → AgentsInfo (deprecated July 1, 2026)
-//   ManagementStatus → LifecycleStatus | TechnicalOwner → Owners (dynamic)
-//   CreatedTime → CreatedDateTime | new: PublishedStatus, McpServers, DeclaredTools, InstanceCount
+//   ManagementStatus → LifecycleStatus | AgentType → Platform (removed from AgentsInfo)
+//   TechnicalOwner → Owners (dynamic) | CreatedTime → CreatedDateTime
+//   TimeGenerated → Timestamp (AgentsInfo) | new: PublishedStatus, McpServers, DeclaredTools, InstanceCount
 // =============================================================================
 
 
@@ -14,11 +15,11 @@
 // Use: Baseline visibility — what agents exist and which are unmanaged
 // -----------------------------------------------------------------------------
 AgentsInfo
-| where TimeGenerated > ago(30d)
+| where Timestamp > ago(30d)
 | summarize
-    LastSeen = max(TimeGenerated),
+    LastSeen = max(Timestamp),
     AgentCount = dcount(AgentId)
-    by AgentType, Platform, LifecycleStatus, PublishedStatus, AgentName
+    by Platform, LifecycleStatus, PublishedStatus, AgentName
 | extend RiskLevel = case(
     LifecycleStatus == "Unmanaged", "High",
     LifecycleStatus == "PartiallyManaged", "Medium",
@@ -26,7 +27,7 @@ AgentsInfo
     "Low"
 )
 | sort by RiskLevel asc, LastSeen desc
-| project AgentName, AgentType, Platform, LifecycleStatus, PublishedStatus, RiskLevel, AgentCount, LastSeen
+| project AgentName, Platform, LifecycleStatus, PublishedStatus, RiskLevel, AgentCount, LastSeen
 
 
 // -----------------------------------------------------------------------------
@@ -34,14 +35,14 @@ AgentsInfo
 // Use: Identify shadow AI — agents operating without formal registration
 // -----------------------------------------------------------------------------
 AgentsInfo
-| where TimeGenerated > ago(30d)
+| where Timestamp > ago(30d)
 | where LifecycleStatus == "Unmanaged"
-    or isempty(tostring(Owners))
-| distinct AgentId, AgentName, AgentType, Platform, CreatedDateTime, Owners
-| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
+    or isempty(Owners) or array_length(Owners) == 0
+| distinct AgentId, AgentName, Platform, CreatedDateTime, Owners
+| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | extend DaysSinceCreation = datetime_diff('day', now(), CreatedDateTime)
 | sort by DaysSinceCreation desc
-| project AgentId, AgentName, AgentType, Platform, OwnerDisplay, DaysSinceCreation
+| project AgentId, AgentName, Platform, OwnerDisplay, DaysSinceCreation
 
 
 // -----------------------------------------------------------------------------
@@ -70,13 +71,12 @@ OfficeActivity
 | where RecordType == "SharePointFileOperation"
     and UserAgent has "agent"
 | join kind=leftouter (
-    // Approximate: sites without label events in the same window
     MicrosoftPurviewInformationProtection
     | where TimeGenerated > ago(7d)
     | where Activity == "LabelApplied"
     | distinct ObjectId
 ) on $left.ObjectId == $right.ObjectId
-| where isempty(ObjectId1)   // No label event found for this object
+| where isempty(ObjectId1)
 | summarize
     AgentAccesses = count(),
     LastAccess = max(TimeGenerated)
@@ -91,13 +91,12 @@ OfficeActivity
 // Recommended: Schedule as Analytics Rule, frequency 1h, lookback 1d
 // -----------------------------------------------------------------------------
 AgentsInfo
-| where TimeGenerated > ago(1d)
+| where Timestamp > ago(1d)
 | where CreatedDateTime > ago(1d)
-| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
+| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | project
     AgentId,
     AgentName,
-    AgentType,
     Platform,
     OwnerDisplay,
     LifecycleStatus,
@@ -107,7 +106,7 @@ AgentsInfo
     McpServers
 | extend AlertDetail = strcat(
     "New agent registered: ", AgentName,
-    " | Type: ", AgentType,
+    " | Platform: ", Platform,
     " | Owner: ", OwnerDisplay,
     " | MCP servers: ", tostring(array_length(McpServers))
 )
@@ -121,21 +120,21 @@ AgentsInfo
 // New AgentsInfo columns: McpServers (dynamic), DeclaredTools (dynamic), InstanceCount
 // -----------------------------------------------------------------------------
 AgentsInfo
-| where TimeGenerated > ago(30d)
+| where Timestamp > ago(30d)
 | extend McpServerCount = array_length(McpServers)
 | extend DeclaredToolCount = array_length(DeclaredTools)
 | where McpServerCount > 0 or DeclaredToolCount > 10
-| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
+| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | extend RiskSignal = case(
     McpServerCount > 0 and DeclaredToolCount > 10, "High — external MCP + large toolset",
     McpServerCount > 0, "Medium — external MCP server(s) declared",
     "Medium — large declared tool count"
 )
 | project
-    AgentName, AgentType, Platform,
+    AgentName, Platform,
     OwnerDisplay, LifecycleStatus, PublishedStatus,
     McpServerCount, McpServers,
     DeclaredToolCount, DeclaredTools,
     InstanceCount, RiskSignal,
-    LastSeen = TimeGenerated
+    LastSeen = Timestamp
 | sort by McpServerCount desc, DeclaredToolCount desc

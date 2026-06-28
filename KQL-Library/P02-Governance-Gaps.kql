@@ -5,7 +5,7 @@
 // Tables: AgentsInfo, AuditLogs, CloudAppEvents
 // MIGRATED: AIAgentsInfo → AgentsInfo (deprecated July 1, 2026)
 //   ManagementStatus → LifecycleStatus | TechnicalOwner → Owners (dynamic)
-//   CreatedTime → CreatedDateTime
+//   TimeGenerated → Timestamp (AgentsInfo only)
 // =============================================================================
 
 
@@ -14,12 +14,12 @@
 // Use: Find agents running without a dedicated Entra identity (identity laundering risk)
 // -----------------------------------------------------------------------------
 AgentsInfo
-| where TimeGenerated > ago(30d)
+| where Timestamp > ago(30d)
 | where isempty(EntraAgentId) or EntraAgentId == "Inherited"
-| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
-| distinct AgentId, AgentName, AgentType, Platform, OwnerDisplay, LifecycleStatus
+| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
+| distinct AgentId, AgentName, Platform, OwnerDisplay, LifecycleStatus
 | extend RiskNote = "Agent operates under user identity — no dedicated Entra Agent ID assigned"
-| sort by AgentType asc
+| sort by Platform asc
 
 
 // -----------------------------------------------------------------------------
@@ -52,9 +52,9 @@ AuditLogs
 //      Signals candidates for decommission review
 // -----------------------------------------------------------------------------
 AgentsInfo
-| where TimeGenerated > ago(90d)
-| summarize LastActivity = max(TimeGenerated) by AgentId, AgentName, AgentType, Owners
-| extend OwnerDisplay = iff(isempty(tostring(Owners)), "UNASSIGNED", tostring(Owners))
+| where Timestamp > ago(90d)
+| summarize LastActivity = max(Timestamp) by AgentId, AgentName, Platform, Owners
+| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | extend DaysSinceActivity = datetime_diff('day', now(), LastActivity)
 | where DaysSinceActivity > 60
 | extend LifecycleRisk = case(
@@ -63,7 +63,7 @@ AgentsInfo
     "Medium — approaching review threshold"
 )
 | sort by DaysSinceActivity desc
-| project AgentId, AgentName, AgentType, OwnerDisplay, DaysSinceActivity, LifecycleRisk
+| project AgentId, AgentName, Platform, OwnerDisplay, DaysSinceActivity, LifecycleRisk
 
 
 // -----------------------------------------------------------------------------
@@ -78,12 +78,11 @@ AuditLogs
 | extend NewPermission = tostring(TargetResources[0].modifiedProperties[0].newValue)
 | extend GrantedBy = tostring(InitiatedBy.user.userPrincipalName)
 | join kind=leftouter (
-    // Check if there's a corresponding approval event
     AuditLogs
     | where OperationName == "AgentPermissionApproved"
     | distinct CorrelationId
 ) on CorrelationId
-| where isempty(CorrelationId1)   // Permission added without approval correlation
+| where isempty(CorrelationId1)
 | project
     TimeGenerated,
     AgentObjectId,

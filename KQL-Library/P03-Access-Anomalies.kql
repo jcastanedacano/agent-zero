@@ -2,7 +2,7 @@
 // P03 — SECURE ACCESS
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: CloudAppEvents, AADServicePrincipalSignInLogs, AuditLogs
+// Tables: CloudAppEvents, EntraIdSpnSignInEvents, AuditLogs
 // =============================================================================
 
 
@@ -10,7 +10,7 @@
 // Q1: Agents Accessing Resources Outside Their Declared Scope
 // Use: Detect permission scope expansion — agents accessing more than intended
 // -----------------------------------------------------------------------------
-AADServicePrincipalSignInLogs
+EntraIdSpnSignInEvents
 | where TimeGenerated > ago(7d)
 | where ServicePrincipalName has "agent" or AppDisplayName has "agent"
 | summarize
@@ -81,7 +81,7 @@ AuditLogs
 // Use: Baseline deviation — agents operating outside normal parameters
 // Note: Adjust expected hours and locations for your environment
 // -----------------------------------------------------------------------------
-AADServicePrincipalSignInLogs
+EntraIdSpnSignInEvents
 | where TimeGenerated > ago(7d)
 | where ServicePrincipalName has "agent" or AppDisplayName has "agent"
 | extend HourOfDay = datetime_part("Hour", TimeGenerated)
@@ -91,7 +91,7 @@ AADServicePrincipalSignInLogs
     OffHoursSignIns = count(),
     EarliestSignIn = min(TimeGenerated),
     LatestSignIn = max(TimeGenerated),
-    LocationSet = make_set(Location)
+    LocationSet = make_set(Country)
     by ServicePrincipalName, AppId
 | sort by OffHoursSignIns desc
 | project ServicePrincipalName, AppId, OffHoursSignIns, EarliestSignIn, LatestSignIn, LocationSet
