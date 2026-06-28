@@ -11,12 +11,12 @@
 // Use: Detect permission scope expansion — agents accessing more than intended
 // -----------------------------------------------------------------------------
 EntraIdSpnSignInEvents
-| where TimeGenerated > ago(7d)
+| where Timestamp > ago(7d)
 | where ServicePrincipalName has "agent" or AppDisplayName has "agent"
 | summarize
     ResourcesAccessed = make_set(ResourceDisplayName),
     AccessCount = count(),
-    LastAccess = max(TimeGenerated)
+    LastAccess = max(Timestamp)
     by ServicePrincipalId, ServicePrincipalName, AppId
 | extend ResourceCount = array_length(ResourcesAccessed)
 | where ResourceCount > 3   // Adjust threshold based on expected agent scope
@@ -82,15 +82,15 @@ AuditLogs
 // Note: Adjust expected hours and locations for your environment
 // -----------------------------------------------------------------------------
 EntraIdSpnSignInEvents
-| where TimeGenerated > ago(7d)
+| where Timestamp > ago(7d)
 | where ServicePrincipalName has "agent" or AppDisplayName has "agent"
-| extend HourOfDay = datetime_part("Hour", TimeGenerated)
+| extend HourOfDay = datetime_part("Hour", Timestamp)
 | extend IsOffHours = HourOfDay < 6 or HourOfDay > 22
 | where IsOffHours == true
 | summarize
     OffHoursSignIns = count(),
-    EarliestSignIn = min(TimeGenerated),
-    LatestSignIn = max(TimeGenerated),
+    EarliestSignIn = min(Timestamp),
+    LatestSignIn = max(Timestamp),
     LocationSet = make_set(Country)
     by ServicePrincipalName, AppId
 | sort by OffHoursSignIns desc

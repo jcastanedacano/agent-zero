@@ -4,45 +4,61 @@
 // Target: Microsoft Sentinel / Defender Advanced Hunting
 // Tables: AgentsInfo, CloudAppEvents, OfficeActivity
 // MIGRATED: AIAgentsInfo → AgentsInfo (deprecated July 1, 2026)
-//   ManagementStatus → LifecycleStatus | AgentType → Platform (removed from AgentsInfo)
-//   TechnicalOwner → Owners (dynamic) | CreatedTime → CreatedDateTime
-//   TimeGenerated → Timestamp (AgentsInfo) | new: PublishedStatus, McpServers, DeclaredTools, InstanceCount
+//   AgentType → Platform | TechnicalOwner → Owners (dynamic)
+//   ManagementStatus removed — LifecycleStatus values: Active/Blocked/Uninstalled/Deleted
+//   Shadow AI signal: isempty(Owners) or isempty(EntraAgentId) (no "Unmanaged" value exists)
+//   TimeGenerated → Timestamp (AgentsInfo) | CreatedTime → CreatedDateTime
 // =============================================================================
 
 
 // -----------------------------------------------------------------------------
-// Q1: Full Agent Inventory by Type and Lifecycle Status
-// Use: Baseline visibility — what agents exist and which are unmanaged
+// Q1: Full Agent Inventory by Platform and Lifecycle Status
+// Use: Baseline visibility — what agents exist, which lack owner or Entra identity
+// Note: LifecycleStatus valid values: Active, Blocked, Uninstalled, Deleted
+//       Shadow AI = no Owners assigned + no Entra Agent ID registered
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
 | summarize
     LastSeen = max(Timestamp),
-    AgentCount = dcount(AgentId)
+    AgentCount = dcount(AgentId),
+    WithoutOwner = countif(isempty(Owners) or array_length(Owners) == 0),
+    WithoutEntraId = countif(isempty(EntraAgentId))
     by Platform, LifecycleStatus, PublishedStatus, AgentName
 | extend RiskLevel = case(
-    LifecycleStatus == "Unmanaged", "High",
-    LifecycleStatus == "PartiallyManaged", "Medium",
-    PublishedStatus == "Inactive", "Medium",
+    WithoutOwner > 0 and WithoutEntraId > 0, "High",
+    WithoutOwner > 0 or WithoutEntraId > 0, "Medium",
+    LifecycleStatus in ("Blocked", "Deleted"), "Medium",
     "Low"
 )
 | sort by RiskLevel asc, LastSeen desc
-| project AgentName, Platform, LifecycleStatus, PublishedStatus, RiskLevel, AgentCount, LastSeen
+| project AgentName, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
+          WithoutOwner, WithoutEntraId, AgentCount, LastSeen
 
 
 // -----------------------------------------------------------------------------
-// Q2: Unmanaged Agents — No Owner, No Registration
-// Use: Identify shadow AI — agents operating without formal registration
+// Q2: Shadow AI — Agents Without Owner or Entra Identity
+// Use: Identify agents operating without formal registration or assigned ownership
+// Note: "Unmanaged" is not a LifecycleStatus value in AgentsInfo.
+//       Shadow AI detection relies on empty Owners and/or missing EntraAgentId.
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
-| where LifecycleStatus == "Unmanaged"
-    or isempty(Owners) or array_length(Owners) == 0
-| distinct AgentId, AgentName, Platform, CreatedDateTime, Owners
+| where isempty(Owners) or array_length(Owners) == 0
+    or isempty(EntraAgentId)
+| distinct AgentId, AgentName, Platform, CreatedDateTime, Owners, EntraAgentId
 | extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
+| extend HasEntraId = isnotempty(EntraAgentId)
+| extend RiskSignal = case(
+    not(HasEntraId) and (isempty(Owners) or array_length(Owners) == 0),
+        "No owner + no Entra Agent ID — shadow AI",
+    not(HasEntraId),
+        "No Entra Agent ID — identity laundering risk",
+    "No owner assigned"
+)
 | extend DaysSinceCreation = datetime_diff('day', now(), CreatedDateTime)
 | sort by DaysSinceCreation desc
-| project AgentId, AgentName, Platform, OwnerDisplay, DaysSinceCreation
+| project AgentId, AgentName, Platform, OwnerDisplay, HasEntraId, RiskSignal, DaysSinceCreation
 
 
 // -----------------------------------------------------------------------------
