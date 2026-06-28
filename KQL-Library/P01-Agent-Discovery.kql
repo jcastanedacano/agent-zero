@@ -3,11 +3,10 @@
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
 // Tables: AgentsInfo, CloudAppEvents, OfficeActivity
-// MIGRATED: AIAgentsInfo → AgentsInfo (deprecated July 1, 2026)
-//   AgentType → Platform | TechnicalOwner → Owners (dynamic)
-//   ManagementStatus removed — LifecycleStatus values: Active/Blocked/Uninstalled/Deleted
-//   Shadow AI signal: isempty(Owners) or isempty(EntraAgentId) (no "Unmanaged" value exists)
-//   TimeGenerated → Timestamp (AgentsInfo) | CreatedTime → CreatedDateTime
+// SCHEMA NOTES (validated against live tenant 2026-06-28):
+//   AgentsInfo.Name (not AgentName) | Owners: dynamic, can be null
+//   EntraAgentID (capital ID) | LifecycleStatus may be empty in preview data
+//   Both Timestamp and TimeGenerated exist in AgentsInfo
 // =============================================================================
 
 
@@ -15,16 +14,16 @@
 // Q1: Full Agent Inventory by Platform and Lifecycle Status
 // Use: Baseline visibility — what agents exist, which lack owner or Entra identity
 // Note: LifecycleStatus valid values: Active, Blocked, Uninstalled, Deleted
-//       Shadow AI = no Owners assigned + no Entra Agent ID registered
+//       Shadow AI = no Owners + no EntraAgentID
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
 | summarize
     LastSeen = max(Timestamp),
     AgentCount = dcount(AgentId),
-    WithoutOwner = countif(isempty(Owners) or array_length(Owners) == 0),
-    WithoutEntraId = countif(isempty(EntraAgentId))
-    by Platform, LifecycleStatus, PublishedStatus, AgentName
+    WithoutOwner = countif(isnull(Owners) or array_length(Owners) == 0),
+    WithoutEntraId = countif(isempty(EntraAgentID))
+    by Platform, LifecycleStatus, PublishedStatus, Name
 | extend RiskLevel = case(
     WithoutOwner > 0 and WithoutEntraId > 0, "High",
     WithoutOwner > 0 or WithoutEntraId > 0, "Medium",
@@ -32,25 +31,25 @@ AgentsInfo
     "Low"
 )
 | sort by RiskLevel asc, LastSeen desc
-| project AgentName, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
+| project Name, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
           WithoutOwner, WithoutEntraId, AgentCount, LastSeen
 
 
 // -----------------------------------------------------------------------------
 // Q2: Shadow AI — Agents Without Owner or Entra Identity
 // Use: Identify agents operating without formal registration or assigned ownership
-// Note: "Unmanaged" is not a LifecycleStatus value in AgentsInfo.
-//       Shadow AI detection relies on empty Owners and/or missing EntraAgentId.
+// Note: Owners can be null (third-party/external agents) or empty array
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
-| where isempty(Owners) or array_length(Owners) == 0
-    or isempty(EntraAgentId)
-| distinct AgentId, AgentName, Platform, CreatedDateTime, Owners, EntraAgentId
-| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
-| extend HasEntraId = isnotempty(EntraAgentId)
+| where isnull(Owners) or array_length(Owners) == 0
+    or isempty(EntraAgentID)
+| extend OwnersStr = tostring(Owners)
+| distinct AgentId, Name, Platform, CreatedDateTime, OwnersStr, EntraAgentID
+| extend OwnerDisplay = iff(OwnersStr == '' or OwnersStr == '[]', 'UNASSIGNED', OwnersStr)
+| extend HasEntraId = isnotempty(EntraAgentID)
 | extend RiskSignal = case(
-    not(HasEntraId) and (isempty(Owners) or array_length(Owners) == 0),
+    not(HasEntraId) and (OwnersStr == "" or OwnersStr == "[]"),
         "No owner + no Entra Agent ID — shadow AI",
     not(HasEntraId),
         "No Entra Agent ID — identity laundering risk",
@@ -58,7 +57,7 @@ AgentsInfo
 )
 | extend DaysSinceCreation = datetime_diff('day', now(), CreatedDateTime)
 | sort by DaysSinceCreation desc
-| project AgentId, AgentName, Platform, OwnerDisplay, HasEntraId, RiskSignal, DaysSinceCreation
+| project AgentId, Name, Platform, OwnerDisplay, HasEntraId, RiskSignal, DaysSinceCreation
 
 
 // -----------------------------------------------------------------------------
@@ -67,11 +66,11 @@ AgentsInfo
 // Note: Requires MDE endpoint connector active
 // -----------------------------------------------------------------------------
 CloudAppEvents
-| where TimeGenerated > ago(7d)
+| where Timestamp > ago(7d)
 | where ActionType == "AgentProcessDetected"
     or ApplicationId has_any ("mcp-server", "claude-code", "openai-api-local")
 | summarize
-    LastActivity = max(TimeGenerated),
+    LastActivity = max(Timestamp),
     ActivityCount = count()
     by DeviceName, AccountDisplayName, ApplicationId, IPAddress
 | sort by ActivityCount desc
@@ -109,10 +108,10 @@ OfficeActivity
 AgentsInfo
 | where Timestamp > ago(1d)
 | where CreatedDateTime > ago(1d)
-| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
+| extend OwnerDisplay = iff(isnull(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | project
     AgentId,
-    AgentName,
+    Name,
     Platform,
     OwnerDisplay,
     LifecycleStatus,
@@ -121,7 +120,7 @@ AgentsInfo
     DeclaredTools,
     McpServers
 | extend AlertDetail = strcat(
-    "New agent registered: ", AgentName,
+    "New agent registered: ", Name,
     " | Platform: ", Platform,
     " | Owner: ", OwnerDisplay,
     " | MCP servers: ", tostring(array_length(McpServers))
@@ -137,17 +136,17 @@ AgentsInfo
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
-| extend McpServerCount = array_length(McpServers)
-| extend DeclaredToolCount = array_length(DeclaredTools)
+| extend McpServerCount = iff(isnull(McpServers), 0, array_length(McpServers))
+| extend DeclaredToolCount = iff(isnull(DeclaredTools), 0, array_length(DeclaredTools))
 | where McpServerCount > 0 or DeclaredToolCount > 10
-| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
+| extend OwnerDisplay = iff(isnull(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | extend RiskSignal = case(
     McpServerCount > 0 and DeclaredToolCount > 10, "High — external MCP + large toolset",
     McpServerCount > 0, "Medium — external MCP server(s) declared",
     "Medium — large declared tool count"
 )
 | project
-    AgentName, Platform,
+    Name, Platform,
     OwnerDisplay, LifecycleStatus, PublishedStatus,
     McpServerCount, McpServers,
     DeclaredToolCount, DeclaredTools,

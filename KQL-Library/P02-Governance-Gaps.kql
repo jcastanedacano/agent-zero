@@ -3,9 +3,9 @@
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
 // Tables: AgentsInfo, AuditLogs, CloudAppEvents
-// MIGRATED: AIAgentsInfo → AgentsInfo (deprecated July 1, 2026)
-//   ManagementStatus → LifecycleStatus | TechnicalOwner → Owners (dynamic)
-//   TimeGenerated → Timestamp (AgentsInfo only)
+// SCHEMA NOTES (validated against live tenant 2026-06-28):
+//   AgentsInfo.Name (not AgentName) | Owners: dynamic, can be null
+//   EntraAgentID (capital ID) | Both Timestamp and TimeGenerated exist
 // =============================================================================
 
 
@@ -15,10 +15,10 @@
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
-| where isempty(EntraAgentId) or EntraAgentId == "Inherited"
-| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
-| distinct AgentId, AgentName, Platform, OwnerDisplay, LifecycleStatus
-| extend RiskNote = "Agent operates under user identity — no dedicated Entra Agent ID assigned"
+| where isempty(EntraAgentID)
+| extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
+| distinct AgentId, Name, Platform, OwnerDisplay, LifecycleStatus, PublishedStatus
+| extend RiskNote = "Agent operates without dedicated Entra Agent ID — identity laundering risk"
 | sort by Platform asc
 
 
@@ -53,8 +53,9 @@ AuditLogs
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(90d)
-| summarize LastActivity = max(Timestamp) by AgentId, AgentName, Platform, Owners
-| extend OwnerDisplay = iff(isempty(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
+| extend OwnersStr = tostring(Owners)
+| summarize LastActivity = max(Timestamp) by AgentId, Name, Platform, OwnersStr
+| extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
 | extend DaysSinceActivity = datetime_diff('day', now(), LastActivity)
 | where DaysSinceActivity > 60
 | extend LifecycleRisk = case(
@@ -63,7 +64,7 @@ AgentsInfo
     "Medium — approaching review threshold"
 )
 | sort by DaysSinceActivity desc
-| project AgentId, AgentName, Platform, OwnerDisplay, DaysSinceActivity, LifecycleRisk
+| project AgentId, Name, Platform, OwnerDisplay, DaysSinceActivity, LifecycleRisk
 
 
 // -----------------------------------------------------------------------------
@@ -97,7 +98,7 @@ AuditLogs
 // Use: Detect agents created by makers using connectors outside DLP boundaries
 // -----------------------------------------------------------------------------
 CloudAppEvents
-| where TimeGenerated > ago(30d)
+| where Timestamp > ago(30d)
 | where Application == "Microsoft Power Platform"
     and ActionType == "AgentConnectorAdded"
 | extend ConnectorName = tostring(RawEventData["ConnectorName"])
@@ -106,7 +107,7 @@ CloudAppEvents
     or isempty(ConnectorClassification)
 | summarize
     ConnectorUses = count(),
-    LastUsed = max(TimeGenerated),
+    LastUsed = max(Timestamp),
     Makers = make_set(AccountDisplayName)
     by ConnectorName, ConnectorClassification
 | sort by ConnectorUses desc

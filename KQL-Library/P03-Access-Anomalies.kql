@@ -12,7 +12,7 @@
 // -----------------------------------------------------------------------------
 EntraIdSpnSignInEvents
 | where Timestamp > ago(7d)
-| where ServicePrincipalName has "agent" or AppDisplayName has "agent"
+| where ServicePrincipalName has "agent"
 | summarize
     ResourcesAccessed = make_set(ResourceDisplayName),
     AccessCount = count(),
@@ -83,7 +83,7 @@ AuditLogs
 // -----------------------------------------------------------------------------
 EntraIdSpnSignInEvents
 | where Timestamp > ago(7d)
-| where ServicePrincipalName has "agent" or AppDisplayName has "agent"
+| where ServicePrincipalName has "agent"
 | extend HourOfDay = datetime_part("Hour", Timestamp)
 | extend IsOffHours = HourOfDay < 6 or HourOfDay > 22
 | where IsOffHours == true
