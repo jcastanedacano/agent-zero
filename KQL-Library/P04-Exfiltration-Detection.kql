@@ -105,6 +105,101 @@ CloudAppEvents
 
 
 // -----------------------------------------------------------------------------
+// Q5a: Memory / Session Poisoning — Persistent Instruction Injection
+// Use: Detect agents that receive instruction-like content via memory or context
+//      that persists across sessions (Copilot Studio with memory enabled)
+// Distinction: corpus poisoning = injected in SharePoint docs the agent reads
+//              memory poisoning = injected in the agent's persistent session memory
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(7d)
+| where Application in ("Microsoft Copilot", "Copilot Studio")
+    and ActionType in ("AgentInteraction", "AgentMemoryUpdate", "AgentContextSet")
+| extend SessionId = tostring(RawEventData["SessionId"])
+| extend MemoryContent = tostring(RawEventData["MemoryContent"])
+| extend HasPoisoningPattern = MemoryContent has_any (
+    "ignore previous instructions",
+    "from now on",
+    "always respond",
+    "never mention",
+    "your new role is",
+    "remember this for all future",
+    "override your default"
+)
+| where HasPoisoningPattern == true
+| project
+    TimeGenerated,
+    AccountDisplayName,
+    SessionId,
+    ActionType,
+    MemoryPreview = substring(MemoryContent, 0, 300),
+    IPAddress
+| sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q5b: Multi-Agent Lateral Movement — Agent Spawning or Calling Other Agents
+// Use: Detect when a compromised agent pivots to invoke another agent
+//      Trust boundary violation: Agent A calling Agent B without user authorization
+// Reference: Anthropic Zero Trust for AI Agents — multi-agent trust boundaries
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(7d)
+| where Application in ("Copilot Studio", "Azure AI Foundry", "Microsoft Power Platform")
+    and ActionType in ("AgentInvokedAgent", "AgentDelegation", "SubAgentCreated", "ConnectorActionExecuted")
+| extend CallingAgent = tostring(RawEventData["CallingAgentId"])
+| extend TargetAgent = tostring(RawEventData["TargetAgentId"])
+| extend CallerUserContext = tostring(RawEventData["UserContext"])
+| where isnotempty(CallingAgent) and isnotempty(TargetAgent)
+| summarize
+    InvocationCount = count(),
+    FirstSeen = min(TimeGenerated),
+    LastSeen = max(TimeGenerated),
+    UserContexts = make_set(CallerUserContext, 5)
+    by CallingAgent, TargetAgent
+| extend BlastRadiusNote = "Agent-to-agent call — verify user authorized both agents"
+| sort by InvocationCount desc
+
+
+// -----------------------------------------------------------------------------
+// Q5c: Model Behavioral Anomaly — Proxy for Supply Chain Poisoning
+// Use: Detect agents producing outputs inconsistent with their declared purpose
+//      Supply chain context: 250 poisoned training docs can backdoor models
+//      (Anthropic research). KQL cannot detect poisoning directly — but can
+//      flag behavioral deviation post-deployment as an early warning signal.
+// Reference: Anthropic Zero Trust for AI Agents — model supply chain
+// -----------------------------------------------------------------------------
+let AgentBaseline = CloudAppEvents
+    | where TimeGenerated between (ago(30d) .. ago(1d))
+    | where ActionType == "AgentInteraction"
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | extend ResponseLength = strlen(tostring(RawEventData["AgentResponse"]))
+    | extend HasExternalRef = tostring(RawEventData["AgentResponse"]) has_any ("http://", "https://", "click here", "download", "visit")
+    | summarize
+        AvgResponseLength = avg(ResponseLength),
+        ExternalRefRate = avgif(1, HasExternalRef == true)
+        by AgentId;
+CloudAppEvents
+| where TimeGenerated > ago(1d)
+| where ActionType == "AgentInteraction"
+| extend AgentId = tostring(RawEventData["AgentId"])
+| extend ResponseLength = strlen(tostring(RawEventData["AgentResponse"]))
+| extend HasExternalRef = tostring(RawEventData["AgentResponse"]) has_any ("http://", "https://", "click here", "download", "visit")
+| summarize
+    CurrentAvgLength = avg(ResponseLength),
+    CurrentExternalRefRate = avgif(1, HasExternalRef == true),
+    InteractionCount = count()
+    by AgentId
+| join kind=inner AgentBaseline on AgentId
+| extend LengthDeviation = abs(CurrentAvgLength - AvgResponseLength) / max_of(AvgResponseLength, 1.0)
+| extend RefRateDeviation = abs(CurrentExternalRefRate - ExternalRefRate)
+| where LengthDeviation > 0.5 or RefRateDeviation > 0.3
+| project AgentId, LengthDeviation = round(LengthDeviation, 2), RefRateDeviation = round(RefRateDeviation, 2), InteractionCount
+| extend AnomalyNote = "Response pattern changed significantly vs. baseline — investigate for supply chain or poisoning"
+| sort by LengthDeviation desc
+
+
+// -----------------------------------------------------------------------------
 // Q5: Prompt Injection Indicators — Repeated Anomalous Prompt Patterns
 // Use: Identify patterns consistent with prompt injection in agent interactions
 //      Focus: unusual instruction sequences, role override attempts

@@ -167,14 +167,24 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 
 ---
 
+## Design Principles
+
+Two concepts from Anthropic's [Zero Trust for AI Agents](https://www.anthropic.com/resources/zero-trust-for-ai-agents) inform the architecture of this framework:
+
+**Least Agency** extends least privilege to agentic applications. Where least privilege restricts *what users and systems can access*, least agency goes further — restricting *what each agent tool can do*, *how often*, and *where*. Entra Agent ID + CA for Agents is the Microsoft-native implementation of least agency: the agent gets an identity, scoped permissions, and a policy that defines its blast radius before it ever runs.
+
+**The "impossible vs. tedious" test** distinguishes real controls from friction. Ask of every mitigation: does this make an attack *impossible*, or just *tedious*? Rate limits, extra hops, and SMS-based MFA are tedious for a human attacker. An agentic adversary that can process thousands of steps per minute treats tedious controls as negligible overhead. Design for impossible first; treat tedious as a delay, not a defense.
+
+---
+
 ## Risk Vectors Covered
 
 | Domain | Vectors |
 |--------|---------|
 | 01 | Shadow AI · Identity exposure · Data exposure · Local AI agents without endpoint connector |
-| 02 | No technical owner · Makers without controls · No lifecycle · Graph drift |
+| 02 | No technical owner · Makers without controls · No lifecycle · Graph drift · Multi-agent trust boundaries |
 | 03 | CA inherited from users · Over-permissioned agents · Uncontrolled OAuth consent · Identity laundering |
-| 04 | Prompt injection · Oversharing · API exfiltration · Poisoned corpus |
+| 04 | Prompt injection · Oversharing · API exfiltration · Corpus poisoning (SharePoint) · Model supply chain poisoning · Memory/session poisoning |
 | 05 | Jailbreak attempts · Agent anomaly · Structural false negatives |
 
 ---
@@ -229,4 +239,5 @@ MIT License. See [LICENSE](./LICENSE) for details.
 - [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 - [CISA — Careful Adoption of Agentic AI Services](https://www.cisa.gov/resources-tools/resources/careful-adoption-agentic-ai-services)
 - [Microsoft — Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)
+- [Anthropic — Zero Trust for AI Agents](https://www.anthropic.com/resources/zero-trust-for-ai-agents) — source of the "least agency" concept and the impossible vs. tedious design test
 - [agentskills.io — Agent skill format reference](https://agentskills.io)

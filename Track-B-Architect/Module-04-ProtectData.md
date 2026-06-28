@@ -26,6 +26,10 @@ Al finalizar este módulo, el participante será capaz de diseñar una arquitect
 
 4. **El orden de remediación como control arquitectónico:** Habilitar retrieval antes de aplicar etiquetas y remediar ACL crea una ventana de exposición activa que puede durar semanas. El orden correcto es: (1) clasificar y etiquetar todos los sitios candidatos, (2) auditar y remediar errores de ACL, (3) habilitar retrieval del agente. Invertir este orden es el error más frecuente en deployments de agentes que acceden a SharePoint.
 
+5. **Tres niveles de corpus/memory poisoning:** (a) Corpus SharePoint: documentos maliciosos que el agente indexa — detectable con Q3 del KQL Library. (b) Memory/session poisoning: instrucciones maliciosas inyectadas en la memoria persistente del agente — afecta interacciones futuras de todos los usuarios. (c) Supply chain del modelo: Anthropic documenta que 250 documentos de entrenamiento envenenados pueden backdoorear modelos de hasta 13B parámetros con persistencia a través del safety training — no detectable con KQL, requiere evaluación del proveedor del modelo y monitoreo de desviación de comportamiento post-despliegue (Q5c del KQL Library).
+
+6. **Multi-agent trust boundaries como vector de escalada:** Un agente comprometido que puede invocar otros agentes pivota a nuevos blast radii con permisos propios. El diseño arquitectónico correcto trata cada invocación agent-to-agent como una llamada no confiable: verificar autorización explícita del usuario y limitar permisos heredados entre agentes. Referencia: Anthropic Zero Trust for AI Agents.
+
 ---
 
 **Ejercicio / Lab:**

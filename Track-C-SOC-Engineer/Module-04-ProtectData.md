@@ -34,6 +34,12 @@ At the end of this module, you will be able to configure a Purview DLP policy fo
 
 4. **El orden de remediación como control arquitectónico:** Habilitar retrieval antes de aplicar etiquetas y remediar ACL crea exposición activa. Orden correcto: (1) etiquetar sitios, (2) remediar ACL, (3) habilitar retrieval. Invertirlo es el error más frecuente en deployments de agentes que acceden a SharePoint.
 
+5. **Memory/session poisoning vs. corpus poisoning:** Son dos vectores distintos. Corpus poisoning ocurre en documentos de SharePoint que el agente indexa — se detecta con Q3 de esta librería. Memory poisoning ocurre en la memoria persistente de sesión del agente (Copilot Studio con memoria habilitada): el atacante inyecta instrucciones que persisten en interacciones futuras de todos los usuarios. Se detecta con Q5a de P04.
+
+6. **Supply chain de modelo vs. corpus envenenado:** Anthropic documenta que 250 documentos maliciosos pueden backdoorear un modelo de entre 600M y 13B parámetros, y el backdoor persiste a través del safety training. Este vector opera a nivel de entrenamiento del modelo — no a nivel de documentos. KQL no puede detectarlo directamente; Q5c detecta desviación de comportamiento post-despliegue como señal de alerta temprana.
+
+7. **Multi-agent trust boundaries:** Cuando un agente comprometido invoca otro agente, pivota a un segundo blast radius con permisos propios. Sin controles de trust boundary entre agentes, una cadena de compromisos puede escalar rápidamente. Q5b detecta invocaciones agent-to-agent no correlacionadas con autorización explícita del usuario.
+
 ---
 
 ## Background

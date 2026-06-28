@@ -34,6 +34,8 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 4. **`grantControls: mfa` es inválido para agentes:** Los agentes no pueden completar MFA interactivo. Una CA policy con este control sobre identidades de agente aparece activa pero no genera ningún enforcement. Solo `block` o `sessionControls` son válidos para políticas que apuntan a `clientApplications.includeAgentIdServicePrincipals`.
 
+5. **Multi-agent trust boundaries:** En arquitecturas multi-agente, un agente puede invocar a otro (orquestador → sub-agente). Si el agente orquestador es comprometido, puede usar sus permisos para invocar sub-agentes con mayor blast radius. El principio de gobernanza correcto: cada invocación agent-to-agent debe tratarse como llamada no confiable. Cada agente necesita su propio Entra Agent ID — no pueden compartir identidad — y los permisos no se heredan entre agentes sin autorización explícita del usuario.
+
 ---
 
 ## Background
