@@ -112,3 +112,50 @@ CloudAppEvents
     by ConnectorName, ConnectorClassification
 | sort by ConnectorUses desc
 | project ConnectorName, ConnectorClassification, ConnectorUses, LastUsed, Makers
+
+
+// -----------------------------------------------------------------------------
+// Q6: Consent Architecture Gap — Compound Actions Without Per-Step HITL Events
+// Use: Identify agent sessions that executed multi-action sequences
+//      (read + write + send) without corresponding per-action consent/approval events
+//      Signals missing HITL gates for compound actions — consent architecture gap
+// Reference: Microsoft AIRT Taxonomy v2.0 §5.4 | Tiered Autonomy principle
+// Recommended: Weekly scheduled query or Analytics Rule | Severity: Medium
+// -----------------------------------------------------------------------------
+let CompoundActionTypes = dynamic([
+    "FileDownloaded", "FileCopied", "FileUploaded",
+    "MessageSent", "EmailSent", "MeetingCreated",
+    "RecordCreated", "RecordUpdated", "RecordDeleted"
+]);
+let ApprovalEvents = AuditLogs
+    | where TimeGenerated > ago(7d)
+    | where OperationName in (
+        "AgentActionApproved", "AgentConsentGranted",
+        "AgentStepApproved", "UserApprovedAgentAction"
+    )
+    | extend SessionId = tostring(AdditionalDetails["SessionId"])
+    | distinct SessionId;
+CloudAppEvents
+| where TimeGenerated > ago(7d)
+| where ActionType in (CompoundActionTypes)
+| extend SessionId = tostring(RawEventData["SessionId"])
+| extend AgentId = tostring(RawEventData["AgentId"])
+| where isnotempty(SessionId) and isnotempty(AgentId)
+| summarize
+    ActionsInSession = count(),
+    DistinctActionTypes = dcount(ActionType),
+    ActionSequence = make_set(ActionType),
+    LastAction = max(TimeGenerated),
+    AccountDisplayName = any(AccountDisplayName)
+    by SessionId, AgentId
+| where DistinctActionTypes >= 2   // Compound action: at least 2 distinct action types
+| join kind=leftanti ApprovalEvents on SessionId
+| extend RiskNote = strcat(
+    "Agent executed ", DistinctActionTypes, " distinct action types in session without HITL consent events — ",
+    "compound action decomposition may be missing"
+)
+| project
+    SessionId, AgentId, AccountDisplayName,
+    ActionsInSession, DistinctActionTypes,
+    ActionSequence, LastAction, RiskNote
+| sort by DistinctActionTypes desc, ActionsInSession desc

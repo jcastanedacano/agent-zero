@@ -2,7 +2,7 @@
 // P05 — DETECT & RESPOND
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: CloudAppEvents, MicrosoftPurviewInformationProtection, AIAgentsInfo
+// Tables: CloudAppEvents, MicrosoftPurviewInformationProtection, AgentsInfo
 // =============================================================================
 
 
@@ -162,3 +162,45 @@ AuditLogs
 | extend AutomationRate = round(100.0 * AutomatedCount / RevocationCount, 1)
 | project OperationName, RevocationCount, AutomatedCount, ManualCount, AutomationRate, LastRevocation
 | sort by RevocationCount desc
+
+
+// -----------------------------------------------------------------------------
+// Q6: Goal Hijacking — Sustained Objective Drift Across Session Steps
+// Use: Detect agents executing high-privilege or destructive actions deep into
+//      a session, after an innocuous initial interaction — pattern consistent
+//      with goal hijacking via adversarial instructions surviving multi-step reasoning
+// Reference: Microsoft AIRT Taxonomy v2.0 §4.4 | OWASP ASI01
+// Recommended: Analytics Rule | Frequency: 30m | Lookback: 2h | Severity: High
+// -----------------------------------------------------------------------------
+let HighPrivilegeActions = dynamic([
+    "FilePermanentlyDeleted", "FileDeleted", "MessageSent",
+    "InviteExternalUser", "AdminUpdated", "RoleAssigned",
+    "BulkFileDownload", "SiteCollectionAdminAdded"
+]);
+let SessionFirstAction = CloudAppEvents
+    | where TimeGenerated > ago(2h)
+    | where ActionType == "AgentInteraction"
+    | extend SessionId = tostring(RawEventData["SessionId"])
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | summarize SessionStart = min(TimeGenerated) by SessionId, AgentId, AccountDisplayName;
+CloudAppEvents
+| where TimeGenerated > ago(2h)
+| where ActionType in (HighPrivilegeActions)
+| extend SessionId = tostring(RawEventData["SessionId"])
+| extend AgentId = tostring(RawEventData["AgentId"])
+| extend StepIndex = toint(RawEventData["StepIndex"])
+| where isnotempty(SessionId) and isnotempty(AgentId)
+| join kind=inner SessionFirstAction on SessionId, AgentId, AccountDisplayName
+| extend MinutesIntoSession = datetime_diff('minute', TimeGenerated, SessionStart)
+| where MinutesIntoSession > 10 and StepIndex > 3   // High-privilege action only after sustained session
+| project
+    TimeGenerated,
+    AccountDisplayName,
+    AgentId,
+    SessionId,
+    ActionType,
+    StepIndex,
+    MinutesIntoSession,
+    SessionStart,
+    RiskNote = "High-privilege action executed deep in session — potential goal hijacking via adversarial instructions"
+| sort by MinutesIntoSession desc, StepIndex desc

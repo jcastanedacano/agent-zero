@@ -98,6 +98,54 @@ EntraIdSpnSignInEvents
 
 
 // -----------------------------------------------------------------------------
+// Q5b: Capability & Architecture Disclosure — Agent Leaking Its Own Tool Schema
+// Use: Detect agent responses that include internal tool definitions, system prompt
+//      fragments, or parameter schemas — used by attackers as attack pivot to forge
+//      consent tokens or craft tool-specific injection payloads
+// Reference: Microsoft AIRT Taxonomy v2.0 §4.9 | No OWASP mapping yet (emerging)
+// Recommended: Analytics Rule | Frequency: 15m | Lookback: 1h | Severity: Medium
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(1h)
+| where Application in ("Microsoft Copilot", "Copilot Studio", "Azure AI Foundry")
+    and ActionType == "AgentInteraction"
+| extend ResponseText = tostring(RawEventData["AgentResponse"])
+| extend PromptText = tostring(RawEventData["UserPrompt"])
+| extend AgentId = tostring(RawEventData["AgentId"])
+// Score for schema/tool disclosure patterns in agent response
+| extend DisclosureScore = toint(
+    (ResponseText has "\"type\": \"function\"") * 3 +
+    (ResponseText has "\"parameters\":{") * 3 +
+    (ResponseText has "system_prompt") * 3 +
+    (ResponseText has "tool_use") * 2 +
+    (ResponseText has "function_call") * 2 +
+    (ResponseText has "\"description\":") * 1 +
+    (ResponseText has "\"required\":") * 1
+)
+// Score for elicitation attempts in user prompt
+| extend ElicitScore = toint(
+    (PromptText has "what tools") * 2 +
+    (PromptText has "list your functions") * 2 +
+    (PromptText has "show your capabilities") * 2 +
+    (PromptText has "what can you access") * 1 +
+    (PromptText has "your system prompt") * 3 +
+    (PromptText has "repeat your instructions") * 3
+)
+| where DisclosureScore >= 3 or ElicitScore >= 3
+| project
+    TimeGenerated,
+    AccountDisplayName,
+    AgentId,
+    DisclosureScore,
+    ElicitScore,
+    PromptPreview = substring(PromptText, 0, 200),
+    ResponsePreview = substring(ResponseText, 0, 300),
+    IPAddress,
+    RiskNote = "Agent may have disclosed tool schema or system prompt — potential attack pivot for forged consent"
+| sort by DisclosureScore desc, ElicitScore desc
+
+
+// -----------------------------------------------------------------------------
 // Q6: Model Extraction via API — Anomalous Query Volume to AI Endpoints
 // Use: Detect attackers systematically querying Azure AI Foundry or Copilot
 //      endpoints to reconstruct the model through input/output pairs
