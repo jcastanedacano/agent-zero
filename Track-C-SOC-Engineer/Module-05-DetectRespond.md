@@ -24,15 +24,15 @@ At the end of this module, you will be able to create Sentinel analytics rules f
 
 ---
 
-## Contenido core (puntos que el facilitador debe cubrir)
+## Core Content
 
-1. **Intentos de jailbreak como vector de incidente activo:** Un jailbreak exitoso convierte al agente en ejecutor de instrucciones maliciosas con acceso legítimo a los sistemas de la organización. La señal está en los patrones del prompt en `CloudAppEvents`, no en el comportamiento de red — lo que hace que los controles perimetrales sean insuficientes.
+1. **Jailbreak attempts as an active incident vector:** A successful jailbreak converts the agent into an executor of malicious instructions with legitimate system access. The signal is in prompt patterns in `CloudAppEvents`, not network behavior — which makes perimeter controls insufficient.
 
-2. **Falsos negativos estructurales por calibración humana:** Las reglas de detección calibradas para comportamiento humano generan falsos negativos con agentes. Un agente que hace 5.000 llamadas en una hora puede estar operando normalmente. Sin un baseline por agente usando `percentile()` o `avg()` sobre ventanas largas, cualquier umbral fijo genera falsos positivos o falsos negativos.
+2. **Structural false negatives from human calibration:** Detection rules calibrated for human behavior generate false negatives with agents. An agent making 5,000 calls in an hour may be operating normally. Without a per-agent baseline using `percentile()` or `avg()` over long time windows, any fixed threshold generates either false positives or false negatives.
 
-3. **Controles Microsoft aplicables:** Defender XDR integra señales de comportamiento agentic con contexto de identidad. Microsoft Sentinel con el MCP server nativo permite consultar el estado de agentes desde el contexto de investigación. Security Copilot acelera el triage de incidentes complejos. Purview Audit provee cadena de custodia forense con inmutabilidad. Agent 365 correlaciona eventos de incidente con el registro de ownership del agente.
+3. **Applicable Microsoft controls:** Defender XDR integrates agentic behavioral signals with identity context. Microsoft Sentinel with the native MCP server allows querying agent status from within the investigation context. Security Copilot accelerates triage of complex incidents. Purview Audit provides the forensic chain of custody with immutability. Agent 365 correlates incident events with the agent ownership registry.
 
-4. **Enforcement automático como requisito arquitectónico:** Detección sin automatización de respuesta tiene un MTTR limitado por el tiempo de reacción humana. Para agentes que actúan en segundos, el objetivo es: detección automática → contención automática (Logic App revoca token vía Graph API) → revisión humana. La postura de "detección sin enforcement" no es un control — es un registro de incidentes.
+4. **Automated enforcement as an architectural requirement:** Detection without response automation has MTTR limited by human reaction time. For agents acting in seconds, the target is: automatic detection → automatic containment (Logic App revokes token via Graph API) → human review. A "detection without enforcement" posture is not a control — it is an incident log.
 
 ---
 
@@ -150,7 +150,7 @@ CloudAppEvents
 4. Add action: **Microsoft Sentinel — Add comment to incident**
    - Comment: `Automated response: agent token revoked at @{utcNow()} by playbook-revoke-agent-token`
 5. Add action: **Office 365 Outlook — Send an email**
-   - To: agent technical owner (from `AIAgentsInfo.TechnicalOwner`)
+   - To: agent technical owner (from `Owners` field in `AgentsInfo` or Agent 365 Registry)
    - Subject: `[ALERT] Agent token revoked — review required`
    - Body: include incident URL and AgentId
 6. Save the Logic App

@@ -1,52 +1,52 @@
-# Pilar 01 — Discover & Prioritize | Track B
+# Module 01 — Discover & Prioritize | Track B
 
-**Duración del módulo:** 90 minutos
+**Module duration:** 90 minutes
 
-**Objetivo de aprendizaje:**
-Al finalizar este módulo, el participante será capaz de diseñar una arquitectura de inventario de agentes de IA que cubra fuentes cloud y endpoints, configurar Defender AI Agent Inventory y Purview DSPM for AI en un tenant demo, identificar los blind spots estructurales del inventario, y producir un gap assessment de visibilidad para su organización.
+**Learning objective:**
+By the end of this module, participants will be able to design an agent inventory architecture covering cloud sources and endpoints, configure Defender AI Agent Inventory and Purview DSPM for AI in a demo tenant, identify structural inventory blind spots, and produce a visibility gap assessment for their organization.
 
-**Agenda del módulo:**
+**Module agenda:**
 
-| Tiempo | Actividad | Tipo |
-|--------|-----------|------|
-| 20 min | Arquitectura de descubrimiento: fuentes, tablas, conectores y blind spots por tipo de agente | Exposición |
-| 15 min | Recorrido por `AIAgentsInfo`: schema, campos clave, limitaciones documentadas | Exposición |
-| 45 min | Lab: Activación de Defender AI Agent Inventory + KQL de inventario | Lab |
-| 10 min | Gap assessment: diseño del mapa de visibilidad de la organización | Discusión |
-
----
-
-**Contenido core (puntos que el facilitador debe cubrir):**
-
-1. **Topología de descubrimiento por tipo de agente:** Copilot Studio y Azure AI Foundry generan telemetría en `AIAgentsInfo`. Power Automate con pasos de IA aparece en `CloudAppEvents`. Los agentes locales (Claude Code, MCP servers, scripts con LLM) no generan señal cloud sin endpoint connector activo — este es el blind spot estructural que ningún control de Purview ni Defender resuelve por sí solo.
-
-2. **Shadow AI como estado por defecto:** Agent Builder (M365 Copilot) permite a cualquier usuario licenciado crear y publicar agentes sin aprobación. Estos agentes aparecen en Agent 365 Registry pero sin Entra Agent ID, sin dueño técnico y sin revisión de DLP. No son excepciones — son el caso base en cualquier tenant M365 E5 con Copilot habilitado.
-
-3. **Controles Microsoft aplicables:** Purview DSPM for AI mapea las interacciones de los agentes con datos sensibles — complementa pero no reemplaza el inventario de identidades. Defender AI Agent Inventory requiere conectores activos por plataforma. SharePoint Advanced Management audita qué sitios son accedidos por agentes. Agent 365 es el registro central, pero solo cubre agentes registrados.
-
-4. **El costo del inventario incompleto:** Un agente no listado en el inventario no aparece en las políticas de Conditional Access, no tiene dueño técnico para escalada y no está sujeto a las analytics rules de Sentinel. La brecha de inventario es la brecha de todas las capas de seguridad posteriores.
+| Time | Activity | Type |
+|------|----------|------|
+| 20 min | Discovery architecture: sources, tables, connectors, and blind spots by agent type | Presentation |
+| 15 min | Walk-through of `AgentsInfo`: schema, key fields, documented limitations | Presentation |
+| 45 min | Lab: Activate Defender AI Agent Inventory + inventory KQL | Lab |
+| 10 min | Gap assessment: design the organization's visibility map | Discussion |
 
 ---
 
-**Ejercicio / Lab:**
+**Core content (points the facilitator must cover):**
 
-- **Nombre:** Diseño del architecture de inventario de agentes
-- **Modalidad:** Parejas
-- **Descripción:**
-  1. Acceder a Microsoft Defender XDR → AI Agent Inventory; verificar qué conectores están activos y qué tablas retornan datos
-  2. En Sentinel → Logs, ejecutar la query de inventario completo de `AIAgentsInfo` del KQL Library (P01-Agent-Discovery.kql) y documentar el recuento por tipo y status de gestión
-  3. Identificar qué categorías de agentes del entorno de la organización NO aparecerán en este inventario (agentes locales, third-party sin conector, etc.) — documentar como blind spots
-  4. Diseñar en un diagrama el flujo de telemetría: qué agente → qué conector → qué tabla → qué query detecta → qué control aplica
-  5. Completar la sección "Domain 1 — Discover" del Gap Assessment Template
-- **Herramientas requeridas:** Microsoft Defender XDR (AI Agent Inventory), Microsoft Sentinel (Logs), KQL Library del repositorio, Gap Assessment Template
-- **Entregable:** Diagrama de flujo de telemetría + sección Domain 1 del Gap Assessment completada con recuento real de agentes, blind spots identificados y recomendaciones de control
+1. **Discovery topology by agent type:** Copilot Studio and Azure AI Foundry generate telemetry in `AgentsInfo`. Power Automate with AI steps appears in `CloudAppEvents`. Local agents (Claude Code, MCP servers, LLM scripts) generate no cloud signal without an active endpoint connector — this is the structural blind spot that no Purview or Defender control resolves on its own.
+
+2. **Shadow AI as the default state:** Agent Builder (M365 Copilot) allows any licensed user to create and publish agents without approval. These agents appear in Agent 365 Registry but without an Entra Agent ID, no technical owner, and no DLP review. They are not exceptions — they are the baseline case in any M365 E5 tenant with Copilot enabled.
+
+3. **Applicable Microsoft controls:** Purview DSPM for AI maps agent interactions with sensitive data — it complements but does not replace identity inventory. Defender AI Agent Inventory requires active connectors per platform. SharePoint Advanced Management audits which sites are accessed by agents. Agent 365 is the central registry, but only covers registered agents.
+
+4. **The cost of an incomplete inventory:** An agent not listed in the inventory does not appear in Conditional Access policies, has no technical owner for escalation, and is not subject to Sentinel analytics rules. The inventory gap is the gap across every subsequent security layer.
 
 ---
 
-**Preguntas de cierre para el facilitador:**
-- En su diagrama, ¿cuántos tipos de agente quedaron fuera del inventario cloud? ¿Qué arquitectura de endpoint (MDE onboarding, sensor local) resolvería esos blind spots?
-- Si tuvieran que presentar el inventario de agentes a un comité de riesgo la semana que viene, ¿qué dato de la query ejecutada les generaría más preguntas de parte del comité, y cómo responderían?
+**Exercise / Lab:**
 
-**Conexión al siguiente pilar:** El inventario es el input del proceso de gobernanza. Sin saber qué agentes existen, no es posible asignar dueños ni crear políticas. El Pilar 02 toma la lista de agentes del inventario y responde: ¿quién es responsable de cada uno, qué proceso los aprueba, y cómo se gestiona su ciclo de vida?
+- **Name:** Agent inventory architecture design
+- **Format:** Pairs
+- **Description:**
+  1. Open Microsoft Defender XDR → AI Agent Inventory; verify which connectors are active and which tables return data
+  2. In Sentinel → Logs, run the full `AgentsInfo` inventory query from the KQL Library (P01-Agent-Discovery.kql) and document the count by platform and lifecycle status
+  3. Identify which categories of agents in the organization's environment will NOT appear in this inventory (local agents, third-party without connector, etc.) — document as blind spots
+  4. Design a telemetry flow diagram: which agent → which connector → which table → which query detects it → which control applies
+  5. Complete the "Domain 1 — Discover" section of the Gap Assessment Template
+- **Required tools:** Microsoft Defender XDR (AI Agent Inventory), Microsoft Sentinel (Logs), KQL Library (repository), Gap Assessment Template
+- **Deliverable:** Telemetry flow diagram + Domain 1 section of the Gap Assessment completed with real agent count, identified blind spots, and control recommendations
 
-→ [Módulo 02 — Govern & Control](./Module-02-Govern.md)
+---
+
+**Closing questions for the facilitator:**
+- In your diagram, how many agent types fell outside the cloud inventory? What endpoint architecture (MDE onboarding, local sensor) would close those blind spots?
+- If you had to present the agent inventory to a risk committee next week, what result from the query you ran would generate the most questions from the committee, and how would you answer?
+
+**Connection to the next domain:** Inventory is the input to the governance process. Without knowing which agents exist, it is not possible to assign owners or create policies. Domain 2 takes the agent list from inventory and answers: who is responsible for each one, what process approves them, and how is their lifecycle managed?
+
+→ [Module 02 — Govern & Control](./Module-02-Govern.md)

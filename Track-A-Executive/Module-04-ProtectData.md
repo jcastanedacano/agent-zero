@@ -1,52 +1,52 @@
-# Pilar 04 — Protect Data | Track A
+# Module 04 — Protect Data | Track A
 
-**Duración del módulo:** 45 minutos
+**Module duration:** 45 minutes
 
-**Objetivo de aprendizaje:**
-Al finalizar este módulo, el participante será capaz de evaluar el riesgo de exfiltración de datos a través de agentes de IA en su organización, identificar las brechas de clasificación y etiquetado que amplifican ese riesgo, y tomar decisiones de inversión en controles de protección de datos en el contexto de un entorno Microsoft Purview.
+**Learning objective:**
+By the end of this module, participants will be able to evaluate the data exfiltration risk through AI agents in their organization, identify classification and labeling gaps that amplify that risk, and make investment decisions on data protection controls in the context of a Microsoft Purview environment.
 
-**Agenda del módulo:**
+**Module agenda:**
 
-| Tiempo | Actividad | Tipo |
-|--------|-----------|------|
-| 10 min | Cómo los agentes se convierten en vectores de exfiltración: prompts, respuestas y conectores | Exposición |
-| 10 min | El problema del corpus no etiquetado: oversharing y SharePoint como superficie de ataque | Exposición |
-| 20 min | Ejercicio: Análisis de escenario de exfiltración y decisión de priorización | Ejercicio |
-| 5 min | Cierre y conexión al pilar 5 | Discusión |
-
----
-
-**Contenido core (puntos que el facilitador debe cubrir):**
-
-1. **Prompt injection como vector de exfiltración:** Un agente con acceso a SharePoint puede ser manipulado mediante instrucciones en documentos que lee — el llamado "corpus envenenado". El agente ejecuta las instrucciones maliciosas como si vinieran de un usuario legítimo, sin ninguna señal de alerta en los logs estándar.
-
-2. **El efecto multiplicador del oversharing:** Un error de ACL en SharePoint (un sitio que debería ser confidencial pero está compartido con todos) es un problema manejable para usuarios humanos — solo los que buscan activamente lo encuentran. Para un agente, ese error se amplifica: todos los usuarios que interactúan con el agente pueden recuperar el contenido a través de prompts.
-
-3. **Controles Microsoft aplicables:** Purview DLP puede configurarse para detectar datos sensibles en las interacciones con agentes de IA (prompts y respuestas), no solo en correos y documentos. Los sensitivity labels aplicados a sitios de SharePoint restringen qué puede indexar el agente. SharePoint Advanced Management audita y remedia el oversharing. Insider Risk Management detecta patrones de exfiltración en volumen.
-
-4. **El orden de remediación importa:** Habilitar el retrieval de un agente sobre un sitio de SharePoint antes de aplicar sensitivity labels y remediar errores de ACL crea una ventana de exposición activa. El orden correcto es: etiquetar → auditar ACL → habilitar retrieval.
+| Time | Activity | Type |
+|------|----------|------|
+| 10 min | How agents become exfiltration vectors: prompts, responses, and connectors | Presentation |
+| 10 min | The unlabeled corpus problem: oversharing and SharePoint as an attack surface | Presentation |
+| 20 min | Exercise: Exfiltration scenario analysis and prioritization decision | Exercise |
+| 5 min | Wrap-up and connection to Domain 5 | Discussion |
 
 ---
 
-**Ejercicio / Lab:**
+**Core content (points the facilitator must cover):**
 
-- **Nombre:** Triaje de riesgo de datos
-- **Modalidad:** Individual
-- **Descripción:**
-  1. El participante recibe una lista de 6 sitios de SharePoint ficticios con diferentes características: etiquetado (sí/no), estado de ACL (limpio/con oversharing), y si el agente ya tiene retrieval habilitado
-  2. Debe clasificar cada sitio en una escala de riesgo: Crítico / Alto / Medio / Bajo
-  3. Luego prioriza el orden de remediación para los 3 sitios de mayor riesgo, justificando la secuencia
-  4. Identifica cuál de los 6 sitios representa el escenario de "corpus envenenado" y explica por qué
-  5. Registra los dos sitios de mayor riesgo en la sección "Domain 4" de su Risk Posture Map
-- **Herramientas requeridas:** Tabla de sitios ficticios (provista por el facilitador); no requiere acceso a sistemas
-- **Entregable:** Lista priorizada de remediación con justificación + dos sitios de mayor riesgo en el Risk Posture Map
+1. **Prompt injection as an exfiltration vector:** An agent with SharePoint access can be manipulated through instructions embedded in documents it reads — the so-called "poisoned corpus." The agent executes malicious instructions as if they came from a legitimate user, without any alert signal in standard activity logs.
+
+2. **The oversharing multiplier effect:** An ACL error in SharePoint (a site that should be confidential but is shared with everyone) is a manageable problem for human users — only those who actively search will find it. For an agent, that error is amplified: every user who interacts with the agent can retrieve the content through prompts.
+
+3. **Applicable Microsoft controls:** Purview DLP can be configured to detect sensitive data in AI agent interactions (prompts and responses), not just in emails and documents. Sensitivity labels applied to SharePoint sites restrict what the agent can index. SharePoint Advanced Management audits and remediates oversharing at the site and site collection level. Insider Risk Management detects exfiltration patterns by volume and data type.
+
+4. **Remediation order matters:** Enabling agent retrieval on a SharePoint site before applying sensitivity labels and remediating ACL errors creates an active exposure window. The correct order is: label → audit ACLs → enable retrieval.
 
 ---
 
-**Preguntas de cierre para el facilitador:**
-- ¿Tienen hoy un inventario de los sitios de SharePoint que usan (o planean usar) como fuente de conocimiento para agentes de IA? ¿Saben cuáles tienen etiqueta de sensibilidad aplicada?
-- Si un auditor externo les preguntara mañana qué datos pueden acceder sus agentes de IA, ¿podrían responder con certeza? ¿Qué les daría esa certeza?
+**Exercise:**
 
-**Conexión al siguiente pilar:** Proteger los datos reduce la superficie de ataque, pero no elimina la posibilidad de que un ataque ocurra. El Pilar 05 cierra el ciclo: cómo detectar cuando un agente está siendo manipulado o se comporta de forma anómala, y cómo responder con un proceso que el SOC pueda ejecutar.
+- **Name:** Data risk triage
+- **Format:** Individual
+- **Description:**
+  1. Participants receive a list of 6 fictional SharePoint sites with different characteristics: labeled (yes/no), ACL status (clean/with oversharing), and whether the agent already has retrieval enabled
+  2. Classify each site on a risk scale: Critical / High / Medium / Low
+  3. Prioritize the remediation order for the 3 highest-risk sites, justifying the sequence
+  4. Identify which of the 6 sites represents the "poisoned corpus" scenario and explain why
+  5. Record the two highest-risk sites in the "Domain 4" section of the Risk Posture Map
+- **Required tools:** Fictional site table (provided by facilitator); no system access required
+- **Deliverable:** Prioritized remediation list with justification + two highest-risk sites in the Risk Posture Map
 
-→ [Módulo 05 — Detect & Respond](./Module-05-DetectRespond.md)
+---
+
+**Closing questions for the facilitator:**
+- Do you today have an inventory of the SharePoint sites you use (or plan to use) as knowledge sources for AI agents? Do you know which ones have sensitivity labels applied?
+- If an external auditor asked tomorrow what data your AI agents can access, could you answer with certainty? What would give you that certainty?
+
+**Connection to the next domain:** Protecting data reduces the attack surface, but does not eliminate the possibility of an attack occurring. Domain 5 closes the loop: how to detect when an agent is being manipulated or behaving anomalously, and how to respond with a process the SOC can execute.
+
+→ [Module 05 — Detect & Respond](./Module-05-DetectRespond.md)

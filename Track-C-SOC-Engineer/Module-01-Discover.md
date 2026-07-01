@@ -1,7 +1,7 @@
 # Module 01 — Discover & Prioritize | Track C
 
 **Duration:** 90 minutes  
-**Tables:** `AIAgentsInfo`, `CloudAppEvents`, `OfficeActivity`, `MicrosoftPurviewInformationProtection`  
+**Tables:** `AgentsInfo`, `CloudAppEvents`, `OfficeActivity`, `MicrosoftPurviewInformationProtection`  
 **Minimum role:** Security Reader (Defender + Sentinel)
 
 ---
@@ -17,21 +17,21 @@ At the end of this module, you will be able to configure Defender AI Agent Inven
 | Time | Activity | Type |
 |------|----------|------|
 | 15 min | Technical architecture: how Defender and Purview detect agents — tables, connectors, gaps | Explanation |
-| 10 min | `AIAgentsInfo` schema walkthrough: fields, values, limitations | Explanation |
+| 10 min | `AgentsInfo` schema walkthrough: fields, values, limitations | Explanation |
 | 55 min | Lab: KQL queries for agent inventory and classification | Lab |
 | 10 min | Results review + playbook section 1 documentation | Discussion |
 
 ---
 
-## Contenido core (puntos que el facilitador debe cubrir)
+## Core Content
 
-1. **Telemetría diferenciada por tipo de agente:** Copilot Studio y Azure AI Foundry generan telemetría en `AIAgentsInfo`. Power Automate con pasos de IA aparece en `CloudAppEvents`. Los agentes locales (Claude Code, MCP servers, scripts con LLM en endpoints) no generan señal cloud sin un endpoint connector activo en MDE — este es el blind spot estructural que ninguna query de Sentinel puede resolver sin el conector.
+1. **Differentiated telemetry by agent type:** Copilot Studio and Azure AI Foundry generate telemetry in `AgentsInfo`. Power Automate with AI steps appears in `CloudAppEvents`. Local agents (Claude Code, MCP servers, LLM scripts on endpoints) generate no cloud signal without an active MDE endpoint connector — this is the structural blind spot that no Sentinel query can resolve without the connector.
 
-2. **Shadow AI como condición base:** Agent Builder permite a cualquier usuario licenciado crear y publicar un agente sin aprobación. Estos agentes aparecen en Agent 365 Registry pero sin Entra Agent ID, sin dueño técnico y sin revisión de DLP. No son la excepción — son el caso más frecuente en tenants M365 E5 con Copilot habilitado.
+2. **Shadow AI as the baseline condition:** Agent Builder allows any licensed user to create and publish an agent without approval. These agents appear in Agent 365 Registry but without an Entra Agent ID, no technical owner, and no DLP review. They are not the exception — they are the most common case in M365 E5 tenants with Copilot enabled.
 
-3. **Controles Microsoft aplicables:** Purview DSPM for AI mapea interacciones de agentes con datos sensibles. Defender AI Agent Inventory requiere conectores activos por plataforma. SharePoint Advanced Management audita qué sitios acceden los agentes. Agent 365 es el registro central, pero solo cubre agentes que completaron el proceso de registro.
+3. **Applicable Microsoft controls:** Purview DSPM for AI maps agent interactions with sensitive data. Defender AI Agent Inventory requires active connectors per platform. SharePoint Advanced Management audits which sites agents access. Agent 365 is the central registry, but only covers agents that completed the registration process.
 
-4. **El costo del inventario incompleto:** Un agente ausente del inventario no aparece en las policies de Conditional Access, no tiene dueño para escalada y no está cubierto por las analytics rules de Sentinel. La brecha de visibilidad es la brecha de todas las capas de seguridad posteriores.
+4. **The cost of an incomplete inventory:** An agent absent from inventory does not appear in Conditional Access policies, has no owner for escalation, and is not covered by Sentinel analytics rules. The visibility gap is the gap across every subsequent security layer.
 
 ---
 
@@ -41,12 +41,28 @@ At the end of this module, you will be able to configure Defender AI Agent Inven
 
 Defender AI Agent Inventory covers Copilot Studio, Azure AI Foundry, AWS Bedrock, GCP Vertex, and 20+ agent types — but only when the relevant connector is active and endpoints are onboarded via MDE. Agents running locally (Claude Code, MCP servers, OpenClaw on endpoints) generate no cloud telemetry without an active endpoint connector. The gap isn't a policy problem — it's a telemetry problem.
 
-### What `AIAgentsInfo` doesn't capture by default
+### What `AgentsInfo` doesn't capture by default
 
 - Agents deployed via third-party APIs without Agent 365 registration
 - Local agents on endpoints without MDE onboarding
 - Power Automate flows with AI steps that aren't registered as agents
 - Agents created via Agent Builder (M365 Copilot) that bypass Copilot Studio registry
+
+### `AgentsInfo` schema — validated fields (June 2026)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `Timestamp` | datetime | Use for time filters (XDR table) |
+| `AgentId` | string | Unique agent identifier |
+| `Name` | string | Agent display name (not `AgentName`) |
+| `Platform` | string | Copilot Studio, Azure AI Foundry, etc. |
+| `LifecycleStatus` | string | Active / Blocked / Uninstalled / Deleted |
+| `PublishedStatus` | string | Draft / Published |
+| `Owners` | dynamic | Can be null — use `isnull()` check |
+| `EntraAgentID` | string | Empty if no Entra identity assigned |
+| `CreatedDateTime` | datetime | Agent creation timestamp |
+| `McpServers` | dynamic | External MCP endpoints declared |
+| `DeclaredTools` | dynamic | Tool definitions declared by agent |
 
 ---
 
@@ -55,50 +71,65 @@ Defender AI Agent Inventory covers Copilot Studio, Azure AI Foundry, AWS Bedrock
 ### Setup
 
 1. Open **Microsoft Defender XDR** → Advanced Hunting, or **Microsoft Sentinel** → Logs
-2. Verify `AIAgentsInfo` returns results: run `AIAgentsInfo | take 5`
-3. If the table is empty, use `CloudAppEvents` as fallback for agent activity signals
+2. Verify `AgentsInfo` returns results: run `AgentsInfo | take 5`
+3. If the table is empty, verify Agent 365 / Microsoft 365 Copilot license is assigned and allow 2–4 hours for propagation. Use `CloudAppEvents` as a fallback for agent activity signals.
 
 ---
 
-### Step 1 — Full agent inventory by type and management status
+### Step 1 — Full agent inventory by platform and lifecycle status
 
 ```kql
-AIAgentsInfo
-| where TimeGenerated > ago(30d)
+AgentsInfo
+| where Timestamp > ago(30d)
 | summarize
-    LastSeen = max(TimeGenerated),
-    AgentCount = dcount(AgentId)
-    by AgentType, Platform, ManagementStatus, AgentName
+    LastSeen = max(Timestamp),
+    AgentCount = dcount(AgentId),
+    WithoutOwner = countif(isnull(Owners) or array_length(Owners) == 0),
+    WithoutEntraId = countif(isempty(EntraAgentID))
+    by Platform, LifecycleStatus, PublishedStatus, Name
 | extend RiskLevel = case(
-    ManagementStatus == "Unmanaged", "High",
-    ManagementStatus == "PartiallyManaged", "Medium",
+    WithoutOwner > 0 and WithoutEntraId > 0, "High",
+    WithoutOwner > 0 or WithoutEntraId > 0, "Medium",
+    LifecycleStatus in ("Blocked", "Deleted"), "Medium",
     "Low"
 )
 | sort by RiskLevel asc, LastSeen desc
-| project AgentName, AgentType, Platform, ManagementStatus, RiskLevel, AgentCount, LastSeen
+| project Name, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
+          WithoutOwner, WithoutEntraId, AgentCount, LastSeen
 ```
 
-**Expected output:** Table of agents grouped by type and platform, classified by management status.
+**Expected output:** Agent inventory grouped by platform and lifecycle status, classified by risk level based on ownership and Entra identity coverage.
 
-**Document in your playbook:** How many agents appear as `Unmanaged`? What platforms have the highest count?
+**Document in your playbook:** How many agents appear as High risk? Which platforms have the highest count of agents without an owner?
 
 ---
 
-### Step 2 — Agents without a technical owner
+### Step 2 — Shadow AI — agents without owner or Entra identity
 
 ```kql
-AIAgentsInfo
-| where TimeGenerated > ago(30d)
-| where ManagementStatus == "Unmanaged"
-    or isempty(TechnicalOwner)
-| distinct AgentId, AgentName, AgentType, Platform, CreatedTime, TechnicalOwner
-| extend DaysSinceCreation = datetime_diff('day', now(), CreatedTime)
+AgentsInfo
+| where Timestamp > ago(30d)
+| where isnull(Owners) or array_length(Owners) == 0
+    or isempty(EntraAgentID)
+| extend OwnersStr = tostring(Owners)
+| distinct AgentId, Name, Platform, CreatedDateTime, OwnersStr, EntraAgentID
+| extend OwnerDisplay = iff(OwnersStr == '' or OwnersStr == '[]', 'UNASSIGNED', OwnersStr)
+| extend HasEntraId = isnotempty(EntraAgentID)
+| extend RiskSignal = case(
+    not(HasEntraId) and (OwnersStr == "" or OwnersStr == "[]"),
+        "No owner + no Entra Agent ID — shadow AI",
+    not(HasEntraId),
+        "No Entra Agent ID — identity laundering risk",
+    "No owner assigned"
+)
+| extend DaysSinceCreation = datetime_diff('day', now(), CreatedDateTime)
 | sort by DaysSinceCreation desc
+| project AgentId, Name, Platform, OwnerDisplay, HasEntraId, RiskSignal, DaysSinceCreation
 ```
 
-**Expected output:** List of identity orphans — agents operating with no assigned owner.
+**Expected output:** List of shadow AI agents — operating without formal registration or ownership.
 
-**Note:** `TechnicalOwner` is only populated if the agent was registered through Agent 365. Agents created via Agent Builder or direct API calls will appear with empty owner fields.
+**Note:** `Owners` is a dynamic field that can be null (third-party or external agents) or an empty array. The null check `isnull(Owners) or array_length(Owners) == 0` is required to capture both cases.
 
 ---
 
@@ -124,7 +155,7 @@ OfficeActivity
 | project SiteUrl, OfficeObjectId, AgentAccesses, LastAccess, UserId
 ```
 
-**Expected output:** Sites accessed by agents that have no sensitivity label — these are your oversharing candidates.
+**Expected output:** Sites accessed by agents that have no sensitivity label — oversharing candidates.
 
 **Critical note:** Remediate oversharing in SharePoint **before** enabling retrieval on any agent. Every ACL error in the corpus is inherited by the agent and amplified to all users interacting with it.
 
@@ -133,34 +164,38 @@ OfficeActivity
 ### Step 4 — New agent registrations in the last 24 hours
 
 ```kql
-AIAgentsInfo
-| where TimeGenerated > ago(1d)
-| where CreatedTime > ago(1d)
+AgentsInfo
+| where Timestamp > ago(1d)
+| where CreatedDateTime > ago(1d)
+| extend OwnerDisplay = iff(isnull(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | project
     AgentId,
-    AgentName,
-    AgentType,
+    Name,
     Platform,
-    TechnicalOwner,
-    ManagementStatus,
-    CreatedTime
+    OwnerDisplay,
+    LifecycleStatus,
+    PublishedStatus,
+    CreatedDateTime,
+    DeclaredTools,
+    McpServers
 | extend AlertDetail = strcat(
-    "New agent registered: ", AgentName,
-    " | Type: ", AgentType,
-    " | Owner: ", iff(isempty(TechnicalOwner), "UNASSIGNED", TechnicalOwner)
+    "New agent registered: ", Name,
+    " | Platform: ", Platform,
+    " | Owner: ", OwnerDisplay,
+    " | MCP servers: ", tostring(array_length(McpServers))
 )
-| sort by CreatedTime desc
+| sort by CreatedDateTime desc
 ```
 
-**Expected output:** Agents registered in the last 24 hours. This is your candidate for a Sentinel analytics rule with daily frequency.
+**Expected output:** Agents registered in the last 24 hours — candidate for a Sentinel analytics rule with hourly frequency.
 
 ---
 
 ### Step 5 — Convert Step 4 to a Sentinel Analytics Rule
 
 1. In Microsoft Sentinel → **Analytics** → **Create** → **Scheduled query rule**
-2. Name: `New Unmanaged Agent Registered`
-3. Paste the query from Step 4; add filter: `| where ManagementStatus == "Unmanaged" or isempty(TechnicalOwner)`
+2. Name: `New Agent Without Owner or Entra Identity`
+3. Paste the query from Step 4; add filter: `| where isempty(EntraAgentID) or isnull(Owners) or array_length(Owners) == 0`
 4. Frequency: Every 1 hour | Lookback: 1 day
 5. Severity: **Medium**
 6. Map entity: `AgentId` → Custom entity
@@ -182,13 +217,14 @@ Add to your [Incident Response Playbook Template](./Templates/Incident-Response-
 | Metric | Value |
 |--------|-------|
 | Total agents detected | |
-| Unmanaged agents | |
-| Agents without technical owner | |
+| Agents without owner | |
+| Agents without Entra Agent ID | |
+| Shadow AI (no owner + no Entra ID) | |
 | SharePoint sites accessed without labels | |
 | New agents in last 24h | |
 
 ### Queries Deployed as Analytics Rules
-- [ ] New Unmanaged Agent Registered (hourly)
+- [ ] New Agent Without Owner or Entra Identity (hourly)
 
 ### Top Risk Findings
 1.
@@ -200,7 +236,7 @@ Add to your [Incident Response Playbook Template](./Templates/Incident-Response-
 
 ## Closing Questions
 
-- What type of agent in your tenant had the largest gap between cloud inventory and expected count? What explains the difference?
+- What platform in your tenant had the largest count of agents without an Entra Agent ID? What process would have prevented that condition?
 - If you had to convert the Step 3 query into a weekly scheduled report for the security team, what additional fields would you add?
 
 ---

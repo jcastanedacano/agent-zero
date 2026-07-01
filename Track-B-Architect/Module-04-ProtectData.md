@@ -1,58 +1,58 @@
-# Pilar 04 — Protect Data | Track B
+# Module 04 — Protect Data | Track B
 
-**Duración del módulo:** 90 minutos
+**Module duration:** 90 minutes
 
-**Objetivo de aprendizaje:**
-Al finalizar este módulo, el participante será capaz de diseñar una arquitectura de protección de datos para agentes de IA que cubra clasificación, DLP en interacciones y auditoría de exfiltración, configurar una política DLP de Purview para interacciones de IA en un tenant demo, auditar el oversharing en sitios SharePoint usados como fuente de conocimiento, y documentar el orden correcto de remediación antes de habilitar retrieval.
+**Learning objective:**
+By the end of this module, participants will be able to design a data protection architecture for AI agents covering classification, DLP on interactions, and exfiltration auditing; configure a Purview DLP policy for AI interactions in a demo tenant; audit oversharing on SharePoint sites used as knowledge sources; and document the correct remediation order before enabling retrieval.
 
-**Agenda del módulo:**
+**Module agenda:**
 
-| Tiempo | Actividad | Tipo |
-|--------|-----------|------|
-| 20 min | Arquitectura de protección de datos para agentes: capas, vectores y el efecto multiplicador del oversharing | Exposición |
-| 15 min | Purview DLP para interacciones de IA: diferencias vs. DLP tradicional, cobertura y limitaciones | Exposición |
-| 45 min | Lab: DLP policy para AI interactions + auditoría de sensitivity labels + KQL de exfiltración | Lab |
-| 10 min | Gap assessment: protección de datos y roadmap de etiquetado | Discusión |
-
----
-
-**Contenido core (puntos que el facilitador debe cubrir):**
-
-1. **El efecto multiplicador del oversharing:** Un error de ACL en SharePoint que expone un sitio confidencial a todos los usuarios es un riesgo manejable para humanos — requiere que alguien busque activamente. Para un agente con retrieval habilitado, ese error se amplifica a todos los usuarios que interactúan con el agente: la exposición es pasiva y automática. El agente no discrimina entre contenido sensible y no sensible — indexa todo lo que puede leer.
-
-2. **Prompt injection sobre corpus envenenado:** Un atacante con acceso para editar documentos en SharePoint puede insertar instrucciones maliciosas que el agente ejecuta como si vinieran de un usuario legítimo. El agente no valida la fuente de las instrucciones — solo las ejecuta. Este vector no genera alertas en los logs estándar de actividad de usuario.
-
-3. **Controles Microsoft aplicables:** Purview DLP configurado sobre "AI interactions" cubre prompts y respuestas en Microsoft 365 Copilot y otros agentes — no solo documentos y correos. Los sensitivity labels aplicados a sitios SharePoint restringen el índice del agente. SharePoint Advanced Management audita y remedia oversharing a nivel de sitio y colección de sitios. Insider Risk Management detecta patrones de exfiltración por volumen y por tipo de dato.
-
-4. **El orden de remediación como control arquitectónico:** Habilitar retrieval antes de aplicar etiquetas y remediar ACL crea una ventana de exposición activa que puede durar semanas. El orden correcto es: (1) clasificar y etiquetar todos los sitios candidatos, (2) auditar y remediar errores de ACL, (3) habilitar retrieval del agente. Invertir este orden es el error más frecuente en deployments de agentes que acceden a SharePoint.
-
-5. **Tres niveles de corpus/memory poisoning:** (a) Corpus SharePoint: documentos maliciosos que el agente indexa — detectable con Q3 del KQL Library. (b) Memory/session poisoning: instrucciones maliciosas inyectadas en la memoria persistente del agente — afecta interacciones futuras de todos los usuarios. (c) Supply chain del modelo: Anthropic documenta que 250 documentos de entrenamiento envenenados pueden backdoorear modelos de hasta 13B parámetros con persistencia a través del safety training — no detectable con KQL, requiere evaluación del proveedor del modelo y monitoreo de desviación de comportamiento post-despliegue (Q5c del KQL Library).
-
-6. **Multi-agent trust boundaries como vector de escalada:** Un agente comprometido que puede invocar otros agentes pivota a nuevos blast radii con permisos propios. El diseño arquitectónico correcto trata cada invocación agent-to-agent como una llamada no confiable: verificar autorización explícita del usuario y limitar permisos heredados entre agentes. Referencia: Anthropic Zero Trust for AI Agents.
-
-7. **Membership inference — privacidad sin exfiltración visible:** Si un modelo fue fine-tuneado con datos personales (PII de empleados, datos de clientes, registros médicos), un atacante puede inferir si un registro específico estuvo en el training set consultando sistemáticamente el modelo y analizando patrones de respuesta — sin necesidad de extraer el dato directamente. El riesgo es una violación de privacidad no detectable por DLP ni por Purview audit estándar. El control arquitectónico es: (a) no fine-tunear con PII sin anonimización diferencial, (b) usar Foundry RBAC para restringir quién puede consultar modelos fine-tuneados con datos sensibles, (c) monitorear volumen de inferencias por identidad. OWASP Agentic AG07.
+| Time | Activity | Type |
+|------|----------|------|
+| 20 min | Data protection architecture for agents: layers, vectors, and the oversharing multiplier effect | Presentation |
+| 15 min | Purview DLP for AI interactions: differences vs. traditional DLP, coverage, and limitations | Presentation |
+| 45 min | Lab: DLP policy for AI interactions + sensitivity label audit + exfiltration KQL | Lab |
+| 10 min | Gap assessment: data protection and labeling roadmap | Discussion |
 
 ---
 
-**Ejercicio / Lab:**
+**Core content (points the facilitator must cover):**
 
-- **Nombre:** Arquitectura de protección de datos para agentes en tenant demo
-- **Modalidad:** Individual
-- **Descripción:**
-  1. En Microsoft Purview compliance portal → Data loss prevention → Policies, crear la política "Agentic AI — Sensitive Data in AI Interactions": workload = AI interactions, regla = Credit Card Number en prompt o respuesta, acción = Block + notify + audit
-  2. En SharePoint admin center, usar SharePoint Advanced Management para auditar el oversharing en al menos 2 sitios del tenant demo; documentar cuáles tienen sensitivity label aplicada y cuáles no
-  3. Ejecutar las queries del KQL Library (P04-Exfiltration-Detection.kql): exfiltración por conector, documentos sin etiqueta accedidos por agentes, prompt injection patterns
-  4. Diseñar el orden de remediación para los sitios sin etiqueta identificados, justificando la secuencia antes de habilitar retrieval
-  5. Completar la sección "Domain 4 — Protect Data" del Gap Assessment Template incluyendo el inventario de sitios y el plan de etiquetado
-- **Herramientas requeridas:** Microsoft Purview compliance portal (DLP), SharePoint admin center (Advanced Management), Microsoft Sentinel (Logs), KQL Library P04, Gap Assessment Template
-- **Entregable:** DLP policy activa documentada + inventario de sitios con estado de etiquetado + orden de remediación justificado + sección Domain 4 del Gap Assessment completada
+1. **The oversharing multiplier effect:** An ACL error in SharePoint that exposes a confidential site to all users is a manageable risk for humans — it requires someone to actively search. For an agent with retrieval enabled, that error is amplified to every user who interacts with the agent: exposure is passive and automatic. The agent does not discriminate between sensitive and non-sensitive content — it indexes everything it can read.
+
+2. **Prompt injection over a poisoned corpus:** An attacker with write access to SharePoint documents can embed malicious instructions that the agent executes as if they came from a legitimate user. The agent does not validate the source of instructions — it simply executes them. This vector generates no alerts in standard user activity logs.
+
+3. **Applicable Microsoft controls:** Purview DLP configured on "AI interactions" covers prompts and responses in Microsoft 365 Copilot and other agents — not just documents and emails. Sensitivity labels applied to SharePoint sites restrict the agent's index. SharePoint Advanced Management audits and remediates oversharing at the site and site collection level. Insider Risk Management detects exfiltration patterns by volume and data type.
+
+4. **Remediation order as an architectural control:** Enabling retrieval before applying labels and remediating ACLs creates an active exposure window that can last weeks. The correct order is: (1) classify and label all candidate sites, (2) audit and remediate ACL errors, (3) enable agent retrieval. Inverting this order is the most common error in agent deployments that access SharePoint.
+
+5. **Three levels of corpus/memory poisoning:** (a) SharePoint corpus: malicious documents the agent indexes — detectable with P04 KQL Library Q3. (b) Memory/session poisoning: malicious instructions injected into the agent's persistent memory — affects all future user interactions. (c) Model supply chain: Anthropic documents that 250 poisoned training documents can backdoor models up to 13B parameters with persistence through safety training — not detectable with KQL; requires provider evaluation and post-deployment behavioral drift monitoring (P05-Q6 KQL Library).
+
+6. **Multi-agent trust boundaries as an escalation vector:** A compromised agent that can invoke other agents pivots to new blast radii with their own permissions. The correct architectural design treats every agent-to-agent call as an untrusted call: verify explicit user authorization and limit inherited permissions between agents. Reference: Anthropic Zero Trust for AI Agents.
+
+7. **Membership inference — privacy without visible exfiltration:** If a model was fine-tuned with personal data (employee PII, customer data, medical records), an attacker can infer whether a specific record was in the training set by systematically querying the model and analyzing response patterns — without extracting the data directly. The risk is a privacy violation undetectable by DLP or standard Purview audit. Architectural controls: (a) do not fine-tune with PII without differential anonymization, (b) use Foundry RBAC to restrict who can query models fine-tuned with sensitive data, (c) monitor inference volume by identity. OWASP Agentic AG07.
 
 ---
 
-**Preguntas de cierre para el facilitador:**
-- Al auditar los sitios de SharePoint del tenant demo, ¿cuántos tenían retrieval de agentes habilitado sin sensitivity label aplicada? ¿Qué proceso organizacional habría prevenido esa condición?
-- Si tuvieran que diseñar una política de DLP que cubra tanto las respuestas del agente como los documentos que el agente genera o modifica, ¿qué workloads incluirían y qué tipos de información sensible priorizarían?
+**Exercise / Lab:**
 
-**Conexión al siguiente pilar:** Proteger los datos reduce la superficie de ataque pero no elimina la posibilidad de incidentes. El Pilar 05 cierra la arquitectura de seguridad con la capa de detección y respuesta: cómo integrar los agentes como señal activa en el SOC, qué analytics rules son específicas para comportamiento agentic, y cómo automatizar la contención.
+- **Name:** Data protection architecture for agents in demo tenant
+- **Format:** Individual
+- **Description:**
+  1. In Microsoft Purview compliance portal → Data loss prevention → Policies, create the policy "Agentic AI — Sensitive Data in AI Interactions": workload = AI interactions, rule = Credit Card Number in prompt or response, action = Block + notify + audit
+  2. In SharePoint admin center, use SharePoint Advanced Management to audit oversharing on at least 2 sites in the demo tenant; document which have sensitivity labels applied and which do not
+  3. Run the KQL Library queries (P04-Exfiltration-Detection.kql): connector-based exfiltration, unlabeled documents accessed by agents, prompt injection patterns
+  4. Design the remediation order for the unlabeled sites identified, justifying the sequence before enabling retrieval
+  5. Complete the "Domain 4 — Protect Data" section of the Gap Assessment Template including the site inventory and labeling plan
+- **Required tools:** Microsoft Purview compliance portal (DLP), SharePoint admin center (Advanced Management), Microsoft Sentinel (Logs), KQL Library P04, Gap Assessment Template
+- **Deliverable:** Active DLP policy documented + site inventory with labeling status + justified remediation order + Domain 4 section of the Gap Assessment completed
 
-→ [Módulo 05 — Detect & Respond](./Module-05-DetectRespond.md)
+---
+
+**Closing questions for the facilitator:**
+- When auditing SharePoint sites in the demo tenant, how many had agent retrieval enabled without a sensitivity label applied? What organizational process would have prevented that condition?
+- If you had to design a DLP policy covering both agent responses and documents the agent generates or modifies, what workloads would you include and what types of sensitive information would you prioritize?
+
+**Connection to the next domain:** Protecting data reduces the attack surface but does not eliminate the possibility of incidents. Domain 5 closes the security architecture with the detection and response layer: how to integrate agents as an active signal in the SOC, which analytics rules are specific to agentic behavior, and how to automate containment.
+
+→ [Module 05 — Detect & Respond](./Module-05-DetectRespond.md)

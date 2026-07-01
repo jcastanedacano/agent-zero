@@ -1,54 +1,54 @@
-# Pilar 03 — Secure Access | Track B
+# Module 03 — Secure Access | Track B
 
-**Duración del módulo:** 90 minutos
+**Module duration:** 90 minutes
 
-**Objetivo de aprendizaje:**
-Al finalizar este módulo, el participante será capaz de diseñar una arquitectura de Conditional Access específica para identidades de agente, configurar una CA policy válida usando `clientApplications.includeAgentIdServicePrincipals`, validarla con la herramienta What If, detectar OAuth consent drift mediante KQL, y documentar la diferencia crítica entre CA para usuarios y CA para agentes en el Gap Assessment de su organización.
+**Learning objective:**
+By the end of this module, participants will be able to design a Conditional Access architecture specific to agent identities, configure a valid CA policy using `clientApplications.includeAgentIdServicePrincipals`, validate it with the What If tool, detect OAuth consent drift via KQL, and document the critical difference between CA for users and CA for agents in their organization's Gap Assessment.
 
-**Agenda del módulo:**
+**Module agenda:**
 
-| Tiempo | Actividad | Tipo |
-|--------|-----------|------|
-| 20 min | Arquitectura de CA para agentes: scopes, grant controls válidos e inválidos, Blueprint-level vs. per-instance | Exposición |
-| 15 min | OAuth consent sin control: cómo los agentes acumulan permisos no revisados | Exposición |
-| 45 min | Lab: CA policy para agentes + What If validation + KQL de auditoría de acceso | Lab |
-| 10 min | Gap assessment: control de acceso y roadmap de least privilege | Discusión |
-
----
-
-**Contenido core (puntos que el facilitador debe cubrir):**
-
-1. **La trampa de `grantControls: mfa` para agentes:** Una política de CA que usa `mfa` como grant control sobre identidades de agente es **silenciosamente inválida** — no bloquea ni autentica. El agente no puede completar MFA interactivo, y la política no genera ningún evento de enforcement en los logs. La única opción válida para bloquear un agente con CA es `"builtInControls": ["block"]`. Esto no es un bug — está documentado en la referencia de CA for workload identities.
-
-2. **Blueprint-level CA como patrón de escala:** Crear una política de CA por instancia de agente falla a escala. La arquitectura correcta es un Blueprint-level CA que usa `clientApplications.includeAgentIdServicePrincipals` para cubrir todas las identidades de agente actuales y futuras derivadas del mismo blueprint — sin configuración por instancia.
-
-3. **Controles Microsoft aplicables:** Entra CA for Agents con `clientApplications.includeAgentIdServicePrincipals` permite policies específicas para agentes. Entra ID Protection evalúa el riesgo de service principals y puede alimentar condiciones de CA. PIM just-in-time limita la ventana de exposición de permisos elevados. Defender for Cloud Apps audita OAuth consent y surface anomalías de aplicación.
-
-4. **OAuth consent como vector de acumulación silenciosa:** Un agente puede acumular permisos adicionales sin que ningún administrador lo apruebe explícitamente si el consent flow no está restringido. La señal está en `AuditLogs` bajo `Add delegated permission grant` — sin correlación con un evento de aprobación, es un indicador de deriva.
-
-5. **Model extraction via API como vector de robo de IP y evasión:** Un atacante con acceso a un endpoint de Azure AI Foundry puede reconstruir el modelo propietario mediante consultas sistemáticas (input/output pairs), sin necesidad de acceder al modelo directamente. Señales: >500 inferencias/hora desde una única identidad, alta tasa de prompts distintos, patrones de consulta en grilla (exploración del espacio de decisión). El control de acceso correcto: rate limiting por identidad en Foundry + monitoreo con Q6 de P03. Este vector corresponde a OWASP Agentic AG06 y es particularmente relevante cuando el modelo fue fine-tuneado con datos propietarios.
+| Time | Activity | Type |
+|------|----------|------|
+| 20 min | CA architecture for agents: scopes, valid and invalid grant controls, Blueprint-level vs. per-instance | Presentation |
+| 15 min | Uncontrolled OAuth consent: how agents accumulate unreviewed permissions | Presentation |
+| 45 min | Lab: CA policy for agents + What If validation + access audit KQL | Lab |
+| 10 min | Gap assessment: access control and least privilege roadmap | Discussion |
 
 ---
 
-**Ejercicio / Lab:**
+**Core content (points the facilitator must cover):**
 
-- **Nombre:** Diseño e implementación de CA para identidades de agente
-- **Modalidad:** Individual
-- **Descripción:**
-  1. En Entra ID → Security → Conditional Access, crear la política "Agentic AI — Risk-Based Access Control" con: usuarios = none, apps = `clientApplications.includeAgentIdServicePrincipals`, condición = sign-in risk medium+, grant = block
-  2. Validar con la herramienta **What If**: confirmar que la política aplica a `demo-sales-agent` con riesgo Medium, y que NO aplica a cuentas de usuario
-  3. Intentar configurar la misma política con `grantControls: mfa` — documentar que la herramienta What If no genera enforcement y registrar el hallazgo en el Gap Assessment
-  4. Ejecutar las queries del KQL Library (P03-Access-Anomalies.kql): OAuth consent sin revisión, sign-ins fuera de horario, agentes con scopes excesivos
-  5. Completar la sección "Domain 3 — Secure Access" del Gap Assessment Template
-- **Herramientas requeridas:** Entra ID (Conditional Access + What If), Microsoft Sentinel (Logs), KQL Library P03, Gap Assessment Template
-- **Entregable:** CA policy creada y validada con What If (screenshot de validación) + evidencia documentada de la ineficacia de `grantControls: mfa` + sección Domain 3 del Gap Assessment completada
+1. **The `grantControls: mfa` trap for agents:** A CA policy using `mfa` as a grant control on agent identities is **silently invalid** — it neither blocks nor authenticates. The agent cannot complete interactive MFA, and the policy generates no enforcement event in the logs. The only valid option to block an agent with CA is `"builtInControls": ["block"]`. This is not a bug — it is documented in the CA for workload identities reference.
+
+2. **Blueprint-level CA as a scaling pattern:** Creating a CA policy per agent instance fails at scale. The correct architecture is a Blueprint-level CA policy using `clientApplications.includeAgentIdServicePrincipals` to cover all current and future agent identities derived from the same blueprint — without per-instance configuration.
+
+3. **Applicable Microsoft controls:** Entra CA for Agents with `clientApplications.includeAgentIdServicePrincipals` enables agent-specific policies. Entra ID Protection evaluates service principal risk and can feed CA conditions. PIM just-in-time limits the elevated permission exposure window. Defender for Cloud Apps audits OAuth consent and surfaces application anomalies.
+
+4. **OAuth consent as a silent accumulation vector:** An agent can accumulate additional permissions without any administrator explicitly approving them if the consent flow is unrestricted. The signal is in `AuditLogs` under `Add delegated permission grant` — without correlation to an approval event, it is a drift indicator.
+
+5. **Model extraction via API as IP theft and evasion vector:** An attacker with access to an Azure AI Foundry endpoint can reconstruct a proprietary model through systematic queries (input/output pairs), without needing direct model access. Signals: >500 inferences/hour from a single identity, high rate of distinct prompts, grid-pattern query sequences (decision space exploration). Correct access control: per-identity rate limiting in Foundry + monitoring with P03-Q6. This vector maps to OWASP Agentic AG06 and is particularly relevant when the model was fine-tuned with proprietary data.
 
 ---
 
-**Preguntas de cierre para el facilitador:**
-- Al ejecutar el What If con `grantControls: mfa`, ¿qué resultado obtuvieron? ¿Cómo explicarían a un equipo de seguridad que una política "activa" en Entra CA no está generando ningún enforcement real?
-- En su arquitectura de CA, ¿dónde colocarían el control de PIM just-in-time para permisos de agente? ¿Sería a nivel de Entra role o de OAuth scope?
+**Exercise / Lab:**
 
-**Conexión al siguiente pilar:** Controlar el acceso del agente limita el alcance potencial de un ataque, pero no protege los datos que el agente puede leer dentro de ese alcance. El Pilar 04 cubre la capa de datos: clasificación, etiquetado, DLP para interacciones de IA y el orden correcto de remediación antes de habilitar retrieval.
+- **Name:** CA design and implementation for agent identities
+- **Format:** Individual
+- **Description:**
+  1. In Entra ID → Security → Conditional Access, create the policy "Agentic AI — Risk-Based Access Control" with: users = none, apps = `clientApplications.includeAgentIdServicePrincipals`, condition = sign-in risk medium+, grant = block
+  2. Validate with the **What If** tool: confirm the policy applies to `demo-sales-agent` with Medium risk, and does NOT apply to user accounts
+  3. Attempt to configure the same policy with `grantControls: mfa` — document that What If generates no enforcement and record the finding in the Gap Assessment
+  4. Run the KQL Library queries (P03-Access-Anomalies.kql): unreviewed OAuth consent, off-hours sign-ins, agents with excessive scopes
+  5. Complete the "Domain 3 — Secure Access" section of the Gap Assessment Template
+- **Required tools:** Entra ID (Conditional Access + What If), Microsoft Sentinel (Logs), KQL Library P03, Gap Assessment Template
+- **Deliverable:** CA policy created and validated with What If (validation screenshot) + documented evidence of `grantControls: mfa` ineffectiveness + Domain 3 section of the Gap Assessment completed
 
-→ [Módulo 04 — Protect Data](./Module-04-ProtectData.md)
+---
+
+**Closing questions for the facilitator:**
+- When running What If with `grantControls: mfa`, what result did you get? How would you explain to a security team that an "active" policy in Entra CA is generating no real enforcement?
+- In your CA architecture, where would you place PIM just-in-time for agent permissions? At the Entra role level or the OAuth scope level?
+
+**Connection to the next domain:** Controlling agent access limits the potential scope of an attack, but does not protect the data the agent can read within that scope. Domain 4 covers the data layer: classification, labeling, DLP for AI interactions, and the correct remediation order before enabling retrieval.
+
+→ [Module 04 — Protect Data](./Module-04-ProtectData.md)

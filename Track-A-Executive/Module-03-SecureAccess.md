@@ -1,52 +1,52 @@
-# Pilar 03 — Secure Access | Track A
+# Module 03 — Secure Access | Track A
 
-**Duración del módulo:** 45 minutos
+**Module duration:** 45 minutes
 
-**Objetivo de aprendizaje:**
-Al finalizar este módulo, el participante será capaz de explicar por qué las políticas de acceso diseñadas para usuarios humanos no aplican directamente a agentes de IA, evaluar el riesgo de configuraciones heredadas en su entorno, y tomar decisiones de inversión en controles de identidad para agentes en el contexto de una estrategia de Conditional Access empresarial.
+**Learning objective:**
+By the end of this module, participants will be able to explain why access policies designed for human users do not apply directly to AI agents, evaluate the risk of inherited configurations in their environment, and make investment decisions on agent identity controls in the context of an enterprise Conditional Access strategy.
 
-**Agenda del módulo:**
+**Module agenda:**
 
-| Tiempo | Actividad | Tipo |
-|--------|-----------|------|
-| 10 min | Identidad de agente vs. identidad humana: por qué la herencia de políticas crea falsa seguridad | Exposición |
-| 10 min | Vectores de riesgo: CA heredada, permisos excesivos, OAuth sin control, lavado de identidad | Exposición |
-| 20 min | Ejercicio: Escenario de decisión — Crisis de acceso agentic | Roleplay |
-| 5 min | Cierre y conexión al pilar 4 | Discusión |
-
----
-
-**Contenido core (puntos que el facilitador debe cubrir):**
-
-1. **La trampa del MFA para agentes:** Las políticas de Conditional Access que requieren MFA para usuarios humanos son **inválidas para agentes** — un agente no puede completar MFA interactivo. Si una política aplica MFA como control de acceso a un agente, la política existe pero no ejecuta ninguna acción: ni bloquea ni autentica. El resultado es una falsa sensación de seguridad.
-
-2. **Privilegio mínimo verificable:** Los agentes acumulan permisos sin un proceso sistemático de revisión. OAuth consent sin control permite que un agente obtenga `Mail.ReadWrite` sin que ningún administrador lo apruebe explícitamente. El gap no es de intención — es de proceso.
-
-3. **Controles Microsoft aplicables:** Entra CA for Agents permite crear políticas específicas para identidades de agente usando `clientApplications.includeAgentIdServicePrincipals`. Entra ID Protection detecta comportamiento anómalo en service principals. PIM just-in-time limita el tiempo de exposición de permisos elevados. Defender for Cloud Apps audita el comportamiento de aplicaciones conectadas.
-
-4. **Lavado de identidad como vector de riesgo:** Un agente puede operar bajo la identidad delegada de un usuario humano, ejecutando acciones que en los logs parecen realizadas por la persona. Sin identidad de agente separada (Entra Agent ID), la trazabilidad forense es imposible.
+| Time | Activity | Type |
+|------|----------|------|
+| 10 min | Agent identity vs. human identity: why policy inheritance creates false security | Presentation |
+| 10 min | Risk vectors: inherited CA, excessive permissions, uncontrolled OAuth, identity laundering | Presentation |
+| 20 min | Exercise: Decision scenario — Agentic access crisis | Roleplay |
+| 5 min | Wrap-up and connection to Domain 4 | Discussion |
 
 ---
 
-**Ejercicio / Lab:**
+**Core content (points the facilitator must cover):**
 
-- **Nombre:** Crisis de acceso agentic
-- **Modalidad:** Grupal (equipos de 3-4 personas)
-- **Descripción:**
-  1. El facilitador presenta el escenario: "Un agente de ventas desplegado hace 3 meses empieza a acceder a carpetas de RRHH en SharePoint. Los logs muestran la actividad bajo el nombre del Director de Ventas, quien afirma no haber iniciado esas acciones."
-  2. Cada equipo tiene 8 minutos para responder: ¿cómo lo detectaron (o por qué no lo detectaron antes)? ¿Quién es responsable?
-  3. El equipo debe decidir: ¿revocan el acceso del agente inmediatamente o investigan primero? ¿Cómo revocan si no saben exactamente qué permisos tiene?
-  4. Cada equipo presenta su decisión en 2 minutos y la justifica
-  5. El facilitador revela qué controles del Pilar 03 habrían prevenido o acelerado la detección
-- **Herramientas requeridas:** Descripción del escenario (impresa o proyectada); tarjetas con los controles disponibles del Pilar 03
-- **Entregable:** Decisión documentada por equipo: qué hicieron, quién fue responsable, y qué control habrían necesitado para responder más rápido. Incorporado al Risk Posture Map.
+1. **The MFA trap for agents:** Conditional Access policies requiring MFA for human users are **invalid for agents** — an agent cannot complete interactive MFA. If a policy applies MFA as an access control to an agent, the policy exists but executes no action: it neither blocks nor authenticates. The result is a false sense of security.
+
+2. **Verifiable least privilege:** Agents accumulate permissions without a systematic review process. Uncontrolled OAuth consent allows an agent to obtain `Mail.ReadWrite` without any administrator explicitly approving it. The gap is not one of intent — it is one of process.
+
+3. **Applicable Microsoft controls:** Entra CA for Agents enables policies specific to agent identities using `clientApplications.includeAgentIdServicePrincipals`. Entra ID Protection detects anomalous service principal behavior. PIM just-in-time limits the exposure window for elevated permissions. Defender for Cloud Apps audits connected application behavior.
+
+4. **Identity laundering as a risk vector:** An agent can operate under a human user's delegated identity, executing actions that appear in logs as performed by the person. Without a separate agent identity (Entra Agent ID), forensic traceability is impossible.
 
 ---
 
-**Preguntas de cierre para el facilitador:**
-- En el escenario planteado, ¿cuánto tiempo le tomaría a su organización identificar que fue un agente y no el Director de Ventas quien realizó las acciones? ¿Qué proceso lo haría posible?
-- ¿Qué postura de riesgo es más aceptable: bloquear acceso del agente hasta confirmar la identidad, o mantenerlo activo mientras se investiga? ¿Qué factores de su organización determinan esa decisión?
+**Exercise:**
 
-**Conexión al siguiente pilar:** Controlar quién accede no es suficiente si los datos que el agente puede leer no están clasificados ni protegidos. El Pilar 04 cubre la protección de datos: cómo evitar que un agente con acceso legítimo se convierta en un vector de exfiltración.
+- **Name:** Agentic access crisis
+- **Format:** Groups of 3–4
+- **Description:**
+  1. Facilitator presents the scenario: "A sales agent deployed three months ago starts accessing HR folders in SharePoint. Logs show the activity under the Sales Director's name, who states they did not initiate those actions."
+  2. Each team has 8 minutes to answer: how did you detect it (or why didn't you detect it earlier)? Who is accountable?
+  3. The team must decide: revoke agent access immediately or investigate first? How do you revoke if you don't know exactly what permissions it has?
+  4. Each team presents their decision in 2 minutes and justifies it
+  5. Facilitator reveals which Domain 03 controls would have prevented or accelerated detection
+- **Required tools:** Scenario description (printed or projected); cards with the Domain 03 available controls
+- **Deliverable:** Decision documented per team: what they did, who was accountable, and what control they would have needed to respond faster. Added to the Risk Posture Map.
 
-→ [Módulo 04 — Protect Data](./Module-04-ProtectData.md)
+---
+
+**Closing questions for the facilitator:**
+- In the scenario presented, how long would it take your organization to identify that it was an agent and not the Sales Director who performed those actions? What process would make that possible?
+- Which risk posture is more acceptable: blocking agent access until the identity is confirmed, or keeping it active while investigating? What factors in your organization determine that decision?
+
+**Connection to the next domain:** Controlling who has access is not sufficient if the data the agent can read is not classified or protected. Domain 4 covers data protection: how to prevent an agent with legitimate access from becoming an exfiltration vector.
+
+→ [Module 04 — Protect Data](./Module-04-ProtectData.md)

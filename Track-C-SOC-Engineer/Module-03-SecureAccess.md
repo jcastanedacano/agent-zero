@@ -1,7 +1,7 @@
 # Module 03 — Secure Access | Track C
 
 **Duration:** 90 minutes  
-**Tables:** `CloudAppEvents`, `AADServicePrincipalSignInLogs`, `AuditLogs`  
+**Tables:** `CloudAppEvents`, `EntraIdSpnSignInEvents`, `AuditLogs`  
 **Portals:** Entra ID (Conditional Access + PIM), Defender for Cloud Apps  
 **Minimum role:** Security Admin (scoped to demo tenant)
 
@@ -24,15 +24,15 @@ At the end of this module, you will be able to configure a Conditional Access po
 
 ---
 
-## Contenido core (puntos que el facilitador debe cubrir)
+## Core Content
 
-1. **La trampa de `grantControls: mfa` para agentes:** Una política de CA con `mfa` como grant control sobre identidades de agente es silenciosamente inválida — no bloquea ni fuerza autenticación. Los agentes no pueden completar MFA interactivo y la política no genera ningún evento de enforcement en los logs. Solo `"block"` es válido para bloquear acceso de agentes con CA.
+1. **The `grantControls: mfa` trap for agents:** A CA policy with `mfa` as a grant control on agent identities is silently invalid — it neither blocks nor forces authentication. Agents cannot complete interactive MFA and the policy generates no enforcement event in the logs. Only `"block"` is valid to block agent access via CA.
 
-2. **Blueprint-level CA como patrón de escala:** Una política de CA por instancia de agente no escala. El patrón correcto es un Blueprint-level CA que usa `clientApplications.includeAgentIdServicePrincipals` para cubrir todas las identidades de agente actuales y futuras derivadas del mismo blueprint.
+2. **Blueprint-level CA as a scaling pattern:** A CA policy per agent instance does not scale. The correct pattern is a Blueprint-level CA using `clientApplications.includeAgentIdServicePrincipals` to cover all current and future agent identities derived from the same blueprint.
 
-3. **OAuth consent drift como vector de acumulación silenciosa:** Sin restricciones en el consent flow, un agente puede acumular permisos adicionales sin aprobación explícita. La señal: `AuditLogs` → `Add delegated permission grant` sin correlación con un evento `AgentPermissionApproved`.
+3. **OAuth consent drift as a silent accumulation vector:** Without consent flow restrictions, an agent can accumulate additional permissions without explicit approval. The signal: `AuditLogs` → `Add delegated permission grant` without correlation to an `AgentPermissionApproved` event.
 
-4. **Model extraction via API — robo de modelo a través del endpoint:** Un atacante con acceso al endpoint de Azure AI Foundry puede reconstruir un modelo propietario mediante consultas sistemáticas (input/output pairs), sin acceso directo al modelo. El indicador es volumen masivo de inferencias desde una sola identidad con alta variedad de prompts. KQL Q6 de P03 detecta este patrón. Control: rate limiting por identidad en Foundry + CA policy bloqueando identidades no autorizadas. OWASP Agentic AG06.
+4. **Model extraction via API — model theft through the endpoint:** An attacker with access to an Azure AI Foundry endpoint can reconstruct a proprietary model through systematic queries (input/output pairs), without direct model access. The indicator is a massive inference volume from a single identity with high prompt variety. KQL P03-Q6 detects this pattern. Control: per-identity rate limiting in Foundry + CA policy blocking unauthorized identities. OWASP Agentic AG06.
 
 ---
 
@@ -56,15 +56,6 @@ For agent identities, `mfa` as a grant control is **silently invalid** — it ne
 
 Reference: [Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)
 
-## Contenido core (puntos que el facilitador debe cubrir)
-
-1. **La trampa de `grantControls: mfa`:** Para políticas de CA sobre identidades de agente, `mfa` como grant control es silenciosamente inválido — el agente no puede completar MFA, la política no bloquea y no genera eventos de enforcement. El único control válido para bloqueo es `"builtInControls": ["block"]`. Esta es la misconfiguration más frecuente en CA policies para agentes.
-
-2. **OAuth consent sin control como vector de acumulación:** Los agentes pueden obtener permisos adicionales vía OAuth consent flow sin aprobación explícita del administrador si el tenant no restringe el consent de aplicaciones. La señal está en `AuditLogs` → `Add delegated permission grant` sin correlación con `AgentPermissionApproved`.
-
-3. **Controles Microsoft aplicables:** Entra CA for Agents con `clientApplications.includeAgentIdServicePrincipals` permite políticas específicas para agentes. Entra ID Protection evalúa riesgo de service principals. PIM just-in-time limita la ventana de exposición de permisos elevados. Defender for Cloud Apps audita OAuth consent y detecta comportamiento anómalo de aplicaciones.
-
-4. **Lavado de identidad en el audit log:** Cuando un agente opera bajo identidad delegada de un usuario (sin Entra Agent ID), el audit log registra `"usuario X realizó acción Y"` — no el agente. Entra Agent ID más una CA policy dedicada es el único mecanismo para crear un audit trail separado para acciones de agentes.
 
 ---
 
@@ -161,17 +152,17 @@ AuditLogs
 ### Step 5 — KQL: Agent sign-ins outside business hours
 
 ```kql
-AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(7d)
-| where ServicePrincipalName has "agent" or AppDisplayName has "agent"
-| extend HourOfDay = datetime_part("Hour", TimeGenerated)
+EntraIdSpnSignInEvents
+| where Timestamp > ago(7d)
+| where ServicePrincipalName has "agent"
+| extend HourOfDay = datetime_part("Hour", Timestamp)
 | extend IsOffHours = HourOfDay < 6 or HourOfDay > 22
 | where IsOffHours == true
 | summarize
     OffHoursSignIns = count(),
-    EarliestSignIn = min(TimeGenerated),
-    LatestSignIn = max(TimeGenerated),
-    LocationSet = make_set(Location)
+    EarliestSignIn = min(Timestamp),
+    LatestSignIn = max(Timestamp),
+    LocationSet = make_set(Country)
     by ServicePrincipalName, AppId
 | sort by OffHoursSignIns desc
 ```
@@ -183,13 +174,13 @@ AADServicePrincipalSignInLogs
 ### Step 6 — KQL: Agents accessing resources outside declared scope
 
 ```kql
-AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(7d)
-| where ServicePrincipalName has "agent" or AppDisplayName has "agent"
+EntraIdSpnSignInEvents
+| where Timestamp > ago(7d)
+| where ServicePrincipalName has "agent"
 | summarize
     ResourcesAccessed = make_set(ResourceDisplayName),
     AccessCount = count(),
-    LastAccess = max(TimeGenerated)
+    LastAccess = max(Timestamp)
     by ServicePrincipalId, ServicePrincipalName, AppId
 | extend ResourceCount = array_length(ResourcesAccessed)
 | where ResourceCount > 3
@@ -237,7 +228,7 @@ Use block or sessionControls only. Confirmed in What If test on [DATE].
 ## Closing Questions
 
 - What happened when you set `grantControls: mfa` for the agent identity in the What If test? How would you document this finding in a configuration hardening guide to prevent a colleague from repeating the error?
-- When comparing `AADServicePrincipalSignInLogs` for agent identities vs. `SigninLogs` for user identities, what fields are present in one but not the other? What does that mean for correlation queries that need to cover both?
+- When comparing `EntraIdSpnSignInEvents` for agent identities vs. `SigninLogs` for user identities, what fields are present in one but not the other? What does that mean for correlation queries that need to cover both?
 
 ---
 

@@ -1,7 +1,7 @@
 # Module 02 — Govern & Control | Track C
 
 **Duration:** 90 minutes  
-**Tables:** `AIAgentsInfo`, `AuditLogs`, `CloudAppEvents`  
+**Tables:** `AgentsInfo`, `AuditLogs`, `CloudAppEvents`  
 **Portals:** Entra ID, Power Platform admin center, Copilot Studio admin center  
 **Minimum role:** Security Admin (scoped to demo tenant)
 
@@ -24,19 +24,19 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 ---
 
-## Contenido core (puntos que el facilitador debe cubrir)
+## Core Content
 
-1. **El bypass de Agent Builder como gap sistémico:** Agent Builder activa agentes inmediatamente sin pasar por el flujo de aprobación de Copilot Studio. Es un gap de diseño a nivel de producto — no de configuración. El control compensatorio es una CA policy sobre el App ID de Agent Builder, o una analytics rule en Sentinel filtrando `AgentSource == "AgentBuilder"` en `AuditLogs`.
+1. **Agent Builder bypass as a systemic gap:** Agent Builder activates agents immediately without going through the Copilot Studio approval flow. This is a product-level design gap — not a configuration error. The compensating control is a CA policy on the Agent Builder App ID, or a Sentinel analytics rule filtering `AgentSource == "AgentBuilder"` on `AuditLogs`.
 
-2. **Deriva del grafo de identidad:** Los agentes acumulan permisos OAuth con el tiempo sin revisión. La señal está en `AuditLogs` bajo `Add delegated permission grant` sin correlación con un evento `AgentPermissionApproved` — ese join ausente es el indicador de deriva.
+2. **Identity graph drift:** Agents accumulate OAuth permissions over time without review. The signal is in `AuditLogs` under `Add delegated permission grant` without a corresponding `AgentPermissionApproved` event — that absent join is the drift indicator.
 
-3. **Controles Microsoft aplicables:** Entra Agent ID establece identidad gestionable por agente, separada de service principals genéricos. Copilot Studio governance habilita el flujo de aprobación antes de publicación. Foundry RBAC restringe operaciones en Azure AI. Power Platform DLP clasifica y bloquea conectores por categoría (Business / Non-business / Blocked).
+3. **Applicable Microsoft controls:** Entra Agent ID establishes a manageable identity per agent, separate from generic service principals. Copilot Studio governance enables the pre-publication approval flow. Foundry RBAC restricts operations in Azure AI. Power Platform DLP classifies and blocks connectors by category (Business / Non-business / Blocked).
 
-4. **`grantControls: mfa` es inválido para agentes:** Los agentes no pueden completar MFA interactivo. Una CA policy con este control sobre identidades de agente aparece activa pero no genera ningún enforcement. Solo `block` o `sessionControls` son válidos para políticas que apuntan a `clientApplications.includeAgentIdServicePrincipals`.
+4. **`grantControls: mfa` is invalid for agents:** Agents cannot complete interactive MFA. A CA policy with this control on agent identities appears active but generates no enforcement. Only `block` or `sessionControls` are valid for policies targeting `clientApplications.includeAgentIdServicePrincipals`.
 
-5. **Multi-agent trust boundaries:** En arquitecturas multi-agente, un agente puede invocar a otro (orquestador → sub-agente). Si el agente orquestador es comprometido, puede usar sus permisos para invocar sub-agentes con mayor blast radius. El principio de gobernanza correcto: cada invocación agent-to-agent debe tratarse como llamada no confiable. Cada agente necesita su propio Entra Agent ID — no pueden compartir identidad — y los permisos no se heredan entre agentes sin autorización explícita del usuario.
+5. **Multi-agent trust boundaries:** In multi-agent architectures, an agent can invoke another (orchestrator → sub-agent). If the orchestrating agent is compromised, it can use its permissions to invoke sub-agents with a larger blast radius. The correct governance principle: every agent-to-agent call must be treated as an untrusted call. Each agent needs its own Entra Agent ID — identities cannot be shared — and permissions are not inherited between agents without explicit user authorization.
 
-6. **Tiered Autonomy — el nivel de autonomía como configuración de gobernanza:** Sin un nivel asignado explícitamente, todos los agentes en producción operan en "full automation" por defecto — el gap más frecuente. Para un SOC engineer, esto se traduce en: (1) *Full automation* → los analytics rules pueden ejecutar contención automática (aislar host, bloquear IP); (2) *Human approval* → el agente genera la recomendación y espera aprobación en el portal antes de ejecutar; (3) *Human-led* → el agente solo presenta evidencia, el analista toma toda la acción. Al crear analytics rules en Sentinel con Logic Apps, el nivel de autonomía debe ser un parámetro explícito del playbook — no un valor por defecto.
+6. **Tiered Autonomy as a governance configuration:** Without an explicitly assigned tier, all production agents default to "full automation" — the most common gap. For a SOC engineer this means: (1) *Full automation* → analytics rules can execute automatic containment (isolate host, block IP); (2) *Human approval* → the agent generates the recommendation and waits for portal approval before executing; (3) *Human-led* → the agent only presents evidence, the analyst takes all action. When creating Sentinel analytics rules with Logic Apps, the autonomy tier must be an explicit playbook parameter — not a default value.
 
 ---
 
@@ -58,7 +58,7 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 | Lifecycle management | Manual | Managed via Agent 365 |
 | Appears in Agent 365 Registry | No | Yes |
 | CA policy targeting | `includeServicePrincipals` | `includeAgentIdServicePrincipals` |
-| Detectable in KQL via | `AppId` | `EntraAgentId` field in `AIAgentsInfo` |
+| Detectable in KQL via | `AppId` | `EntraAgentID` field in `AgentsInfo` |
 
 ---
 
@@ -122,12 +122,14 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 ### Step 4 — KQL: Detect agents without Entra Agent ID
 
 ```kql
-AIAgentsInfo
-| where TimeGenerated > ago(30d)
-| where isempty(EntraAgentId) or EntraAgentId == "Inherited"
-| distinct AgentId, AgentName, AgentType, Platform, TechnicalOwner, ManagementStatus
-| extend RiskNote = "Agent operates under user identity — no dedicated Entra Agent ID"
-| sort by AgentType asc
+AgentsInfo
+| where Timestamp > ago(30d)
+| where isempty(EntraAgentID)
+| extend OwnersStr = tostring(Owners)
+| extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
+| distinct AgentId, Name, Platform, OwnerDisplay, LifecycleStatus, PublishedStatus
+| extend RiskNote = "Agent operates without dedicated Entra Agent ID — identity laundering risk"
+| sort by Platform asc
 ```
 
 **Expected output:** List of agents running without dedicated identity — your identity orphan inventory.

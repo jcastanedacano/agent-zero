@@ -1,58 +1,58 @@
-# Pilar 05 — Detect & Respond | Track A
+# Module 05 — Detect & Respond | Track A
 
-**Duración del módulo:** 45 minutos
+**Module duration:** 45 minutes
 
-**Objetivo de aprendizaje:**
-Al finalizar este módulo, el participante será capaz de evaluar la capacidad de detección y respuesta de su organización frente a incidentes agentic, identificar las brechas entre la postura de detección actual y lo que requiere un agente de IA integrado al SOC, y tomar decisiones de inversión y priorización para reducir el tiempo de respuesta ante incidentes generados por agentes.
+**Learning objective:**
+By the end of this module, participants will be able to evaluate their organization's detection and response capability against agentic incidents, identify gaps between the current detection posture and what an AI agent integrated into the SOC requires, and make investment and prioritization decisions to reduce response time for agent-generated incidents.
 
-**Agenda del módulo:**
+**Module agenda:**
 
-| Tiempo | Actividad | Tipo |
-|--------|-----------|------|
-| 10 min | Agentes como señal de seguridad: por qué el SOC necesita una capa específica para IA agentic | Exposición |
-| 10 min | Falsos negativos estructurales: por qué las detecciones genéricas no alcanzan para agentes | Exposición |
-| 20 min | Ejercicio: Simulación de decisión ante incidente agentic | Roleplay |
-| 5 min | Cierre y consolidación del Risk Posture Map | Discusión |
-
----
-
-**Contenido core (puntos que el facilitador debe cubrir):**
-
-1. **Jailbreak como vector de incidente:** Un intento de jailbreak exitoso convierte al agente en un ejecutor de instrucciones maliciosas con acceso legítimo a los sistemas de la organización. A diferencia de un malware, el agente comprometido opera dentro de los canales autorizados — lo que hace que las defensas perimetrales sean insuficientes.
-
-2. **Anomalía de agente vs. anomalía de usuario:** Las herramientas de detección calibradas para comportamiento humano generan falsos negativos estructurales cuando monitorean agentes. Un agente que hace 5.000 llamadas a SharePoint en una hora es normal en su operación y puede ser un ataque — la diferencia está en el patrón, no en el volumen.
-
-3. **Controles Microsoft aplicables:** Defender XDR integra señales de comportamiento de agentes. Microsoft Sentinel con el MCP server nativo permite consultar el estado de los agentes desde el contexto de investigación. Security Copilot acelera el triage de incidentes agentic. Purview Audit provee la cadena de custodia forense. Agent 365 correlaciona eventos de incidente con el registro de agentes.
-
-4. **El objetivo de MTTR para agentes:** El tiempo de respuesta estándar de un SOC humano (30 min – 2 horas para contención) puede ser inadecuado para un agente comprometido que actúa en segundos. El objetivo debe ser automatización de la contención inicial con revisión humana posterior.
+| Time | Activity | Type |
+|------|----------|------|
+| 10 min | Agents as a security signal: why the SOC needs an agentic AI-specific layer | Presentation |
+| 10 min | Structural false negatives: why generic detections fall short for agents | Presentation |
+| 20 min | Exercise: Crisis table — agentic incident decision simulation | Roleplay |
+| 5 min | Wrap-up and Risk Posture Map consolidation | Discussion |
 
 ---
 
-**Ejercicio / Lab:**
+**Core content (points the facilitator must cover):**
 
-- **Nombre:** Mesa de crisis: incidente agentic
-- **Modalidad:** Grupal (toda la sala, facilitador como moderador)
-- **Descripción:**
-  1. El facilitador presenta el escenario: "A las 2:47 AM, un analista de turno recibe una alerta de Sentinel: el agente de atención a clientes intentó acceder 847 veces a un sitio de SharePoint clasificado como Confidencial en 3 minutos. El agente tiene permiso de lectura sobre ese sitio, así que la alerta no bloquea el acceso."
-  2. El facilitador hace las preguntas clave al grupo: ¿Revocan el token del agente de inmediato? ¿Escalan a CISO? ¿Notifican a clientes?
-  3. El grupo debate cada decisión, el facilitador registra los puntos de desacuerdo
-  4. El facilitador revela el desenlace: el acceso era legítimo — un proceso de indexación programado. Pero la organización no tenía documentación del comportamiento esperado del agente. Discusión: ¿cómo habrían diferenciado el incidente real del falso positivo?
-  5. Cada participante registra en su Risk Posture Map: ¿tiene su organización un baseline documentado del comportamiento esperado de sus agentes?
-- **Herramientas requeridas:** Descripción del escenario (proyectada); pizarra o tablero digital para registrar las decisiones del grupo
-- **Entregable:** Risk Posture Map completo con las 5 secciones completadas (una por módulo) — entregable final del Track A
+1. **Jailbreak as an incident vector:** A successful jailbreak converts the agent into an executor of malicious instructions with legitimate system access. Unlike malware, a compromised agent operates within authorized channels — making perimeter defenses insufficient.
+
+2. **Agent anomaly vs. user anomaly:** Detection tools calibrated for human behavior generate structural false negatives when monitoring agents. An agent making 5,000 SharePoint calls in an hour may be operating normally or executing an attack — the difference is in the pattern, not the volume.
+
+3. **Applicable Microsoft controls:** Defender XDR integrates agent behavioral signals. Microsoft Sentinel with the native MCP server allows querying agent status from within an active investigation context. Security Copilot accelerates triage of agentic incidents. Purview Audit provides the forensic chain of custody. Agent 365 correlates incident events with the agent ownership registry.
+
+4. **MTTR targets for agents:** A SOC's standard human response time (30 min – 2 hours for containment) may be inadequate for a compromised agent acting in seconds. The target should be automated initial containment with subsequent human review.
 
 ---
 
-**Preguntas de cierre para el facilitador:**
-- ¿Tiene su SOC hoy alertas específicas para comportamiento anómalo de agentes de IA, o usa las mismas alertas configuradas para usuarios humanos?
-- Si tuvieran que revocar el acceso de un agente comprometido en los próximos 5 minutos, ¿saben quién tendría que hacer qué, y en qué sistema?
+**Exercise:**
 
-**Consolidación del Track A:**
-Este módulo cierra el Risk Posture Map. El participante debe tener ahora:
-- Un score de visibilidad de agentes (Pilar 01)
-- Un nivel de madurez de gobernanza (Pilar 02)
-- Una decisión de acceso documentada (Pilar 03)
-- Una lista de sitios de SharePoint priorizados para remediación (Pilar 04)
-- Un estado de capacidad de detección y respuesta (Pilar 05)
+- **Name:** Crisis table: agentic incident
+- **Format:** Group (full room, facilitator as moderator)
+- **Description:**
+  1. Facilitator presents the scenario: "At 2:47 AM, an on-call analyst receives a Sentinel alert: the customer service agent attempted to access a SharePoint site classified as Confidential 847 times in 3 minutes. The agent has read permission on that site, so the alert does not block access."
+  2. Facilitator asks key questions to the group: Do you revoke the agent token immediately? Do you escalate to CISO? Do you notify customers?
+  3. Group debates each decision; facilitator records points of disagreement
+  4. Facilitator reveals the outcome: the access was legitimate — a scheduled indexing process. But the organization had no documentation of the agent's expected behavior. Discussion: how would you have differentiated a real incident from a false positive?
+  5. Each participant records in their Risk Posture Map: does their organization have a documented baseline of expected behavior for its agents?
+- **Required tools:** Scenario description (projected); whiteboard or digital board to record group decisions
+- **Deliverable:** Completed Risk Posture Map with all 5 sections filled in (one per module) — the final Track A deliverable
 
-El Risk Posture Map completo es el insumo para encargar el Track B (arquitectos) y el Track C (SOC) a los equipos técnicos de la organización.
+---
+
+**Closing questions for the facilitator:**
+- Does your SOC today have specific alerts for anomalous AI agent behavior, or does it use the same alerts configured for human users?
+- If you had to revoke a compromised agent's access in the next 5 minutes, do you know who would need to do what, and in which system?
+
+**Track A consolidation:**
+This module closes the Risk Posture Map. Participants should now have:
+- An agent visibility score (Domain 01)
+- A governance maturity level (Domain 02)
+- A documented access decision (Domain 03)
+- A prioritized SharePoint site list for remediation (Domain 04)
+- A detection and response capability status (Domain 05)
+
+The completed Risk Posture Map is the input for commissioning Track B (architects) and Track C (SOC engineers) within the participant's organization.

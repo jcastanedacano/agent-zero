@@ -39,10 +39,10 @@ Complete one section per module during the Track C workshop. Each section maps t
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| Full agent inventory | `AIAgentsInfo` | Baseline visibility |
-| Agents without owner | `AIAgentsInfo` | Identity orphan detection |
+| Full agent inventory | `AgentsInfo` | Baseline visibility |
+| Agents without owner | `AgentsInfo` | Identity orphan detection |
 | SharePoint sites without labels | `OfficeActivity` + `MicrosoftPurviewInformationProtection` | Oversharing audit |
-| New agent registrations | `AIAgentsInfo` | Shadow AI near-real-time detection |
+| New agent registrations | `AgentsInfo` | Shadow AI near-real-time detection |
 
 ### Top Findings
 
