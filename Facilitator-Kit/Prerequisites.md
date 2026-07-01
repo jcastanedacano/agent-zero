@@ -28,11 +28,12 @@ Technical and access requirements per track. Validate these **before** distribut
 |-------------|--------|
 | Device | Laptop with browser (no local tooling required) |
 | M365 tenant | M365 E5 demo or trial tenant (CDX tenant recommended) |
+| **Agent 365 license** | Required for agent registry (Module-01) and governance controls (Module-02). Included in Microsoft 365 Copilot SKU. In CDX tenants: enable under **M365 admin center → Billing → Licenses**. Without it, `AgentsInfo` returns 0 rows and Agent 365 Registry is unavailable. |
 | Azure subscription | Contributor access to an Azure subscription for ARM template deployment |
 | Entra roles | Global Reader + Security Reader |
-| Tools | Browser access to: Azure Portal, Microsoft Entra admin center, Microsoft Purview compliance portal |
+| Tools | Browser access to: Azure Portal, Microsoft Entra admin center, Microsoft Purview compliance portal, Copilot Studio admin center |
 
-**Provisioning lead time:** 48 hours minimum for CDX tenant activation.
+**Provisioning lead time:** 48 hours minimum for CDX tenant activation. If adding Agent 365 to an existing CDX tenant, allow an additional 2–4 hours for license propagation before lab day.
 
 ---
 
@@ -46,6 +47,7 @@ Technical and access requirements per track. Validate these **before** distribut
 | M365 tenant | M365 E5 demo tenant (CDX tenant strongly recommended) |
 | Azure subscription | Contributor access — Sentinel workspace will be deployed via ARM template |
 | Microsoft Sentinel | Workspace deployed and connected to M365 tenant before lab day |
+| **Agent 365 license** | Required for `AgentsInfo` table and agent registry (Modules 01–02). Included in Microsoft 365 Copilot SKU. Verify in M365 admin center before lab day. |
 | Roles — Entra | Security Admin (scoped to demo tenant) |
 | Roles — Sentinel | Sentinel Contributor |
 | Roles — Defender | Security Reader minimum; Security Operator to act on findings |
@@ -59,13 +61,16 @@ The following tables must return results before labs start. Run these validation
 
 ```kql
 // Must return > 0 rows
-AIAgentsInfo | take 5
+AgentsInfo | take 5                          // Requires Agent 365 (M365 Copilot) license
 CloudAppEvents | take 5
 OfficeActivity | take 5
 MicrosoftPurviewInformationProtection | take 5
+EntraIdSpnSignInEvents | take 5              // Replaces AADSpnSignInEventsBeta (deprecated Dec 2025)
 ```
 
-If `AIAgentsInfo` is empty, deploy the ARM template — it includes pre-loaded demo data simulating agentic activity.
+If `AgentsInfo` is empty, check two things: (1) verify Agent 365 / Microsoft 365 Copilot license is assigned in M365 admin center; (2) allow 2–4 hours after license assignment for the table to become queryable. If `CloudAppEvents` is empty, deploy the ARM template — it includes pre-loaded demo data simulating agentic activity.
+
+> **Note:** `AIAgentsInfo` was deprecated on **July 1, 2026** and has been replaced by `AgentsInfo`. If you have saved queries referencing the old table name, migrate them before running the lab.
 
 → [Deploy lab environment](../ARM-Templates/README.md)
 

@@ -159,12 +159,13 @@ All queries in the KQL Library have been validated against a live Microsoft 365 
 
 ### Track B — M365 E5 demo tenant
 - Microsoft 365 E5 trial or CDX demo tenant
+- **Agent 365 / Microsoft 365 Copilot license** — required for `AgentsInfo` table and agent registry (Modules 01–02). Included in M365 Copilot SKU. Allow 2–4 hours after assignment before lab day.
 - Azure subscription with Contributor access
 - Roles: Global Reader + Security Reader + Security Admin (demo tenant)
 - Portals: Purview compliance, Defender XDR, Entra admin center, Copilot Studio admin, Power Platform admin
 
 ### Track C — M365 E5 + Sentinel workspace
-- All Track B requirements
+- All Track B requirements (including Agent 365 license)
 - Sentinel workspace deployed (use ARM template above)
 - Roles: Security Admin + Sentinel Contributor + Compliance Administrator
 - Portals: All Track B portals + Microsoft Sentinel + Logic Apps
