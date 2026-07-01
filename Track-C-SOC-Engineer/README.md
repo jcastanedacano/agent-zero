@@ -10,6 +10,7 @@
 ## Prerequisites
 
 - Microsoft 365 E5 demo or trial tenant
+- **Agent 365 / Microsoft 365 Copilot license** — required for the `AgentsInfo` table (Modules 01–02). Assign in M365 admin center and allow 2–4 hours for propagation before lab day.
 - Azure subscription with Microsoft Sentinel workspace deployed
 - Roles: Security Admin (scoped to demo tenant) + Sentinel Contributor
 - Familiarity with KQL basics (can write simple queries, understand filter/summarize/join)
@@ -23,7 +24,7 @@
 
 | Module | Domain | Core Lab | Duration |
 |--------|--------|----------|----------|
-| [01 — Discover & Prioritize](./Module-01-Discover.md) | Agent inventory and visibility | KQL queries on AIAgentsInfo + OfficeActivity | 90 min |
+| [01 — Discover & Prioritize](./Module-01-Discover.md) | Agent inventory and visibility | KQL queries on AgentsInfo + OfficeActivity | 90 min |
 | [02 — Govern & Control](./Module-02-Govern.md) | Governance gaps and identity orphans | Entra Agent ID + DLP policy + governance KQL | 90 min |
 | [03 — Secure Access](./Module-03-SecureAccess.md) | CA policy for agents + OAuth audit | Entra CA for Agents + What If validation | 90 min |
 | [04 — Protect Data](./Module-04-ProtectData.md) | DLP for AI interactions + exfiltration detection | Purview DLP + CloudAppEvents KQL | 90 min |

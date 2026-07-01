@@ -1,53 +1,53 @@
-# Track A — Ejecutivo (CISO / CTO / Director)
+# Track A — Executive (CISO / CTO / Director)
 
-**Audiencia:** CISO, CTO, Directores de Seguridad, Directores de TI, responsables de riesgo y cumplimiento  
-**Duración:** 4 horas (medio día)  
-**Formato:** Exposiciones ejecutivas + ejercicios de decisión + roleplay de crisis — sin configuración técnica  
-**Output del participante:** Risk Posture Map completado para su organización
-
----
-
-## Prerrequisitos
-
-- Ningún acceso técnico requerido — el track es completamente en formato de decisión y análisis
-- Familiaridad general con los conceptos de Microsoft 365 y seguridad empresarial (no se requiere experiencia técnica)
-- Recomendado: haber recibido el resumen ejecutivo del Agentic AI Security Framework antes de la sesión
+**Audience:** CISOs, CTOs, Security Directors, IT Directors, risk and compliance owners  
+**Duration:** 4 hours (half day)  
+**Format:** Executive briefings + decision exercises + crisis roleplay — no technical setup required  
+**Output:** Completed Risk Posture Map for the participant's organization
 
 ---
 
-## Índice de módulos
+## Prerequisites
 
-| Módulo | Pilar | Ejercicio | Duración |
-|--------|-------|-----------|----------|
-| [01 — Discover & Prioritize](./Module-01-Discover.md) | Visibilidad del landscape de agentes | Mapa de riesgo de agentes | 45 min |
-| [02 — Govern & Control](./Module-02-Govern.md) | Ownership y ciclo de vida | Evaluación de madurez de gobernanza | 45 min |
-| [03 — Secure Access](./Module-03-SecureAccess.md) | Control de acceso e identidad de agentes | Crisis de acceso agentic (roleplay) | 45 min |
-| [04 — Protect Data](./Module-04-ProtectData.md) | Protección de datos y exfiltración | Triaje de riesgo de datos | 45 min |
-| [05 — Detect & Respond](./Module-05-DetectRespond.md) | Detección y respuesta integrada al SOC | Mesa de crisis: incidente agentic | 45 min |
-
-Tiempo total de lab: 3h45min. Reservar 15 minutos para consolidación del Risk Posture Map al cierre.
+- No technical access required — this track runs entirely as decision and analysis exercises
+- General familiarity with Microsoft 365 and enterprise security concepts (no technical experience required)
+- Recommended: read the Agentic AI Security Framework executive summary before the session
 
 ---
 
-## Output del participante — Risk Posture Map
+## Module Index
 
-Cada módulo contribuye una sección del Risk Posture Map. Al finalizar el Track A, el participante tiene:
+| Module | Domain | Exercise | Duration |
+|--------|--------|----------|----------|
+| [01 — Discover & Prioritize](./Module-01-Discover.md) | Agent landscape visibility | Agent risk map | 45 min |
+| [02 — Govern & Control](./Module-02-Govern.md) | Ownership and lifecycle | Governance maturity assessment | 45 min |
+| [03 — Secure Access](./Module-03-SecureAccess.md) | Agent identity and access control | Agentic access crisis (roleplay) | 45 min |
+| [04 — Protect Data](./Module-04-ProtectData.md) | Data protection and exfiltration | Data risk triage | 45 min |
+| [05 — Detect & Respond](./Module-05-DetectRespond.md) | SOC-integrated detection and response | Crisis table: agentic incident | 45 min |
+
+Total session time: 3h 45min. Reserve 15 minutes for Risk Posture Map consolidation at close.
+
+---
+
+## Participant Output — Risk Posture Map
+
+Each module contributes one section of the Risk Posture Map. By end of session:
 
 ```
-Risk Posture Map — [Nombre de la Organización]
-├── Sección 1 — Score de visibilidad de agentes (Módulo 01)
-├── Sección 2 — Madurez de gobernanza + decisión ejecutiva priorizada (Módulo 02)
-├── Sección 3 — Decisión de acceso documentada ante escenario de crisis (Módulo 03)
-├── Sección 4 — Lista priorizada de remediación de sitios SharePoint (Módulo 04)
-└── Sección 5 — Estado de capacidad de detección y respuesta (Módulo 05)
+Risk Posture Map — [Organization Name]
+├── Section 1 — Agent visibility score (Module 01)
+├── Section 2 — Governance maturity + prioritized executive decision (Module 02)
+├── Section 3 — Access decision documented against a crisis scenario (Module 03)
+├── Section 4 — Prioritized SharePoint site remediation list (Module 04)
+└── Section 5 — Detection and response capability status (Module 05)
 ```
 
-El Risk Posture Map es el insumo para encargar el Track B (arquitectos) y el Track C (SOC) a los equipos técnicos de la organización.
+The Risk Posture Map is the input for commissioning Track B (architects) and Track C (SOC engineers) in the participant's organization.
 
 ---
 
-## Diseño del track
+## Track Design
 
-Este track no incluye acceso a sistemas ni configuración técnica. Los ejercicios son de juicio, decisión y análisis de riesgo. El lenguaje es de negocio: riesgo, cumplimiento, impacto operacional y priorización de inversión.
+This track includes no system access or technical configuration. All exercises are judgment, decision, and risk analysis. Language is business-facing: risk, compliance, operational impact, and investment prioritization.
 
-Los ejercicios están diseñados para que los participantes anclen cada pilar a situaciones concretas de su propia organización — no a escenarios ficticios genéricos.
+Exercises are designed so participants anchor each domain to concrete situations in their own organization — not to generic fictional scenarios.
