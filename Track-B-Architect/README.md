@@ -27,8 +27,10 @@
 | [03 — Secure Access](./Module-03-SecureAccess.md) | CA policy for agent identities | CA policy + What If + OAuth audit KQL | 90 min |
 | [04 — Protect Data](./Module-04-ProtectData.md) | Data protection and AI DLP | Purview DLP + SharePoint Advanced Management | 90 min |
 | [05 — Detect & Respond](./Module-05-DetectRespond.md) | Detection and response architecture | Sentinel rules + Logic App playbook | 90 min |
+| [06 — Regulatory Frameworks](./Module-06-RegulatoryFrameworks.md) | EU AI Act + NIST AI RMF + ISO 42001 | Agent classification + compliance gap assessment | 90 min |
+| [07 — Vendor & Third-Party AI Risk](./Module-07-VendorRisk.md) | Supply chain and MCP server risk | Vendor evaluation (20-question checklist) + MCP audit KQL | 90 min |
 
-Total lab time: ~7.5 hours. Reserve 30 minutes for Gap Assessment consolidation and roadmap at close.
+Total lab time: ~10.5 hours. Reserve 30 minutes for Gap Assessment consolidation and roadmap at close.
 
 ---
 
@@ -42,7 +44,9 @@ Gap Assessment — [Organization Name]
 ├── Domain 2 — Governance model configured with gaps and owners assigned
 ├── Domain 3 — Valid CA policy for agents + What If evidence
 ├── Domain 4 — DLP policy for AI interactions + site inventory
-└── Domain 5 — Active analytics rules + enforcement Logic App
+├── Domain 5 — Active analytics rules + enforcement Logic App
+├── Domain 6 — Regulatory framework compliance status (EU AI Act / NIST AI RMF / ISO 42001)
+└── Domain 7 — Third-party AI vendor assessment scores + MCP server audit
     └── Consolidated 90-day roadmap with prioritization by domain
 ```
 

@@ -186,6 +186,134 @@ CloudAppEvents
 
 
 // -----------------------------------------------------------------------------
+// Q7: Membership Inference Attack Pattern — Systematic Probing for Training Data
+// Use: Detect identity patterns consistent with membership inference attacks:
+//      attacker sends many slightly-varied prompts to determine if specific data
+//      points were in the model's training set, revealed by binary-like responses
+//      (yes/no, present/absent) across a high volume of minimally-varied queries
+// NOTE: Microsoft threat modeling guidance classifies membership inference as a
+//       PRIVACY concern (not a security concern) — responses involve compliance/privacy
+//       team alongside security. Source: learn.microsoft.com/security/engineering/threat-modeling-aiml
+// Reference: Mileva AI Security Fundamentals Level 3 — Model Extraction & Membership Inference
+// MITRE ATLAS: AML.T0040 (AI Model Inference API Access)
+// Recommended: Analytics Rule | Frequency: 1h | Lookback: 4h | Severity: Medium (privacy)
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(4h)
+| where Application in ("Azure AI Foundry", "Azure OpenAI", "Microsoft Copilot", "Copilot Studio")
+    and ActionType in ("AIInference", "ModelInference", "AgentInteraction", "CompletionRequest")
+| extend CallerIdentity = coalesce(
+    tostring(RawEventData["CallerObjectId"]),
+    AccountObjectId,
+    AccountDisplayName
+)
+| extend PromptText = tostring(RawEventData["UserPrompt"])
+| extend ResponseText = tostring(RawEventData["AgentResponse"])
+// Membership inference uses high-volume minimally-varied prompts → high total, LOW distinct content
+| summarize
+    TotalQueries = count(),
+    DistinctPrompts = dcount(PromptText),
+    DistinctResponses = dcount(ResponseText),
+    PromptSample = take_any(PromptText),
+    FirstSeen = min(TimeGenerated),
+    LastSeen = max(TimeGenerated)
+    by CallerIdentity, bin(TimeGenerated, 1h)
+// Key signal: many queries but low prompt uniqueness (attacker re-uses similar prompts with slight variations)
+| extend DistinctnessRatio = round(toreal(DistinctPrompts) / toreal(TotalQueries), 3)
+// High query count + low distinctness = systematic probing, not normal conversation
+| where TotalQueries > 200 and DistinctnessRatio < 0.3
+// Secondary signal: very few distinct responses suggests binary/categorical answers (yes/no, found/not found)
+| extend BinaryResponseSignal = DistinctResponses < 5
+| extend MembershipInferenceScore = toint(
+    (TotalQueries > 500) * 3 +
+    (DistinctnessRatio < 0.2) * 3 +
+    (BinaryResponseSignal == true) * 4
+)
+| where MembershipInferenceScore >= 3
+| project
+    CallerIdentity,
+    TotalQueries,
+    DistinctPrompts,
+    DistinctnessRatio,
+    DistinctResponses,
+    BinaryResponseSignal,
+    MembershipInferenceScore,
+    PromptSample = substring(PromptSample, 0, 200),
+    FirstSeen,
+    LastSeen,
+    AttackNote = "Pattern consistent with membership inference: high query volume, low prompt variation, binary-like responses"
+| sort by MembershipInferenceScore desc, TotalQueries desc
+
+
+// -----------------------------------------------------------------------------
+// Q8: Model Inversion Pattern — Reconstructing Training Data from Model Responses
+// Use: Detect queries designed to reconstruct training data from model responses.
+//      Inversion attacks iterate through entity names/identifiers to extract memorized
+//      data by prompting for "complete this:" or "what do you know about X?".
+//      Distinguished from Q7 (membership inference) by high prompt diversity
+//      targeting named entities: people, documents, records.
+// Reference: MITRE ATLAS AML.T0040; Carlini et al. "Extracting Training Data from LLMs"
+// Recommended: Analytics Rule | Frequency: 4h | Lookback: 24h | Severity: High
+// -----------------------------------------------------------------------------
+CloudAppEvents
+| where TimeGenerated > ago(24h)
+| where Application in ("Azure AI Foundry", "Azure OpenAI", "Microsoft Copilot", "Copilot Studio")
+    and ActionType in ("AIInference", "ModelInference", "AgentInteraction", "CompletionRequest")
+| extend CallerIdentity = coalesce(
+    tostring(RawEventData["CallerObjectId"]),
+    AccountObjectId,
+    AccountDisplayName
+)
+| extend PromptText = tostring(RawEventData["UserPrompt"])
+// Inversion signal 1: prompts contain "complete", "repeat", "verbatim", "what do you remember"
+| extend InversionKeywords = toint(
+    (PromptText has "complete the following") * 2 +
+    (PromptText has "repeat exactly") * 3 +
+    (PromptText has "verbatim") * 2 +
+    (PromptText has "what do you know about") * 1 +
+    (PromptText has "what information do you have on") * 1 +
+    (PromptText has "tell me everything about") * 1 +
+    (PromptText has "what was in the training") * 3 +
+    (PromptText has "memorized") * 2
+)
+// Inversion signal 2: prompt contains personal identifiers (names, emails, IDs)
+| extend ContainsIdentifier = toint(
+    (PromptText matches regex @"\b[A-Z][a-z]+ [A-Z][a-z]+\b") * 1 +  // Person name pattern
+    (PromptText matches regex @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}") * 2 +  // Email
+    (PromptText matches regex @"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b") * 2  // Phone
+)
+| where InversionKeywords >= 2 or ContainsIdentifier >= 2
+| summarize
+    TotalQueries = count(),
+    DistinctPrompts = dcount(PromptText),
+    MaxInversionKeywords = max(InversionKeywords),
+    MaxIdentifierScore = max(ContainsIdentifier),
+    PromptSample = take_any(PromptText),
+    FirstSeen = min(TimeGenerated),
+    LastSeen = max(TimeGenerated)
+    by CallerIdentity
+| extend ModelInversionScore = toint(
+    (TotalQueries > 50) * 2 +
+    (MaxInversionKeywords >= 3) * 3 +
+    (MaxIdentifierScore >= 2) * 3 +
+    (DistinctPrompts > 30) * 2
+)
+| where ModelInversionScore >= 4
+| project
+    CallerIdentity,
+    TotalQueries,
+    DistinctPrompts,
+    MaxInversionKeywords,
+    MaxIdentifierScore,
+    ModelInversionScore,
+    PromptSample = substring(PromptSample, 0, 300),
+    FirstSeen,
+    LastSeen,
+    AttackNote = "Pattern consistent with model inversion: prompts targeting personal identifiers or training data reconstruction"
+| sort by ModelInversionScore desc
+
+
+// -----------------------------------------------------------------------------
 // Q5: PIM Activation Patterns for Agent Roles — Anomalous Elevation
 // Use: Detect unusual PIM activation patterns for agent-associated privileged roles
 // -----------------------------------------------------------------------------

@@ -24,6 +24,7 @@
 | [03 — Secure Access](./Module-03-SecureAccess.md) | Agent identity and access control | Agentic access crisis (roleplay) | 45 min |
 | [04 — Protect Data](./Module-04-ProtectData.md) | Data protection and exfiltration | Data risk triage | 45 min |
 | [05 — Detect & Respond](./Module-05-DetectRespond.md) | SOC-integrated detection and response | Crisis table: agentic incident | 45 min |
+| [Board Reporting Template](./Templates/Board-AI-Security-Brief-Template.md) | Executive communication | AI security brief template for board presentation | Supplemental |
 
 Total session time: 3h 45min. Reserve 15 minutes for Risk Posture Map consolidation at close.
 
