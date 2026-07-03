@@ -48,18 +48,18 @@ Defender AI Agent Inventory covers Copilot Studio, Azure AI Foundry, AWS Bedrock
 - Power Automate flows with AI steps that aren't registered as agents
 - Agents created via Agent Builder (M365 Copilot) that bypass Copilot Studio registry
 
-### `AgentsInfo` schema — validated fields (June 2026)
+### `AgentsInfo` schema — official fields (July 2026)
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `Timestamp` | datetime | Use for time filters (XDR table) |
 | `AgentId` | string | Unique agent identifier |
-| `Name` | string | Agent display name (not `AgentName`) |
+| `AgentName` | string | Agent display name |
 | `Platform` | string | Copilot Studio, Azure AI Foundry, etc. |
 | `LifecycleStatus` | string | Active / Blocked / Uninstalled / Deleted |
 | `PublishedStatus` | string | Draft / Published |
 | `Owners` | dynamic | Can be null — use `isnull()` check |
-| `EntraAgentID` | string | Empty if no Entra identity assigned |
+| `EntraAgentId` | string | Empty if no Entra identity assigned |
 | `CreatedDateTime` | datetime | Agent creation timestamp |
 | `McpServers` | dynamic | External MCP endpoints declared |
 | `DeclaredTools` | dynamic | Tool definitions declared by agent |
@@ -85,8 +85,8 @@ AgentsInfo
     LastSeen = max(Timestamp),
     AgentCount = dcount(AgentId),
     WithoutOwner = countif(isnull(Owners) or array_length(Owners) == 0),
-    WithoutEntraId = countif(isempty(EntraAgentID))
-    by Platform, LifecycleStatus, PublishedStatus, Name
+    WithoutEntraId = countif(isempty(EntraAgentId))
+    by Platform, LifecycleStatus, PublishedStatus, AgentName
 | extend RiskLevel = case(
     WithoutOwner > 0 and WithoutEntraId > 0, "High",
     WithoutOwner > 0 or WithoutEntraId > 0, "Medium",
@@ -94,7 +94,7 @@ AgentsInfo
     "Low"
 )
 | sort by RiskLevel asc, LastSeen desc
-| project Name, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
+| project AgentName, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
           WithoutOwner, WithoutEntraId, AgentCount, LastSeen
 ```
 
@@ -110,11 +110,11 @@ AgentsInfo
 AgentsInfo
 | where Timestamp > ago(30d)
 | where isnull(Owners) or array_length(Owners) == 0
-    or isempty(EntraAgentID)
+    or isempty(EntraAgentId)
 | extend OwnersStr = tostring(Owners)
-| distinct AgentId, Name, Platform, CreatedDateTime, OwnersStr, EntraAgentID
+| distinct AgentId, AgentName, Platform, CreatedDateTime, OwnersStr, EntraAgentId
 | extend OwnerDisplay = iff(OwnersStr == '' or OwnersStr == '[]', 'UNASSIGNED', OwnersStr)
-| extend HasEntraId = isnotempty(EntraAgentID)
+| extend HasEntraId = isnotempty(EntraAgentId)
 | extend RiskSignal = case(
     not(HasEntraId) and (OwnersStr == "" or OwnersStr == "[]"),
         "No owner + no Entra Agent ID — shadow AI",
@@ -124,7 +124,7 @@ AgentsInfo
 )
 | extend DaysSinceCreation = datetime_diff('day', now(), CreatedDateTime)
 | sort by DaysSinceCreation desc
-| project AgentId, Name, Platform, OwnerDisplay, HasEntraId, RiskSignal, DaysSinceCreation
+| project AgentId, AgentName, Platform, OwnerDisplay, HasEntraId, RiskSignal, DaysSinceCreation
 ```
 
 **Expected output:** List of shadow AI agents — operating without formal registration or ownership.
@@ -170,7 +170,7 @@ AgentsInfo
 | extend OwnerDisplay = iff(isnull(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | project
     AgentId,
-    Name,
+    AgentName,
     Platform,
     OwnerDisplay,
     LifecycleStatus,
@@ -179,7 +179,7 @@ AgentsInfo
     DeclaredTools,
     McpServers
 | extend AlertDetail = strcat(
-    "New agent registered: ", Name,
+    "New agent registered: ", AgentName,
     " | Platform: ", Platform,
     " | Owner: ", OwnerDisplay,
     " | MCP servers: ", tostring(array_length(McpServers))
@@ -195,7 +195,7 @@ AgentsInfo
 
 1. In Microsoft Sentinel → **Analytics** → **Create** → **Scheduled query rule**
 2. Name: `New Agent Without Owner or Entra Identity`
-3. Paste the query from Step 4; add filter: `| where isempty(EntraAgentID) or isnull(Owners) or array_length(Owners) == 0`
+3. Paste the query from Step 4; add filter: `| where isempty(EntraAgentId) or isnull(Owners) or array_length(Owners) == 0`
 4. Frequency: Every 1 hour | Lookback: 1 day
 5. Severity: **Medium**
 6. Map entity: `AgentId` → Custom entity

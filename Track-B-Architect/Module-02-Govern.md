@@ -35,7 +35,7 @@ By the end of this module, participants will be able to design an agent governan
 - **Name:** Governance model implementation in demo tenant
 - **Format:** Individual
 - **Description:**
-  1. In Entra ID → App registrations, create `demo-sales-agent` with `Sites.Read.All` permission and mark it as an Entra Agent ID in the manifest (`"tags": ["agent365", "EntraAgentID"]`)
+  1. In Entra ID → App registrations, create `demo-sales-agent` with `Sites.Read.All` permission and mark it as an Entra Agent ID in the manifest (`"tags": ["agent365", "EntraAgentId"]`)
   2. In Copilot Studio admin center → Settings → Agent publishing, enable the approval flow and configure an approver
   3. In Power Platform admin center, create the DLP policy "Agentic AI — Restrict External Connectors" blocking HTTP and HTTP with Azure AD
   4. Run the governance queries from the KQL Library (P02-Governance-Gaps.kql): agents without Entra Agent ID, agents published without approval, graph drift

@@ -58,7 +58,7 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 | Lifecycle management | Manual | Managed via Agent 365 |
 | Appears in Agent 365 Registry | No | Yes |
 | CA policy targeting | `includeServicePrincipals` | `includeAgentIdServicePrincipals` |
-| Detectable in KQL via | `AppId` | `EntraAgentID` field in `AgentsInfo` |
+| Detectable in KQL via | `AppId` | `EntraAgentId` field in `AgentsInfo` |
 
 ---
 
@@ -78,7 +78,7 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 5. Under **Manifest**, add the following to mark this as an agent identity:
 
 ```json
-"tags": ["agent365", "EntraAgentID"]
+"tags": ["agent365", "EntraAgentId"]
 ```
 
 6. Save the manifest
@@ -124,10 +124,10 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 ```kql
 AgentsInfo
 | where Timestamp > ago(30d)
-| where isempty(EntraAgentID)
+| where isempty(EntraAgentId)
 | extend OwnersStr = tostring(Owners)
 | extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
-| distinct AgentId, Name, Platform, OwnerDisplay, LifecycleStatus, PublishedStatus
+| distinct AgentId, AgentName, Platform, OwnerDisplay, LifecycleStatus, PublishedStatus
 | extend RiskNote = "Agent operates without dedicated Entra Agent ID — identity laundering risk"
 | sort by Platform asc
 ```
@@ -222,7 +222,7 @@ AuditLogs
 
 ## Closing Questions
 
-- What technical difference did you observe between an agent with `EntraAgentId` populated vs. one with `Inherited`? What does that mean for a forensic investigation?
+- What technical difference did you observe between an agent with `EntraAgentId` field populated vs. one where it is empty? What does that mean for a forensic investigation when you try to attribute an action to a specific agent?
 - If you needed to create a Sentinel analytics rule that fires when an agent is published via Agent Builder (bypassing approval), which table would you use and what field would you filter on?
 
 ---

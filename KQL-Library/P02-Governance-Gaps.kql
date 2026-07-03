@@ -3,9 +3,9 @@
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
 // Tables: AgentsInfo, AuditLogs, CloudAppEvents
-// SCHEMA NOTES (validated against live tenant 2026-06-28):
-//   AgentsInfo.Name (not AgentName) | Owners: dynamic, can be null
-//   EntraAgentID (capital ID) | Both Timestamp and TimeGenerated exist
+// SCHEMA NOTES (per official AgentsInfo schema, July 2026):
+//   AgentsInfo.AgentName | Owners: dynamic, can be null
+//   EntraAgentId (lowercase d) | Both Timestamp and TimeGenerated exist
 // =============================================================================
 
 
@@ -15,9 +15,10 @@
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
-| where isempty(EntraAgentID)
+| where isempty(EntraAgentId)
+| extend OwnersStr = tostring(Owners)
 | extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
-| distinct AgentId, Name, Platform, OwnerDisplay, LifecycleStatus, PublishedStatus
+| distinct AgentId, AgentName, Platform, OwnerDisplay, LifecycleStatus, PublishedStatus
 | extend RiskNote = "Agent operates without dedicated Entra Agent ID — identity laundering risk"
 | sort by Platform asc
 
@@ -54,7 +55,7 @@ AuditLogs
 AgentsInfo
 | where Timestamp > ago(90d)
 | extend OwnersStr = tostring(Owners)
-| summarize LastActivity = max(Timestamp) by AgentId, Name, Platform, OwnersStr
+| summarize LastActivity = max(Timestamp) by AgentId, AgentName, Platform, OwnersStr
 | extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
 | extend DaysSinceActivity = datetime_diff('day', now(), LastActivity)
 | where DaysSinceActivity > 60
@@ -64,7 +65,7 @@ AgentsInfo
     "Medium — approaching review threshold"
 )
 | sort by DaysSinceActivity desc
-| project AgentId, Name, Platform, OwnerDisplay, DaysSinceActivity, LifecycleRisk
+| project AgentId, AgentName, Platform, OwnerDisplay, DaysSinceActivity, LifecycleRisk
 
 
 // -----------------------------------------------------------------------------

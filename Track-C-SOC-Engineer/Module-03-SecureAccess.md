@@ -9,7 +9,7 @@
 
 ## Learning Objective
 
-At the end of this module, you will be able to configure a Conditional Access policy targeting agent identities using `clientApplications.includeAgentIdServicePrincipals`, validate it with the What If tool, detect OAuth consent drift via KQL, and document the critical difference between CA for users and CA for agents.
+At the end of this module, you will be able to configure a Conditional Access policy targeting agent identities using the dedicated **Agents** assignment type in Entra CA, validate it with the What If tool, detect OAuth consent drift via KQL, and document the critical difference between CA for users and CA for agents.
 
 ---
 
@@ -28,7 +28,7 @@ At the end of this module, you will be able to configure a Conditional Access po
 
 1. **The `grantControls: mfa` trap for agents:** A CA policy with `mfa` as a grant control on agent identities is silently invalid — it neither blocks nor forces authentication. Agents cannot complete interactive MFA and the policy generates no enforcement event in the logs. Only `"block"` is valid to block agent access via CA.
 
-2. **Blueprint-level CA as a scaling pattern:** A CA policy per agent instance does not scale. The correct pattern is a Blueprint-level CA using `clientApplications.includeAgentIdServicePrincipals` to cover all current and future agent identities derived from the same blueprint.
+2. **Blueprint-level CA as a scaling pattern:** A CA policy per agent instance does not scale. The correct pattern targets the **agent identity blueprint** under `Assignments → Agents → All agent identities` — this automatically covers all current and future agent identities derived from the same blueprint without per-instance configuration.
 
 3. **OAuth consent drift as a silent accumulation vector:** Without consent flow restrictions, an agent can accumulate additional permissions without explicit approval. The signal: `AuditLogs` → `Add delegated permission grant` without correlation to an `AgentPermissionApproved` event.
 
@@ -54,7 +54,7 @@ For agent identities, `mfa` as a grant control is **silently invalid** — it ne
 - `"builtInControls": ["block"]` — explicitly blocks access
 - No `grantControls` block — use `sessionControls` instead for monitoring
 
-Reference: [Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)
+Reference: [Conditional Access for agents](https://learn.microsoft.com/en-us/entra/identity/conditional-access/agent-id) | [Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)
 
 
 ---
@@ -63,7 +63,7 @@ Reference: [Conditional Access for workload identities](https://learn.microsoft.
 
 ### Blueprint-level CA vs. per-instance policies
 
-Creating a separate CA policy for each agent instance is an antipattern that fails at scale. Blueprint-level CA policies target `clientApplications.includeAgentIdServicePrincipals` and apply to all agent identities derived from the same blueprint — covering all current and future instances without per-instance configuration.
+Creating a separate CA policy for each agent instance is an antipattern that fails at scale. The new **Agents** assignment type in Entra CA (`Assignments → Users, agents or workload identities → Agents → All agent identities`) covers all agent identities in the tenant. To scope to a specific blueprint, select individual agent identities under the same blueprint — every new agent identity derived from that blueprint is automatically covered.
 
 ### Identity laundering in the audit log
 
@@ -75,47 +75,56 @@ When an agent acts under a user's identity (no Entra Agent ID, inherited permiss
 
 ### Step 1 — Create a CA policy for agent identities
 
-1. In **Entra ID** → **Security** → **Conditional Access** → **New policy**
-2. Name: `Agentic AI — Risk-Based Access Control`
-3. **Assignments → Users or workload identities:**
-   - Select: **Workload identities**
-   - Include: **Service principals** → filter to your `demo-sales-agent` app
-4. **Assignments → Cloud apps:** All cloud apps
-5. **Conditions → Service principal risk** (requires Entra ID Protection P2):
-   - Enable: Yes
-   - Risk levels: Medium and above
-6. **Grant:** Select **Block access**
-7. Enable policy: **Report-only** first (do not enable directly in production)
-8. Save
+Microsoft Entra now has a dedicated **Agents** assignment type for CA policies — separate from "Workload identities" (service principals). Use this path for all new agent CA policies.
 
-> **Why Report-only first:** In a demo tenant, blocking access immediately may break lab workflows. Report-only lets you validate behavior before enforcing.
+1. In **Microsoft Entra admin center** → **Security** → **Conditional Access** → **New policy**
+2. Name: `Agentic AI — Risk-Based Access Control`
+3. **Assignments → Users, agents or workload identities:**
+   - Under **What does this policy apply to?** → select **Agents**
+   - Under **Include** → select **All agent identities**
+4. **Target resources → Resources:** Include **All resources**
+5. **Conditions → Agent risk (Preview):**
+   - Configure: **Yes**
+   - Select risk levels: **High** (recommended starting point; lower to Medium after baseline review)
+6. **Access controls → Grant:** Select **Block**
+7. **Enable policy:** Set to **Report-only** first
+8. Select **Create**
+
+> **Why Report-only first:** In a demo tenant, blocking agents immediately may break lab workflows. Report-only lets you validate behavior using the What If tool and Sign-in logs before enforcing.
+
+> **License note:** Conditional Access for agents requires Entra ID P1 or P2 and a Microsoft Agent 365 license.
 
 ---
 
 ### Step 2 — Validate with What If tool
 
 1. In **Conditional Access** → **What If**
-2. User or workload identity: select `demo-sales-agent` service principal
-3. Cloud app: select **Microsoft Graph**
-4. Sign-in risk: set to **Medium**
+2. Under **User or workload identity:** select **Workload identity** → choose `demo-sales-agent`
+3. Under **Cloud app:** select **Microsoft Graph**
+4. Under **Agent risk:** set to **High**
 5. Click **What If**
 
 **Expected result:** The policy `Agentic AI — Risk-Based Access Control` appears in the results as "Will apply" with action "Block."
 
-**Document:** Screenshot the What If result for your playbook. This is your evidence that the policy applies correctly to agent identities and not to user identities.
+**Document:** Screenshot the What If result for your playbook. This is your evidence that the policy applies correctly to agent identities and not to user accounts (run a second What If with a user account to confirm the policy does not appear).
 
 ---
 
-### Step 3 — Confirm `grantControls: mfa` behavior
+### Step 3 — Confirm `grantControls: mfa` behavior for agents
+
+Agents cannot complete interactive MFA. A CA policy with MFA as a grant control on agent identities is silently invalid — it generates no enforcement event and no error.
 
 1. Duplicate the policy from Step 1
-2. Change **Grant** from **Block access** to **Require multifactor authentication**
-3. Save as `TEST — MFA Grant for Agent (invalid)`
-4. Run What If again with the same parameters
+2. Under **Assignments**, switch from **Agents** to **Workload identities → Service principals** → select `demo-sales-agent`
+3. Change **Grant** from **Block access** to **Require multifactor authentication**
+4. Save as `TEST — MFA Grant for Agent (invalid)`
+5. Run What If with the same agent identity and High risk
 
-**Expected result:** The MFA policy shows as "Will apply" but the grant control is ineffective for service principals — note that What If may show "Grant: MFA required" but agents cannot satisfy this condition. This is the silent misconfiguration.
+**Expected result:** The MFA policy appears as "Will apply" — but the grant control cannot be enforced because agents cannot satisfy MFA. Microsoft's official documentation confirms: for agent identities, only `Block` is a valid grant control. This is the silent misconfiguration that creates a false sense of security.
 
-5. Delete the test policy after documenting the finding.
+6. Delete the test policy after documenting the finding.
+
+> **Reference:** [Microsoft Entra — Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity) — "Can't perform multifactor authentication."
 
 ---
 
