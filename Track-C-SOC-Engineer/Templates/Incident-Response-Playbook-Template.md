@@ -240,8 +240,11 @@ SecurityIncident
 | 03 Secure Access | CA policy (risk-based, block), What If validated | 3 | grantControls: mfa misconfiguration risk |
 | 04 Protect Data | Purview DLP for AI interactions, label audit | 4 | Oversharing pre-existing before label remediation |
 | 05 Detect & Respond | 3 analytics rules + Logic App enforcement | 3 | Structural false negatives in detection-only posture |
+| 06 Red Team | 5 ATLAS attack exercises, detection gap analysis | — | [From red team findings] |
 
 **Total analytics rules deployed:** 14  
 **Enforcement playbooks deployed:** 1  
+**Red team attacks executed:** [COUNT of 5 completed]  
+**Detection gaps identified:** [COUNT]  
 **Known gaps documented:** [COUNT]  
 **Recommended next review:** [DATE + 90 days]

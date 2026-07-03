@@ -266,20 +266,8 @@ Jailbreak alert fires (T+0)
 
 ---
 
-## Playbook Complete
+## Connection to Module 06
 
-You have now built all five sections of the **Agentic Incident Response Playbook**:
+The detection rules you built in this module are exactly the rules you will test in Module 06. The enforcement playbook you built here is the containment mechanism you will verify still fires after an actual attack. Module 06 closes the loop — it surfaces the detection gaps that this module's rules don't cover.
 
-| Section | Content |
-|---------|---------|
-| 1 — Discover | Agent inventory baseline, unmanaged agents, oversharing sites |
-| 2 — Govern | Governance gap inventory, Agent Builder bypass documentation |
-| 3 — Secure Access | CA policy configuration, What If validation, OAuth audit |
-| 4 — Protect Data | DLP configuration, exfiltration detection queries |
-| 5 — Detect & Respond | Analytics rules, enforcement Logic App, false negative audit |
-
-The playbook is the output you take back to your organization. Each section maps directly to a control domain and includes both configuration evidence and detection queries.
-
----
-
-> The cycle is continuous: what Detect & Respond surfaces feeds back into Discover & Prioritize — new agent types detected, updated risk classifications, and revised inventory. Agentic security maturity is not a state; it is an ongoing process.
+→ [Module 06 — Red Team Perspective](./Module-06-RedTeamPerspective.md)

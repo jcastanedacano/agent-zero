@@ -1,7 +1,7 @@
 # Track C — SOC Analyst / Engineer
 
 **Audience:** SOC analysts, security engineers, detection engineers, incident responders  
-**Duration:** 8 hours (full day)  
+**Duration:** 9.5 hours (full day + extended session)  
 **Format:** Hands-on technical labs — KQL, Sentinel analytics rules, Purview policies, Entra CA  
 **Output:** Agentic incident response playbook (documented, ready to operationalize)
 
@@ -29,8 +29,9 @@
 | [03 — Secure Access](./Module-03-SecureAccess.md) | CA policy for agents + OAuth audit | Entra CA for Agents + What If validation | 90 min |
 | [04 — Protect Data](./Module-04-ProtectData.md) | DLP for AI interactions + exfiltration detection | Purview DLP + CloudAppEvents KQL | 90 min |
 | [05 — Detect & Respond](./Module-05-DetectRespond.md) | Jailbreak detection + response playbook | Sentinel analytics rules + Logic App enforcement | 90 min |
+| [06 — Red Team Perspective](./Module-06-RedTeamPerspective.md) | Attacker perspective + detection gap analysis | Execute 5 ATLAS attacks — verify KQL detects each | 90 min |
 
-Total lab time: ~7.5 hours. Reserve 30 minutes for setup validation and playbook consolidation.
+Total lab time: ~9 hours. Reserve 30 minutes for setup validation and playbook consolidation.
 
 ---
 
@@ -44,7 +45,8 @@ Agentic Incident Response Playbook
 ├── Section 2 — Governance gap detection queries (P02)
 ├── Section 3 — CA policy documentation + access anomaly queries (P03)
 ├── Section 4 — DLP configuration + exfiltration detection queries (P04)
-└── Section 5 — Jailbreak analytics rules + Logic App enforcement flow (P05)
+├── Section 5 — Jailbreak analytics rules + Logic App enforcement flow (P05)
+└── Section 6 — Red team findings: attack execution, detection gaps, threshold tuning
 ```
 
 Use the [Playbook Template](./Templates/Incident-Response-Playbook-Template.md) to consolidate outputs across modules.
