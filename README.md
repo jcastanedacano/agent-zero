@@ -1,4 +1,4 @@
-# Microsoft Agentic Security Labs
+# Agent Zero Labs
 
 **Practical security workshops for AI agents on the Microsoft stack.**
 
