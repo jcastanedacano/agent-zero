@@ -2,7 +2,7 @@
 
 **Practical security workshops for AI agents on the Microsoft stack.**
 
-> A complete framework for securing agentic AI in enterprise Microsoft environments: 15 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 33+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10 and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
+> A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 40+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10 and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fmicrosoft-agentic-security-labs%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
@@ -10,7 +10,7 @@
 
 ## What This Is
 
-A community lab framework covering the five security domains that matter when AI agents operate in your Microsoft environment:
+A community lab framework covering seven security domains for AI agents on the Microsoft stack:
 
 | # | Domain | Core Question | Outcome |
 |---|--------|---------------|---------|
@@ -19,6 +19,8 @@ A community lab framework covering the five security domains that matter when AI
 | 03 | **Secure Access** | Do agents have only the access they need? | Least privilege verified + forensic identity traceability |
 | 04 | **Protect Data** | Can agents exfiltrate data through prompts or connectors? | Data protected with forensic traceability in AI interactions |
 | 05 | **Detect & Respond** | Is your SOC ready for agentic incidents? | Agents integrated into SOC: unified detection and response |
+| 06 | **Regulatory Compliance** | Which EU AI Act tier applies, and what do ISO 42001 and NIST AI RMF require? | Compliance gap assessment + Purview Compliance Manager assessment |
+| 07 | **Vendor & Third-Party AI Risk** | Which external AI vendors and MCP servers are connected, and have they been assessed? | Vendor scorecard (20 questions) + MCP server audit KQL |
 
 ---
 
@@ -28,9 +30,9 @@ Three parallel tracks — pick the one that fits your role:
 
 | Track | Audience | Format | Duration | Output |
 |-------|----------|--------|----------|--------|
-| [**A — Executive**](./Track-A-Executive/README.md) | CISO / CTO / Director | Decision exercises, risk scenarios, roleplay — no lab access required | 4 hours | Risk Posture Map |
-| [**B — Architect**](./Track-B-Architect/README.md) | Security Architect / Consultant | Hands-on labs in M365 E5 demo tenant + Azure AI Foundry | 8 hours | Gap Assessment + 90-day roadmap |
-| [**C — SOC Engineer**](./Track-C-SOC-Engineer/README.md) | SOC Analyst / Security Engineer | KQL labs, Sentinel analytics rules, Purview, Entra CA, Logic Apps | 8 hours | Agentic incident response playbook |
+| [**A — Executive**](./Track-A-Executive/README.md) | CISO / CTO / Director | Decision exercises, risk scenarios, roleplay — no lab access required | 4 hours | Risk Posture Map + Board Brief |
+| [**B — Architect**](./Track-B-Architect/README.md) | Security Architect / Consultant | Hands-on labs in M365 E5 demo tenant + Azure AI Foundry | 10.5 hours | Gap Assessment + 90-day roadmap |
+| [**C — SOC Engineer**](./Track-C-SOC-Engineer/README.md) | SOC Analyst / Security Engineer | KQL labs, Sentinel analytics rules, Purview, Entra CA, Logic Apps | 9.5 hours | Agentic incident response playbook |
 
 ---
 
@@ -44,30 +46,35 @@ microsoft-agentic-security-labs/
 │   ├── Module-02-Govern.md
 │   ├── Module-03-SecureAccess.md
 │   ├── Module-04-ProtectData.md
-│   └── Module-05-DetectRespond.md
-├── Track-B-Architect/               ← 8h architect track (hands-on demo tenant labs)
+│   ├── Module-05-DetectRespond.md
+│   └── Templates/
+│       └── Board-AI-Security-Brief-Template.md  ← NEW: board brief template for CISO/executive
+├── Track-B-Architect/               ← 10.5h architect track (hands-on demo tenant labs)
 │   ├── README.md
 │   ├── Module-01-Discover.md
 │   ├── Module-02-Govern.md
 │   ├── Module-03-SecureAccess.md
 │   ├── Module-04-ProtectData.md
 │   ├── Module-05-DetectRespond.md
+│   ├── Module-06-RegulatoryFrameworks.md        ← NEW: EU AI Act + NIST AI RMF + ISO 42001
+│   ├── Module-07-VendorRisk.md                  ← NEW: third-party AI and MCP server risk
 │   └── Templates/
 │       └── Gap-Assessment-Template.md
-├── Track-C-SOC-Engineer/            ← 8h SOC engineer track (KQL, Sentinel, Purview, Entra CA)
+├── Track-C-SOC-Engineer/            ← 9.5h SOC engineer track (KQL, Sentinel, Purview, Entra CA)
 │   ├── README.md
 │   ├── Module-01-Discover.md
 │   ├── Module-02-Govern.md
 │   ├── Module-03-SecureAccess.md
 │   ├── Module-04-ProtectData.md
 │   ├── Module-05-DetectRespond.md
+│   ├── Module-06-RedTeamPerspective.md          ← NEW: attacker perspective, 5 ATLAS attacks
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
-├── KQL-Library/                     ← 30+ production-ready queries for Sentinel + Defender XDR
+├── KQL-Library/                     ← 40+ production-ready queries for Sentinel + Defender XDR
 │   ├── README.md
 │   ├── P01-Agent-Discovery.kql
 │   ├── P02-Governance-Gaps.kql
-│   ├── P03-Access-Anomalies.kql
+│   ├── P03-Access-Anomalies.kql      ← Q7 membership inference + Q8 model inversion added
 │   ├── P04-Exfiltration-Detection.kql
 │   └── P05-Jailbreak-Detection.kql
 ├── skills/                          ← 30 agent skills (agentskills.io format, ATLAS + NIST mapped)
@@ -141,7 +148,7 @@ All queries in the KQL Library have been validated against a live Microsoft 365 
 |------|--------|---------------|-------|
 | [P01-Agent-Discovery.kql](./KQL-Library/P01-Agent-Discovery.kql) | `AgentsInfo`, `CloudAppEvents`, `OfficeActivity` | 2026-06-28 | Migrated from `AIAgentsInfo` (deprecated July 1, 2026). Real column is `Name` (not `AgentName`). Q6 added: MCP server + tool count risk. |
 | [P02-Governance-Gaps.kql](./KQL-Library/P02-Governance-Gaps.kql) | `AgentsInfo`, `AuditLogs`, `CloudAppEvents` | 2026-06-28 | Migrated from `AIAgentsInfo`. `Owners` (dynamic) cast to string before grouping. Q6 added: compound actions without per-step HITL events (AIRT Taxonomy v2.0 §5.4). |
-| [P03-Access-Anomalies.kql](./KQL-Library/P03-Access-Anomalies.kql) | `CloudAppEvents`, `EntraIdSpnSignInEvents`, `AuditLogs` | 2026-06-28 | Migrated from `AADSpnSignInEventsBeta` (deprecated Dec 2025). Field is `Country` (not `Location`). Q5b added: capability/architecture disclosure detection (AIRT Taxonomy v2.0 §4.9). |
+| [P03-Access-Anomalies.kql](./KQL-Library/P03-Access-Anomalies.kql) | `CloudAppEvents`, `EntraIdSpnSignInEvents`, `AuditLogs` | 2026-06-28 | Migrated from `AADSpnSignInEventsBeta` (deprecated Dec 2025). Field is `Country` (not `Location`). Q5b: capability/architecture disclosure (AIRT Taxonomy v2.0 §4.9). Q7: membership inference detection (privacy classification per Microsoft threat modeling). Q8: model inversion / training data reconstruction. |
 | [P04-Exfiltration-Detection.kql](./KQL-Library/P04-Exfiltration-Detection.kql) | `CloudAppEvents`, `MicrosoftPurviewInformationProtection` | — | Sentinel tables — `TimeGenerated` correct. |
 | [P05-Jailbreak-Detection.kql](./KQL-Library/P05-Jailbreak-Detection.kql) | `CloudAppEvents`, `BehaviorAnalytics`, `AgentsInfo` | — | Sentinel tables. Q6 added: goal hijacking via sustained objective drift (AIRT Taxonomy v2.0 §4.4). |
 
@@ -183,6 +190,8 @@ All queries in the KQL Library have been validated against a live Microsoft 365 
 | 03 Secure Access | Entra CA for Agents (`clientApplications.includeAgentIdServicePrincipals`) · Entra ID Protection · PIM just-in-time · Defender for Cloud Apps · Foundry rate limiting (model extraction prevention) |
 | 04 Protect Data | Purview DLP (AI interactions workload) · Insider Risk Management · Sensitivity labels · SharePoint Advanced Management · Foundry RBAC (membership inference prevention) |
 | 05 Detect & Respond | Defender XDR · Microsoft Sentinel + native MCP server · Security Copilot agents · Purview Audit · Agent 365 · Logic Apps (tiered automated response) |
+| 06 Regulatory Compliance | Microsoft Purview Compliance Manager (EU AI Act + ISO 42001 + NIST AI RMF 1.0 templates) · Purview Audit (immutable record keeping) · Copilot Studio disclosure settings (Art. 13) |
+| 07 Vendor & Third-Party AI Risk | Power Platform DLP (block unapproved connectors) · Microsoft 365 admin center Agents and Tools (MCP server allow/block) · AgentsInfo.McpServers + CloudAppEvents ExecuteToolByGateway (audit) |
 
 ---
 
@@ -208,7 +217,7 @@ Two concepts from Anthropic's [Zero Trust for AI Agents](https://www.anthropic.c
 | AG04 — Memory Poisoning | KQL Q5a memory/session poisoning; Track C Module-04 point 5 | 04 Protect |
 | AG05 — Supply Chain Compromise | KQL Q5c behavioral anomaly; Track C Module-04 point 6; model supply chain notes | 04 Protect |
 | AG06 — Model Extraction | KQL P03-Q6 endpoint query anomaly; Track B/C Module-03 | 03 Secure |
-| AG07 — Membership Inference | Track B/C Module-04; Purview audit log monitoring | 04 Protect |
+| AG07 — Membership Inference | KQL P03-Q7 (high-volume low-distinctness probing, privacy classification); KQL P03-Q8 (model inversion); Track B/C Module-04 | 04 Protect |
 | AG08 — Multi-Agent Trust | KQL Q5b lateral movement; Track B/C Module-02/04; multi-agent trust boundaries | 02 Govern |
 | AG09 — Shadow AI / Ungoverned Agents | Discover pillar; Defender AI Inventory; Agent 365 Registry; KQL P01 | 01 Discover |
 | AG10 — Denial of AI Service | KQL P03-Q1 scope expansion; rate limit monitoring via Q6 | 03 Secure |
@@ -229,7 +238,7 @@ Two concepts from Anthropic's [Zero Trust for AI Agents](https://www.anthropic.c
 
 ## How to Use These Labs
 
-**Self-paced learner:** Pick your track, start at Module 01, work through to Module 05. Each module is standalone but the narrative builds sequentially.
+**Self-paced learner:** Pick your track, start at Module 01, work through sequentially. Each module is standalone but the narrative builds. Track B and C now extend to Module 07 and 06 respectively.
 
 **Facilitator:** Read [`/Facilitator-Kit`](./Facilitator-Kit/README.md) before running any session — environment prep checklist, per-track prerequisites, and signals that the workshop is working.
 
