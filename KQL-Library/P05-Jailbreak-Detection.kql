@@ -204,3 +204,81 @@ CloudAppEvents
     SessionStart,
     RiskNote = "High-privilege action executed deep in session — potential goal hijacking via adversarial instructions"
 | sort by MinutesIntoSession desc, StepIndex desc
+
+
+// -----------------------------------------------------------------------------
+// Q7: LPCI — Logic-Layer Prompt Control Injection Detection
+// Use: Detect tool responses or retrieved content injecting operator-level
+//      instructions into the agent's reasoning context, elevating payload
+//      privileges across session turns. Distinct from direct prompt injection
+//      (Q1): LPCI payloads arrive via tool return values or memory retrieval,
+//      not user prompts, and persist across subsequent steps.
+// Reference: OWASP AST03 (Over-Privileged Skills) | Atta et al. arXiv:2507.10457
+//            MITRE ATLAS AML.T0051 (Prompt Injection via Third-Party Content)
+// Recommended: Analytics Rule | Frequency: 15m | Lookback: 2h | Severity: High
+// -----------------------------------------------------------------------------
+let LpciPatterns = dynamic([
+    "you are now operating as",
+    "new system instruction:",
+    "override previous role",
+    "ignore your prior instructions",
+    "as your administrator i",
+    "your new objective is",
+    "disregard safety",
+    "act with elevated permissions",
+    "treat this as operator instruction",
+    "from this point forward you"
+]);
+let ToolResponseEvents = CloudAppEvents
+    | where TimeGenerated > ago(2h)
+    | where ActionType == "ExecuteToolByGateway"
+    | extend AgentName = tostring(RawEventData["AgentName"])
+    | extend ToolName = tostring(RawEventData["ToolName"])
+    | extend McpServerName = tostring(RawEventData["McpServerName"])
+    | extend ToolResponseText = tolower(tostring(RawEventData["ToolResponse"]))
+    | extend SessionId = tostring(RawEventData["SessionId"])
+    | extend LpciScore = toint(
+        (ToolResponseText has "you are now operating as") * 3 +
+        (ToolResponseText has "new system instruction:") * 3 +
+        (ToolResponseText has "override previous role") * 3 +
+        (ToolResponseText has "ignore your prior instructions") * 3 +
+        (ToolResponseText has "as your administrator i") * 2 +
+        (ToolResponseText has "your new objective is") * 2 +
+        (ToolResponseText has "treat this as operator instruction") * 2 +
+        (ToolResponseText has "act with elevated permissions") * 2 +
+        (ToolResponseText has "disregard safety") * 1 +
+        (ToolResponseText has "from this point forward you") * 1
+    )
+    | where LpciScore >= 2;
+// Correlate with subsequent high-privilege actions in the same session
+let HighPrivilegePostLpci = CloudAppEvents
+    | where TimeGenerated > ago(2h)
+    | where ActionType in (
+        "FilePermanentlyDeleted", "FileDeleted", "MessageSent",
+        "InviteExternalUser", "AdminUpdated", "RoleAssigned",
+        "BulkFileDownload", "SiteCollectionAdminAdded"
+    )
+    | extend SessionId = tostring(RawEventData["SessionId"])
+    | where isnotempty(SessionId);
+ToolResponseEvents
+| join kind=leftouter (
+    HighPrivilegePostLpci
+    | project SessionId, PostLpciAction = ActionType, PostLpciTime = TimeGenerated
+) on SessionId
+| extend EscalationConfirmed = isnotempty(PostLpciAction)
+| project
+    TimeGenerated,
+    AgentName,
+    McpServerName,
+    ToolName,
+    SessionId,
+    LpciScore,
+    EscalationConfirmed,
+    PostLpciAction = iff(EscalationConfirmed, PostLpciAction, "none"),
+    ResponsePreview = substring(tostring(RawEventData["ToolResponse"]), 0, 300),
+    RiskNote = iff(
+        EscalationConfirmed,
+        "CONFIRMED: LPCI in tool response followed by high-privilege action in same session",
+        "SUSPECTED: LPCI pattern in tool response — monitor for subsequent escalation"
+    )
+| sort by LpciScore desc, EscalationConfirmed desc, TimeGenerated desc

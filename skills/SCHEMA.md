@@ -36,8 +36,43 @@ nist_csf: []           # GV|ID|PR|DE|RS|RC + categoría
 ms_license: []         # licencias mínimas requeridas
 ms_roles: []           # roles Entra ID requeridos
 effort_hours: {n}
+
+# --- Universal Skill Format security manifest (OWASP AST10) ---
+# Required for enterprise skill registries and cross-platform portability.
+# Addresses AST01 (malicious skills), AST04 (insecure metadata), AST08 (poor scanning),
+# and AST10 (cross-platform reuse) from the OWASP Agentic Skills Top 10 (2026).
+risk_tier: {low|medium|high|critical}  # Blast radius classification
+permissions:
+  read_files: {true|false}
+  write_files: {true|false}
+  network_access: {true|false}
+  deny_write:                          # Paths this skill must never modify
+    - ".claude/settings.json"
+    - "SOUL.md"
+    - "MEMORY.md"
+scan_status:
+  last_scanned: {ISO-8601 date}        # Date of last security scan
+  scanner: {tool name}                 # e.g., NVIDIA SkillSpector, manual review
+  result: {clean|flagged|pending}
+content_hash: {sha256-hex}             # SHA-256 of SKILL.md at time of scan
+signature: {base64-sig}                # Optional: signing key for provenance
 ---
 ```
+
+### risk_tier guidance
+
+| Tier | Criteria | Examples |
+|------|----------|---------|
+| `low` | Read-only; no external calls; no credential access | Discovery queries, read-only KQL |
+| `medium` | Writes to tenant config; calls internal APIs | DLP policy updates, CA policy creation |
+| `high` | External network access; credential or key management | MCP server connectors, Key Vault access |
+| `critical` | Can modify identity, revoke tokens, or delete data | Agent decommission, role assignment |
+
+### deny_write defaults
+
+All skills **must** include `deny_write` for at minimum:
+- `.claude/settings.json` — prevents hook injection (AST02 supply chain vector)
+- `SOUL.md` / `MEMORY.md` — prevents persistent instruction backdoors (AST01 malicious skill pattern)
 
 ## Secciones Markdown obligatorias
 
