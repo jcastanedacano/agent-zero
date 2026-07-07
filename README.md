@@ -2,7 +2,7 @@
 
 **Practical security workshops for AI agents on the Microsoft stack.**
 
-> A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 40+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10 and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
+> A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fmicrosoft-agentic-security-labs%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
@@ -67,7 +67,7 @@ microsoft-agentic-security-labs/
 │   ├── Module-03-SecureAccess.md
 │   ├── Module-04-ProtectData.md
 │   ├── Module-05-DetectRespond.md
-│   ├── Module-06-RedTeamPerspective.md          ← NEW: attacker perspective, 5 ATLAS attacks
+│   ├── Module-06-RedTeamPerspective.md          ← NEW: attacker perspective, 6 attacks (incl. JadePuffer agentic ransomware)
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
 ├── KQL-Library/                     ← 40+ production-ready queries for Sentinel + Defender XDR
@@ -76,7 +76,7 @@ microsoft-agentic-security-labs/
 │   ├── P02-Governance-Gaps.kql
 │   ├── P03-Access-Anomalies.kql      ← Q7 membership inference + Q8 model inversion added
 │   ├── P04-Exfiltration-Detection.kql
-│   └── P05-Jailbreak-Detection.kql
+│   └── P05-Jailbreak-Detection.kql              ← Q7 LPCI + Q8 agentic ransomware chain (JadePuffer)
 ├── skills/                          ← 30 agent skills (agentskills.io format, ATLAS + NIST mapped)
 │   ├── SCHEMA.md                    ← Universal Skill Format security manifest (OWASP AST04/AST10)
 │   ├── discover/   (6 skills)
@@ -186,12 +186,12 @@ All queries in the KQL Library have been validated against a live Microsoft 365 
 | Domain | Primary Controls |
 |--------|-----------------|
 | 01 Discover & Prioritize | Purview DSPM for AI · Defender AI Agent Inventory · Agent 365 Registry · SharePoint Advanced Management · CloudAppEvents (third-party agent discovery) |
-| 02 Govern & Control | Entra Agent ID · Copilot Studio governance + approval flow · Foundry RBAC + API controls · Power Platform DLP · Tiered Autonomy (Logic Apps playbook tiers) |
-| 03 Secure Access | Entra CA for Agents (`clientApplications.includeAgentIdServicePrincipals`) · Entra ID Protection · PIM just-in-time · Defender for Cloud Apps · Foundry rate limiting (model extraction prevention) |
-| 04 Protect Data | Purview DLP (AI interactions workload) · Insider Risk Management · Sensitivity labels · SharePoint Advanced Management · Foundry RBAC (membership inference prevention) |
-| 05 Detect & Respond | Defender XDR · Microsoft Sentinel + native MCP server · Security Copilot agents · Purview Audit · Agent 365 · Logic Apps (tiered automated response) |
+| 02 Govern & Control | Entra Agent ID · Copilot Studio governance + approval flow · Foundry RBAC + API controls · Power Platform DLP · Tiered Autonomy (Logic Apps playbook tiers) · CAGE model (independent control plane from reasoning path) |
+| 03 Secure Access | Entra CA for Agents (`clientApplications.includeAgentIdServicePrincipals`) · Entra ID Protection · PIM just-in-time · Defender for Cloud Apps · Foundry rate limiting (model extraction prevention) · Placeholder token/proxy pattern (non-Azure agents, RFC 8705 mTLS) · Defender for Cloud CNAPP (Azure-hosted agent workloads) |
+| 04 Protect Data | Purview DLP (AI interactions workload) · Insider Risk Management · Sensitivity labels · SharePoint Advanced Management · Foundry RBAC (membership inference prevention) · Context governance: ABAC + data minimization at data-to-agent boundary · Context gap detection (audit of what data agent received as input) |
+| 05 Detect & Respond | Defender XDR · Microsoft Sentinel + native MCP server · Security Copilot agents · Purview Audit · Agent 365 · Logic Apps (tiered automated response) · KQL P05-Q8 agentic ransomware chain detection |
 | 06 Regulatory Compliance | Microsoft Purview Compliance Manager (EU AI Act + ISO 42001 + NIST AI RMF 1.0 templates) · Purview Audit (immutable record keeping) · Copilot Studio disclosure settings (Art. 13) |
-| 07 Vendor & Third-Party AI Risk | Power Platform DLP (block unapproved connectors) · Microsoft 365 admin center Agents and Tools (MCP server allow/block) · AgentsInfo.McpServers + CloudAppEvents ExecuteToolByGateway (audit) |
+| 07 Vendor & Third-Party AI Risk | Power Platform DLP (block unapproved connectors) · Microsoft 365 admin center Agents and Tools (MCP server allow/block) · AgentsInfo.McpServers + CloudAppEvents ExecuteToolByGateway (audit) · Azure AI Foundry model layer controls (prompt shields, content filters, groundedness detection) · Open source AI platform hardening (Langflow, Flowise, n8n) |
 
 ---
 
@@ -233,8 +233,8 @@ The [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-t
 | OWASP AST | Risk | Severity | This Framework |
 |-----------|------|----------|----------------|
 | AST01 — Malicious Skills | Hidden payloads in skill definitions; credential stealers; SOUL.md/MEMORY.md backdoors | Critical | Track B Module-07 Domain D (MCP server audit); KQL P02 governance gap detection |
-| AST02 — Supply Chain Compromise | Registry flooding; dependency confusion; config file hijacking (.claude/settings.json hooks → RCE) | Critical | Track B Module-07 (vendor risk 20-question checklist Domain D); Track C Module-06 (red team perspective) |
-| AST03 — Over-Privileged Skills | LPCI (Logic-layer Prompt Control Injection) — injected instructions treated as operator-level commands; arXiv:2507.10457 | High | KQL P05-Q7 (LPCI detection); Track B/C Module-03 Least Agency; Entra Agent ID scoped permissions |
+| AST02 — Supply Chain Compromise | Registry flooding; dependency confusion; config file hijacking (.claude/settings.json hooks → RCE); open source AI platform RCE (Langflow CVE-2025-3248) | Critical | Track B Module-07 (vendor risk 20-question checklist Domain D + open source platform row); Track C Module-06 Attack 6 (JadePuffer chain) |
+| AST03 — Over-Privileged Skills | LPCI (Logic-layer Prompt Control Injection) — injected instructions treated as operator-level commands; arXiv:2507.10457 | High | KQL P05-Q7 (LPCI detection); KQL P05-Q8 (agentic ransomware chain); Track B/C Module-03 Least Agency; Entra Agent ID scoped permissions |
 | AST04 — Insecure Metadata | YAML deserialization attacks; brand impersonation; ASCII smuggling; zero-width Unicode in skill definitions | High | Track B Module-07 Domain D-Q4 (MCP server auditability); skills/SCHEMA.md security manifest fields |
 | AST05 — Untrusted External Instructions | External URL references becoming instruction sources; rug-pull; bait-and-switch skill behavior | High | Track C Module-06 (attacker perspective: XPIA patterns); KQL P05-Q1 (jailbreak/instruction override) |
 | AST06 — Weak Isolation | Host-mode execution without sandbox; 135,000+ exposed agent instances (SecurityScorecard Feb 2026) | High | Track B Module-07 Domain D-Q2 (execution boundary); Track C Module-03 (network isolation) |
@@ -250,10 +250,11 @@ The [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-t
 | Domain | Vectors |
 |--------|---------|
 | 01 | Shadow AI · Identity exposure · Data exposure · Local AI agents without endpoint connector · Third-party agents (ISV plugins, MCP servers) |
-| 02 | No technical owner · Makers without controls · No lifecycle · Graph drift · Multi-agent trust boundaries · Unsafe agent autonomy (no tiered autonomy model) |
-| 03 | CA inherited from users · Over-permissioned agents · Uncontrolled OAuth consent · Identity laundering · Model extraction via API |
-| 04 | Prompt injection · Oversharing · API exfiltration · Corpus poisoning (SharePoint) · Model supply chain poisoning · Memory/session poisoning · Membership inference (privacy without exfiltration) |
-| 05 | Jailbreak attempts · Agent anomaly · Structural false negatives · Evasion at inference boundary · Goal hijacking (sustained objective drift) · Capability/architecture disclosure |
+| 02 | No technical owner · Makers without controls · No lifecycle · Graph drift · Multi-agent trust boundaries · Unsafe agent autonomy (no tiered autonomy model) · Control plane collapsed into reasoning path (description laundering / rubber-stamp approval) |
+| 03 | CA inherited from users · Over-permissioned agents · Uncontrolled OAuth consent · Identity laundering · Model extraction via API · Token exfiltration from non-managed-identity agent environments · Internet-exposed AI dev platforms (Langflow CVE-2025-3248 class) |
+| 04 | Prompt injection · Oversharing · API exfiltration · Corpus poisoning (SharePoint) · Model supply chain poisoning · Memory/session poisoning · Membership inference (privacy without exfiltration) · Context gap (agent acting on stale, misrouted, or wrong data at machine speed) |
+| 05 | Jailbreak attempts · Agent anomaly · Structural false negatives · Evasion at inference boundary · Goal hijacking (sustained objective drift) · Capability/architecture disclosure · LPCI via tool responses · Agentic ransomware chain (JadePuffer: autonomous multi-stage, adaptive, no human pause) |
+| 07 | MCP server tool injection · Credential exposure via tool return values · Silent remote tool updates · Open source AI platform RCE · Model layer risks (prompt logging, training data use, no red team documentation) · Foundry model layer misconfiguration (no content filters, no prompt shields) |
 
 ---
 
@@ -312,3 +313,8 @@ MIT License. See [LICENSE](./LICENSE) for details.
 - [Red Teaming AI — Attacking & Defending Intelligent Systems](https://www.apress.com/9798868817328) (Philip A. Dursey, 2025) — model extraction, membership inference, and AI red teaming methodology
 - [AI Strategy and Security](https://link.springer.com/book/9798868817328) (Donnie W. Wendt, 2025) — securing agentic AI, supply chain, and drift analysis
 - [agentskills.io — Agent skill format reference](https://agentskills.io)
+- [JadePuffer: The Dawn of Agentic AI Ransomware](https://thecyberthrone.in/2026/07/06/jadepuffer-the-dawn-of-agentic-ai-ransomware/) (Sysdig / TheCyberThrone, 2026) — first publicly documented autonomous AI agent ransomware campaign; CVE-2025-3248 entry point; adaptive decision making at each stage
+- [AI Agents Need a Control Plane Before They Touch Critical Systems](https://pub.towardsai.net/ai-agents-need-a-control-plane-before-they-touch-critical-systems-48397e1d254d) (Manoj Verma, 2026) — CAGE model; control plane independence from reasoning path; action classification matrix
+- [Securing Agentic Identity](https://www.codon.org.uk/~mjg59/blog/p/securing-agentic-identity/) (Matthew Garrett, 2026) — placeholder token/proxy architecture; mTLS binding via SPIFFE/SVID; RFC 8705 for non-managed-identity agent environments
+- [Agentic AI Security: Context Is the New Attack Surface](https://www.kiteworks.com/cybersecurity-risk-management/agentic-ai-context-attack-surface/) (Kiteworks, 2026) — context gap as operational failure mode; ABAC for agents; data minimization at data-to-agent boundary
+- [Gartner — AI Agent Security Architecture: The Structure](https://www.gartner.com/document/8101397) (Gartner, 2026) — layered architecture: IAM, Model, Infrastructure, Data, Application + WIM/WAM/AMP/CNAPP/DSPM/AppSec + native agent control plane + AI security platform
