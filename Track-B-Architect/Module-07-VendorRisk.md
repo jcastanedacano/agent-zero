@@ -52,6 +52,8 @@ By the end of this module, participants will be able to evaluate third-party AI 
    - **EU AI Act Art. 25:** Importers and distributors of high-risk AI systems must verify supplier compliance documentation. For operators (organizations using AI): contractual obligations must require providers to maintain compliance.
    - **NIST AI RMF GOVERN-5.1:** Organizational policies require AI risk management of third-party entities.
    - **ISO 42001 Clause 8.6:** Externally provided AI systems and components must be controlled. Documented requirements must be communicated to external providers.
+   - **CIS Controls v8.1 Control 2 (Software Asset Inventory):** Agent software stacks — orchestration frameworks, MCP clients/servers, SDKs, LLM clients, tool dependencies — are software assets requiring versioned inventory. A change in a SaaS model or a local library dependency can alter agent decision-making; rigorous tracking of these components is required (CIS Controls AI Agent Companion Guide, 2026, Control 2 — Agent Applicability).
+   - **CIS Controls v8.1 Control 15 (Service Provider Management):** Every external MCP server, foundation model API, and AI-as-a-service provider is a service provider under CIS 15. The 20-question framework in this module (Domains A–E) satisfies the structured assessment requirement. CIS 15.2 requires establishing a process to monitor and validate service provider security controls — map Domain D questions to this ongoing monitoring obligation.
 
 ---
 

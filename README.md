@@ -2,7 +2,7 @@
 
 **Practical security workshops for AI agents on the Microsoft stack.**
 
-> A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
+> A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fmicrosoft-agentic-security-labs%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
@@ -245,6 +245,27 @@ The [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-t
 
 ---
 
+## CIS Controls v8.1 — AI Agent Coverage Map
+
+The [CIS Controls AI Agent Companion Guide](https://www.cisecurity.org/controls/ai-agent-companion-guide) (CIS, 2026) interprets each CIS Control through the lens of autonomous agent systems: their runtimes, orchestration logic, tool interfaces, memory stores, and retrieval pipelines. The table below maps the Controls most relevant to agentic environments to this framework's content.
+
+| CIS Control | Agent Interpretation | This Framework |
+|-------------|---------------------|----------------|
+| **01 — Inventory and Control of Enterprise Assets** | Agent runtimes, orchestration components, memory stores, and retrieval pipelines are enterprise assets requiring inventory and lifecycle management — including dynamically instantiated cloud workloads and serverless functions | Track B/C Module-01 (Discover); KQL P01 (agent inventory queries); Agent 365 Registry + Defender AI Inventory |
+| **02 — Inventory and Control of Software Assets** | Agent software stacks are composite assets: orchestration frameworks, MCP clients/servers, SDKs, LLM clients, and tool dependencies must be versioned and tracked — a change in a SaaS model or local library can alter agent decision-making | Track B Module-07 point 3 (open source AI platform hardening); KQL P01-Q2 (shadow AI / ungoverned agent detection) |
+| **03 — Data Protection** | Agents retrieve, process, and act on sensitive data autonomously. Context window content, retrieval outputs, and intermediate reasoning steps constitute data in motion that requires classification, minimization, and DLP controls | Track B Module-04 (Protect Data); KQL P04 (exfiltration detection); Purview DLP + sensitivity labels |
+| **05 — Account Management** | Agent identities are accounts: they must be provisioned with scoped permissions, reviewed periodically, and decommissioned with token revocation. "Abandoned" agents with active permissions are accounts that can be taken over | Track B Module-02 point 4 (lifecycle); Track B Module-03 (Entra Agent ID + CA for agents); KQL P02 (governance gaps) |
+| **06 — Access Control Management** | Least privilege for agents requires scoping at the OAuth scope level, not only the role level. PIM just-in-time limits the exposure window; Blueprint-level CA scales without per-instance configuration | Track B Module-03 (Secure Access); KQL P03 (access anomalies); Entra CA `clientApplications.includeAgentIdServicePrincipals` |
+| **08 — Audit Log Management** | Agent decisions, tool calls, memory updates, and retrieval operations must be logged with enough fidelity to reconstruct the full agent-loop chain after an incident — standard event logs are insufficient without agent-context correlation | KQL Library (all 5 query files); Track C Module-05 (Detect & Respond); Purview Audit; CloudAppEvents `ExecuteToolByGateway` |
+| **12 — Network Infrastructure Management** | Agents running on internet-exposed infrastructure (open source AI platforms, self-hosted MCP servers) extend the network attack surface. CVE-2025-3248 class vulnerabilities require WAF and network segmentation at the AI platform layer | Track B Module-03 point 6 (CNAPP for Azure-hosted agents); Track B Module-07 point 3 (open source AI platform hardening); Defender for Cloud Containers |
+| **15 — Service Provider Management** | Every external MCP server, foundation model API, and AI-as-a-service provider is a service provider requiring structured assessment. Silent remote tool updates and prompt-logging policies are AI-specific risks not covered by standard vendor questionnaires | Track B Module-07 (20-question vendor evaluation framework, 5 domains); KQL P01-Q6 (MCP server risk scoring) |
+| **16 — Application Software Security** | MCP server tool definitions, skill YAML manifests, and orchestration logic are application software that must be reviewed for injection risks, deserialization vulnerabilities, and supply chain integrity | Track B Module-07 Domain D (MCP server-specific questions); skills/SCHEMA.md (security manifest: `content_hash`, `scan_status`, `signature`) |
+| **18 — Penetration Testing** | Agentic systems require adversarial testing distinct from traditional pen tests: multi-stage chain simulation, LPCI via tool responses, credential exfiltration through agent context, and autonomous ransomware chain (JadePuffer pattern) must be part of the scope | Track C Module-06 (6 attacks + red team perspective); KQL P05-Q7/Q8 (LPCI + agentic ransomware detection) |
+
+**Implementation Groups:** The CIS Companion Guide uses the IG1/IG2/IG3 prioritization model. Map to this framework: Track A exercises (IG1 baseline understanding) → Track B Architect labs (IG2 enterprise controls) → Track C SOC engineer detection (IG3 advanced detection and response).
+
+---
+
 ## Risk Vectors Covered
 
 | Domain | Vectors |
@@ -318,3 +339,4 @@ MIT License. See [LICENSE](./LICENSE) for details.
 - [Securing Agentic Identity](https://www.codon.org.uk/~mjg59/blog/p/securing-agentic-identity/) (Matthew Garrett, 2026) — placeholder token/proxy architecture; mTLS binding via SPIFFE/SVID; RFC 8705 for non-managed-identity agent environments
 - [Agentic AI Security: Context Is the New Attack Surface](https://www.kiteworks.com/cybersecurity-risk-management/agentic-ai-context-attack-surface/) (Kiteworks, 2026) — context gap as operational failure mode; ABAC for agents; data minimization at data-to-agent boundary
 - [Gartner — AI Agent Security Architecture: The Structure](https://www.gartner.com/document/8101397) (Gartner, 2026) — layered architecture: IAM, Model, Infrastructure, Data, Application + WIM/WAM/AMP/CNAPP/DSPM/AppSec + native agent control plane + AI security platform
+- [CIS Controls AI Agent Companion Guide](https://www.cisecurity.org/controls/ai-agent-companion-guide) (CIS, 2026; principal author: Jonathan Sander, Astrix Security) — maps CIS Controls v8.1 to agentic systems; introduces agent-specific asset taxonomy, kill switch guidance, and implementation group (IG1/IG2/IG3) prioritization for agent security programs
