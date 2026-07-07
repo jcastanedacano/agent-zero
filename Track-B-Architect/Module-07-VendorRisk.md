@@ -31,9 +31,13 @@ By the end of this module, participants will be able to evaluate third-party AI 
 
    > **Microsoft MCP certification path:** Microsoft requires third-party MCP servers to undergo certification through the Power Platform connector certification program before being made available to all users. Only certified MCP servers appear in the Microsoft 365 admin center **Agents and Tools** section, where IT admins can allow or block them at the tenant level. Uncertified MCP servers connected directly to agents bypass this control. Reference: [Microsoft MCP server certification](https://learn.microsoft.com/microsoft-copilot-studio/mcp-server-certification).
 
-3. **Model API risk — what you don't control:** When your agent calls an external model API (non-Microsoft), you don't control the model weights, the inference infrastructure, the logging policy, or the data retention. Key questions: Does the provider log your prompts? Does the provider use your data for training? Is the model's safety training documented? Has the model been independently red-teamed? For Microsoft environments: Azure OpenAI and Azure AI Foundry are the approved paths — external model APIs require explicit approval and security assessment.
+3. **Open source AI development platforms as attack surface:** Beyond commercial MCP servers and model APIs, organizations increasingly run open source AI agent platforms — Langflow, Flowise, n8n, Dify, LangGraph — often on internet-accessible infrastructure without hardening. CVE-2025-3248 (Langflow, unauthenticated RCE) demonstrated that AI development platforms left internet-exposed are high-value attack entry points: they provide direct code execution in an environment that already has credentials, model access, and data connections configured. The JadePuffer ransomware campaign (Sysdig, 2026) used this exact entry point to launch a fully autonomous multi-stage attack. Hardening requirements for open source AI platforms: disable unauthenticated endpoints, require MFA for all administrative access, apply network segmentation (no public internet exposure without WAF), treat them as critical infrastructure in the vulnerability management program, and include them in the vendor assessment process even if self-hosted. Add a row to the AI-as-a-service vendor categories table for this risk tier.
 
-4. **AI-as-a-service vendor categories and their risk profiles:**
+3a. **Model layer controls for Azure AI Foundry deployments:** When agents use models deployed in Azure AI Foundry, the model layer itself has security controls independent of identity and network: (a) **Prompt shields** — detect jailbreak attempts and indirect prompt injection before the model processes the input; (b) **Content filters** — block harmful outputs across hate, violence, self-harm, and sexual categories with configurable severity thresholds; (c) **Groundedness detection** — flag model responses that are not grounded in the provided context (hallucination detection); (d) **Protected material detection** — identify model outputs that reproduce copyrighted content. These are configured per deployment in Foundry → Safety + Security → Content filters. For vendor assessment: require documentation of equivalent controls from any external model provider (Domain B of the 20-question checklist).
+
+4. **Model API risk — what you don't control:** When your agent calls an external model API (non-Microsoft), you don't control the model weights, the inference infrastructure, the logging policy, or the data retention. Key questions: Does the provider log your prompts? Does the provider use your data for training? Is the model's safety training documented? Has the model been independently red-teamed? For Microsoft environments: Azure OpenAI and Azure AI Foundry are the approved paths — external model APIs require explicit approval and security assessment.
+
+5. **AI-as-a-service vendor categories and their risk profiles:**
 
    | Vendor type | Examples | Risk profile | Key concern |
    |------------|---------|-------------|------------|
@@ -42,8 +46,9 @@ By the end of this module, participants will be able to evaluate third-party AI 
    | AI plugin provider | Copilot plugins, Teams apps | Medium — runs in M365 context | Permission scope, data access |
    | AI-enhanced SaaS | Salesforce AI, ServiceNow AI | Medium — embedded AI in existing tool | Existing vendor review + AI addendum |
    | On-prem / self-hosted | Ollama, LM Studio | Low cloud risk — endpoint risk instead | Endpoint security, no audit trail |
+   | **Open source AI platform** | **Langflow, Flowise, n8n, Dify** | **Critical — RCE if internet-exposed** | **CVE-2025-3248 class vulns, unauthenticated access** |
 
-5. **Regulatory requirements for third-party AI:**
+6. **Regulatory requirements for third-party AI:**
    - **EU AI Act Art. 25:** Importers and distributors of high-risk AI systems must verify supplier compliance documentation. For operators (organizations using AI): contractual obligations must require providers to maintain compliance.
    - **NIST AI RMF GOVERN-5.1:** Organizational policies require AI risk management of third-party entities.
    - **ISO 42001 Clause 8.6:** Externally provided AI systems and components must be controlled. Documented requirements must be communicated to external providers.

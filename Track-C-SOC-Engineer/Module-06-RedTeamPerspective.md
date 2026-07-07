@@ -386,6 +386,66 @@ Add to your [Incident Response Playbook Template](./Templates/Incident-Response-
 
 ---
 
+---
+
+## Attack 6 — JadePuffer: Agentic Ransomware Chain Simulation
+
+**ATLAS techniques:** `AML.T0051` (prompt injection for initial access) + `AML.T0040` (credential and environment enumeration)
+**Expected detection:** P05-Q8 (agentic ransomware chain detection)
+
+> **Background:** JadePuffer (Sysdig, 2026) is the first publicly documented ransomware campaign where an autonomous AI agent managed the complete intrusion lifecycle — from initial access through encryption — with adaptive decision making at each stage. When a command failed, the agent re-evaluated, generated alternatives, and continued. This is the key differentiator from human-operated ransomware: no pause, no fatigue, no fixed playbook. The entry point was CVE-2025-3248, an unauthenticated RCE vulnerability in Langflow, an AI development platform left internet-accessible without hardening.
+
+**The 7-stage attack chain to threat model:**
+
+| Stage | Activity | Detection signal |
+|-------|----------|-----------------|
+| 1 — Initial Access | Exploit internet-exposed AI platform (Langflow CVE-2025-3248) | Not applicable (external) |
+| 2 — Environment Discovery | Enumerate hosts, services, cloud assets, network relationships | P05-Q8 DiscoveryActions |
+| 3 — Credential Collection | Search for API tokens, env vars, config files, secrets in apps | P05-Q8 CredentialActions |
+| 4 — Lateral Movement | Use acquired credentials to pivot to additional systems | P05-Q8 LateralActions |
+| 5 — Privilege Escalation | Seek elevated permissions across enterprise infrastructure | P03-Q2 (privilege escalation) |
+| 6 — Adaptive Decision Making | Recover from failures: re-evaluate, generate alternatives, continue | P05-Q8 (compressed chain pattern) |
+| 7 — Encryption + Ransom | Initiate bulk encryption, deploy ransom notes | P05-Q8 EncryptionSignals |
+
+**Simulation steps (demo tenant only):**
+
+1. Use the Agent Builder bypass from Attack 2 to create an ungoverned agent with broad permissions
+2. Simulate Stage 2 (discovery): have the agent enumerate SharePoint sites, user lists, and connected services via legitimate tool calls
+3. Simulate Stage 3 (credential access): query Key Vault (read), environment variables via Foundry, and any API keys in configuration documents
+4. Simulate Stage 4 (lateral movement): attempt to add the agent to an additional group or role
+5. Simulate Stage 7 (bulk file operation): download or copy 20+ files in a single session from different sites
+
+**Detection verification:**
+```kql
+// P05-Q8 — confirm the chain correlation fires
+// Check if 3+ stages appeared from the same AgentId within 60 minutes
+CloudAppEvents
+| where TimeGenerated > ago(1h)
+| extend AgentId = tostring(RawEventData["AgentId"])
+| where isnotempty(AgentId)
+| summarize
+    ActionTypes = make_set(ActionType),
+    ActionCount = count(),
+    UniqueActionTypes = dcount(ActionType)
+    by AgentId, AccountDisplayName
+| where UniqueActionTypes >= 5
+| project AgentId, AccountDisplayName, ActionCount, UniqueActionTypes, ActionTypes,
+    RiskNote = "Agent executing high action-type diversity in 1h — multi-stage chain candidate"
+```
+
+**Document:**
+- Did P05-Q8 fire before Stage 7 (encryption) was reached?
+- What was the minimum number of stages required to trigger the alert?
+- If the agent operated at lower volume per stage to evade detection, at what rate would it become invisible?
+- What is the difference in time-to-detect between a human-operated attack (intermittent) and this agent-operated chain (continuous)?
+
+**Defensive recommendations specific to agentic ransomware:**
+- Patch and harden internet-facing AI development platforms (Langflow, Flowise, n8n, Dify) with the same rigor as production systems — MFA, network segmentation, no public exposure without WAF
+- Monitor for compressed multi-stage chains from single agent identities — the signal is time density, not individual action severity
+- Treat AI development platforms as critical infrastructure attack surface in your asset inventory
+
+---
+
 ## Track C Complete
 
 You have now built all six sections of the **Agentic Incident Response Playbook**:

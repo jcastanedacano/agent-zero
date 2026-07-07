@@ -282,3 +282,93 @@ ToolResponseEvents
         "SUSPECTED: LPCI pattern in tool response — monitor for subsequent escalation"
     )
 | sort by LpciScore desc, EscalationConfirmed desc, TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q8: Agentic Ransomware Chain Detection — JadePuffer Pattern
+// Use: Detect autonomous multi-stage attack chain executed by a single agent
+//      identity within a compressed time window: environment discovery →
+//      credential access → lateral movement → bulk file operations.
+//      Distinguishes AI-operated ransomware (adaptive, continuous, no human pause)
+//      from human-operated ransomware (intermittent, variable command patterns).
+// Reference: OWASP AST03 | JadePuffer (Sysdig, 2026) | MITRE ATLAS AML.T0051
+// Recommended: Analytics Rule | Frequency: 15m | Lookback: 60m | Severity: Critical
+// -----------------------------------------------------------------------------
+let WindowMinutes = 60;
+let DiscoveryActions = dynamic([
+    "AgentInteraction", "FileAccessed", "SearchQueryPerformed",
+    "DirectoryQueried", "ServiceEnumerated"
+]);
+let CredentialActions = dynamic([
+    "CredentialAccessed", "SecretRead", "KeyVaultSecretAccessed",
+    "TokenRequested", "ApiKeyAccessed", "EnvironmentVariableRead"
+]);
+let LateralActions = dynamic([
+    "InviteExternalUser", "GroupMemberAdded", "RoleAssigned",
+    "ServicePrincipalAdded", "ApplicationImpersonation"
+]);
+let EncryptionSignals = dynamic([
+    "BulkFileDownload", "FilePermanentlyDeleted", "FileDeleted",
+    "BulkFileCopy", "SiteCollectionAdminAdded", "FileRenamed"
+]);
+// Stage 1: identify agent identities with discovery activity
+let AgentsWithDiscovery = CloudAppEvents
+    | where TimeGenerated > ago(WindowMinutes * 1m)
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | where isnotempty(AgentId)
+    | where ActionType in (DiscoveryActions)
+    | summarize DiscoveryCount = count(), DiscoveryStart = min(TimeGenerated) by AgentId, AccountDisplayName;
+// Stage 2: same agent identity with credential access
+let AgentsWithCredAccess = CloudAppEvents
+    | where TimeGenerated > ago(WindowMinutes * 1m)
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | where isnotempty(AgentId)
+    | where ActionType in (CredentialActions)
+    | summarize CredAccessCount = count(), CredAccessTime = min(TimeGenerated) by AgentId;
+// Stage 3: lateral movement
+let AgentsWithLateral = CloudAppEvents
+    | where TimeGenerated > ago(WindowMinutes * 1m)
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | where isnotempty(AgentId)
+    | where ActionType in (LateralActions)
+    | summarize LateralCount = count(), LateralTime = min(TimeGenerated) by AgentId;
+// Stage 4: encryption/destruction signals
+let AgentsWithEncryption = CloudAppEvents
+    | where TimeGenerated > ago(WindowMinutes * 1m)
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | where isnotempty(AgentId)
+    | where ActionType in (EncryptionSignals)
+    | summarize EncryptionCount = count(), EncryptionTime = min(TimeGenerated) by AgentId;
+// Correlate all 4 stages — agent must appear in at least 3 for alert
+AgentsWithDiscovery
+| join kind=leftouter AgentsWithCredAccess on AgentId
+| join kind=leftouter AgentsWithLateral on AgentId
+| join kind=leftouter AgentsWithEncryption on AgentId
+| extend StagesPresent = toint(
+    (DiscoveryCount > 0) +
+    (CredAccessCount > 0) +
+    (LateralCount > 0) +
+    (EncryptionCount > 0)
+)
+| where StagesPresent >= 3
+| extend ChainDurationMinutes = iff(
+    isnotempty(EncryptionTime),
+    datetime_diff('minute', EncryptionTime, DiscoveryStart),
+    datetime_diff('minute', now(), DiscoveryStart)
+)
+| project
+    DiscoveryStart,
+    AccountDisplayName,
+    AgentId,
+    StagesPresent,
+    DiscoveryCount,
+    CredAccessCount = coalesce(CredAccessCount, 0),
+    LateralCount = coalesce(LateralCount, 0),
+    EncryptionCount = coalesce(EncryptionCount, 0),
+    ChainDurationMinutes,
+    RiskNote = case(
+        StagesPresent == 4, "CRITICAL: All 4 ransomware chain stages detected from single agent identity — agentic ransomware pattern confirmed",
+        StagesPresent == 3, "HIGH: 3 of 4 ransomware chain stages detected — potential agentic ransomware in progress",
+        "MEDIUM: Partial chain detected — monitor for stage completion"
+    )
+| sort by StagesPresent desc, ChainDurationMinutes asc
