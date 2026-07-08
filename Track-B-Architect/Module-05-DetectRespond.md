@@ -26,6 +26,8 @@ By the end of this module, participants will be able to design a detection and r
 
 4. **The Sentinel native MCP server as an architectural differentiator:** Sentinel's MCP server allows a security agent (Security Copilot or custom) to query incident status, run KQL queries, and update investigation state directly from the conversation context — without leaving the triage interface. This is the bridge between agentic detection and agentic response.
 
+5. **The compromised monitoring agent problem (MAESTRO Layer 5):** The CSA MAESTRO framework identifies a class of threat specific to Layer 5 (Evaluation & Observability): the monitoring agent itself becomes a target. When Security Copilot or a custom triage agent ingests alert context, that context can contain adversarially crafted content — LPCI via tool responses (KQL P05-Q7) is the most concrete example. An agent that processes alert summaries containing injected instructions may suppress, misclassify, or modify incident records. The control is the same as for all agent safety: the monitoring agent's actions must be evaluated by a policy layer independent of the content it just ingested. For Security Copilot specifically: validate that automated actions (incident closure, severity downgrade) require a second confirmation step not driven by the same alert content that triggered the action. Reference: CSA MAESTRO (2025), Layer 5 — Compromised Monitoring Agents.
+
 ---
 
 **Exercise / Lab:**

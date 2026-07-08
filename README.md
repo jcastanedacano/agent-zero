@@ -2,7 +2,7 @@
 
 **Practical security workshops for AI agents on the Microsoft stack.**
 
-> A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
+> A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fmicrosoft-agentic-security-labs%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
@@ -245,6 +245,34 @@ The [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-t
 
 ---
 
+## MAESTRO — 7-Layer Agentic AI Threat Model Coverage Map
+
+[MAESTRO](https://cloudsecurityalliance.org/blog/2025/02/06/agentic-ai-threat-modeling-framework-maestro) (Multi-Agent Environment, Security, Threat, Risk & Outcome) is the Cloud Security Alliance's structured threat modeling framework for autonomous AI systems. Unlike OWASP (vulnerability taxonomy) or CIS Controls (control catalog), MAESTRO is a **threat modeling methodology**: it provides a 7-layer reference architecture and a 6-step analysis process for identifying how threats originate in one layer and propagate across others. It is the CSA equivalent of STRIDE/PASTA, purpose-built for agentic systems.
+
+The 7 layers, from infrastructure to ecosystem:
+
+| MAESTRO Layer | Threat Focus | This Framework |
+|---------------|-------------|----------------|
+| **L1 — Foundation Models** | Adversarial inputs, model theft via API (model extraction), training data backdoors, membership inference, denial-of-service via expensive inference | KQL P03-Q6 (model extraction detection); Track B/C Module-03 (rate limiting, Foundry controls); KQL P03-Q7/Q8 (membership inference + model inversion) |
+| **L2 — Data Operations** | RAG pipeline poisoning, vector store tampering, training data exfiltration, in-transit data modification, context injection via retrieval | Track B/C Module-04 (Protect Data); KQL P04 (exfiltration); context gap controls (ABAC, data minimization); Purview DLP on AI interactions |
+| **L3 — Agent Frameworks** | Supply chain backdoors in orchestration libraries (LangGraph, Flowise, n8n); MCP client injection; input validation flaws enabling code injection; compromised dependencies | Track B Module-07 point 3 (open source AI platform hardening, CVE-2025-3248); skills/SCHEMA.md (`content_hash`, `scan_status`); OWASP AST02/AST04 coverage |
+| **L4 — Deployment & Infrastructure** | Malicious container images; orchestration attacks (Kubernetes); IaC tampering; resource hijacking; internet-exposed AI platforms | Track B Module-03 point 6 (CNAPP — Defender for Cloud Containers); Track B Module-07 point 3 (network segmentation, WAF for AI platforms) |
+| **L5 — Evaluation & Observability** | Poisoned monitoring data hiding incidents; manipulated metrics; detection evasion (compressed attack chains); compromised monitoring agents receiving contaminated context | KQL P05-Q7 (LPCI detection via tool responses); KQL P05-Q8 (agentic ransomware chain — compressed time density signal); Track C Module-05 (Detect & Respond) |
+| **L6 — Security & Compliance** | Bias in AI security decision-making; poisoned threat detection agents; lack of explainability in security determinations; regulatory evasion | Track B Module-06 (Regulatory Frameworks); Track B Module-02 point 5 (CAGE model, independent control plane); Purview Compliance Manager |
+| **L7 — Agent Ecosystem** | Agent impersonation in marketplaces; goal manipulation via registry poisoning; malicious agents disguised as legitimate services; Sybil attacks with fake agent identities | Track B Module-07 (MCP server vendor assessment); Track B/C Module-01 (Discover — agent registry + shadow AI); KQL P01 (agent inventory + MCP server audit) |
+
+**Cross-layer threats MAESTRO explicitly calls out** — and where this framework covers them:
+
+| Cross-layer pattern | MAESTRO description | This framework |
+|--------------------|---------------------|----------------|
+| Supply chain → all layers | L3 compromise propagates downstream to L2 data and L7 ecosystem | Track C Module-06 Attack 6 (JadePuffer 7-stage chain); OWASP AST02; KQL P05-Q8 |
+| Compromised monitoring (L5→L6) | The monitoring agent itself becomes the attack vector when fed contaminated context | Track B Module-02 point 5 (CAGE: control plane independent of reasoning path); KQL P05-Q7 (LPCI in tool responses reaching Security Copilot) |
+| Lateral movement between layers | Privilege escalation from L4 (infra) to L3 (frameworks) to L7 (ecosystem) | Track C Module-06 (attacker perspective, lateral movement attack steps); MITRE ATLAS `AML.T0051` |
+
+**MAESTRO 6-step methodology** applied to this framework's lab environment: (1) decompose your demo tenant into MAESTRO's 7 layers — which layer does each Copilot Studio agent, MCP server, and Foundry deployment sit in? (2) run layer-specific KQL queries (P01–P05) to surface threats per layer; (3) trace cross-layer propagation paths using the JadePuffer chain as a concrete example; (4) evaluate risk using the P-series severity scores; (5) map mitigations to the Track B/C module controls; (6) deploy Sentinel analytics rules and monitor continuously.
+
+---
+
 ## CIS Controls v8.1 — AI Agent Coverage Map
 
 The [CIS Controls AI Agent Companion Guide](https://www.cisecurity.org/controls/ai-agent-companion-guide) (CIS, 2026) interprets each CIS Control through the lens of autonomous agent systems: their runtimes, orchestration logic, tool interfaces, memory stores, and retrieval pipelines. The table below maps the Controls most relevant to agentic environments to this framework's content.
@@ -340,3 +368,4 @@ MIT License. See [LICENSE](./LICENSE) for details.
 - [Agentic AI Security: Context Is the New Attack Surface](https://www.kiteworks.com/cybersecurity-risk-management/agentic-ai-context-attack-surface/) (Kiteworks, 2026) — context gap as operational failure mode; ABAC for agents; data minimization at data-to-agent boundary
 - [Gartner — AI Agent Security Architecture: The Structure](https://www.gartner.com/document/8101397) (Gartner, 2026) — layered architecture: IAM, Model, Infrastructure, Data, Application + WIM/WAM/AMP/CNAPP/DSPM/AppSec + native agent control plane + AI security platform
 - [CIS Controls AI Agent Companion Guide](https://www.cisecurity.org/controls/ai-agent-companion-guide) (CIS, 2026; principal author: Jonathan Sander, Astrix Security) — maps CIS Controls v8.1 to agentic systems; introduces agent-specific asset taxonomy, kill switch guidance, and implementation group (IG1/IG2/IG3) prioritization for agent security programs
+- [MAESTRO: Agentic AI Threat Modeling Framework](https://cloudsecurityalliance.org/blog/2025/02/06/agentic-ai-threat-modeling-framework-maestro) (Cloud Security Alliance, 2025) — 7-layer threat model (Foundation Models → Data Operations → Agent Frameworks → Deployment → Observability → Security → Ecosystem); 6-step analysis methodology; cross-layer lateral movement and supply chain propagation patterns; purpose-built for agentic systems as the CSA alternative to STRIDE/PASTA
