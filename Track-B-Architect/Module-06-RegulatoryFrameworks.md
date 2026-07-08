@@ -8,7 +8,7 @@
 
 ## Learning Objective
 
-By the end of this module, participants will be able to map Microsoft AI agent deployments against the three major regulatory frameworks (EU AI Act, NIST AI RMF, ISO 42001), identify compliance obligations that apply to their organization's agent deployments, and translate those obligations into concrete technical controls already available in the Microsoft security stack.
+By the end of this module, participants will be able to map Microsoft AI agent deployments against four regulatory frameworks (EU AI Act, DORA, NIST AI RMF, ISO 42001), identify compliance obligations that apply to their organization's agent deployments, and translate those obligations into concrete technical controls already available in the Microsoft security stack. Participants in regulated financial institutions will additionally be able to scope the action plan required by the ECB/SSM supervisory letter of 7 July 2026 (SSM-2026-0301).
 
 ---
 
@@ -16,7 +16,7 @@ By the end of this module, participants will be able to map Microsoft AI agent d
 
 | Time | Activity | Type |
 |------|----------|------|
-| 20 min | Three frameworks, one Microsoft stack: EU AI Act + NIST AI RMF + ISO 42001 | Presentation |
+| 20 min | Four frameworks, one Microsoft stack: EU AI Act + DORA + NIST AI RMF + ISO 42001 | Presentation |
 | 15 min | Mapping Microsoft controls to regulatory obligations | Presentation |
 | 45 min | Gap assessment: classify your agent deployments against each framework | Exercise |
 | 10 min | Prioritization and remediation roadmap draft | Discussion |
@@ -31,30 +31,56 @@ By the end of this module, participants will be able to map Microsoft AI agent d
 
 3. **ISO 42001 — AI Management System Standard (2023):** The first international standard for AI management systems. Structured like ISO 27001 but focused on AI risk. Key clauses: Clause 4 (organizational context — AI system inventory), Clause 6 (planning — AI risk assessment and treatment), Clause 8 (operation — AI impact assessment), Clause 9 (performance evaluation — monitoring and measurement), Clause 10 (improvement). Certification is possible; many enterprise customers will require it from AI service providers by 2027.
 
-4. **How the frameworks overlap and where they diverge:**
+4. **DORA — Digital Operational Resilience Act (Regulation EU 2022/2554):** Mandatory for all EU financial entities (banks, payment institutions, investment firms, insurance). DORA establishes binding requirements for ICT risk management, incident reporting, resilience testing, and third-party ICT provider oversight. AI-enabled threats do not introduce new DORA obligations but dramatically raise the stakes on existing ones: the ECB/SSM supervisory letter of **7 July 2026** (SSM-2026-0301, Claudia Buch) explicitly invokes DORA as the binding framework for its action plan requirement. Banks must submit a concrete AI-enabled threat response plan to their Joint Supervisory Team (JST) by **31 October 2026**. Key DORA articles for agent deployments: Art. 5 (ICT risk management governance — management body accountability), Art. 8 (ICT asset identification and classification — includes agent runtimes and MCP servers), Art. 9 (protection of ICT systems — least privilege, zero-trust for service accounts/APIs), Art. 10 (detection — monitoring of anomalous activities), Art. 11 (ICT response and recovery), Art. 28-30 (third-party ICT provider risk management — applies to every external model API and MCP server). **The Gap Assessment produced in Track B Modules 01–07 is the technical foundation for the ECB-required action plan.**
 
-   | Obligation | EU AI Act | NIST AI RMF | ISO 42001 |
-   |-----------|-----------|-------------|-----------|
-   | AI inventory | Article 9 | MAP-1.1 | Clause 4.3 |
-   | Risk assessment | Article 9 | MAP-2.1 / MEASURE-2.5 | Clause 6.1 |
-   | Human oversight | Article 14 | GOVERN-6.1 | Clause 8.4 |
-   | Transparency to users | Article 13 | MAP-1.6 | Clause 8.3 |
-   | Incident logging | Article 12 | MANAGE-2.4 | Clause 9.1 |
-   | Third-party risk | Article 25 | GOVERN-5.1 | Clause 8.6 |
+5. **How the frameworks overlap and where they diverge:**
 
-5. **Microsoft controls that satisfy regulatory obligations directly:**
+   | Obligation | EU AI Act | DORA | NIST AI RMF | ISO 42001 |
+   |-----------|-----------|------|-------------|-----------|
+   | AI / ICT inventory | Article 9 | Art. 8 | MAP-1.1 | Clause 4.3 |
+   | Risk assessment | Article 9 | Art. 6 | MAP-2.1 / MEASURE-2.5 | Clause 6.1 |
+   | Human oversight | Article 14 | Art. 5 (governance) | GOVERN-6.1 | Clause 8.4 |
+   | Transparency to users | Article 13 | — | MAP-1.6 | Clause 8.3 |
+   | Incident logging | Article 12 | Art. 10 / Art. 19 | MANAGE-2.4 | Clause 9.1 |
+   | Third-party risk | Article 25 | Art. 28-30 | GOVERN-5.1 | Clause 8.6 |
+   | Resilience testing | — | Art. 24-25 (TLPT) | MANAGE-4.1 | Clause 9.2 |
+
+6. **Microsoft controls that satisfy regulatory obligations directly:**
 
    | Obligation | Microsoft Control | Where configured |
    |-----------|-----------------|------------------|
-   | AI inventory (all frameworks) | Defender AI Agent Inventory + Agent 365 Registry | Defender XDR → AI Agents |
+   | AI / ICT inventory (all frameworks) | Defender AI Agent Inventory + Agent 365 Registry | Defender XDR → AI Agents |
    | Compliance assessment (EU AI Act, ISO 42001, NIST AI RMF) | **Microsoft Purview Compliance Manager** — premium templates for all 3 frameworks | Purview compliance portal → Compliance Manager |
-   | Human oversight (EU Act Art. 14, NIST GOVERN-6.1) | Copilot Studio approval flow + Tiered Autonomy | Module 02 of this track |
+   | Human oversight (EU Act Art. 14, DORA Art. 5, NIST GOVERN-6.1) | Copilot Studio approval flow + Tiered Autonomy | Module 02 of this track |
    | Transparency to users (EU Act Art. 13) | Copilot Studio — agent identity disclosure | Agent Builder settings |
-   | Incident logging (EU Act Art. 12, ISO 9.1) | Microsoft Purview Audit (immutable) | Purview compliance portal |
-   | Risk assessment documentation (ISO 6.1) | Gap Assessment Template (this repo) | Track B Templates |
-   | Third-party risk (EU Act Art. 25) | Power Platform DLP + MCP server audit (AgentsInfo.McpServers) | Module 07 of this track |
+   | Incident logging (EU Act Art. 12, DORA Art. 10/19, ISO 9.1) | Microsoft Purview Audit (immutable) | Purview compliance portal |
+   | Risk assessment documentation (ISO 6.1, DORA Art. 6) | Gap Assessment Template (this repo) — doubles as ECB action plan foundation | Track B Templates |
+   | Third-party risk (EU Act Art. 25, DORA Art. 28-30) | Power Platform DLP + MCP server audit (AgentsInfo.McpServers) | Module 07 of this track |
+   | Detection of anomalous ICT activity (DORA Art. 10) | KQL P01–P05 + Sentinel analytics rules + Defender XDR | Track C KQL Library + Module 05 |
+   | Resilience testing (DORA Art. 24-25 TLPT) | Track C Module 06 red team exercises (JadePuffer chain simulation) | Track C Module 06 |
 
    > **Key tool:** Microsoft Purview Compliance Manager has official premium templates for EU AI Act, ISO/IEC 42001:2023, and NIST AI RMF 1.0, applicable to M365 Copilot, Copilot Studio, Security Copilot, Azure AI Foundry, and ChatGPT Enterprise interactions. Use it as the starting point for any formal compliance assessment against these three frameworks.
+
+---
+
+## ECB/SSM Supervisory Letter — Action Plan Requirement for Financial Institutions
+
+> **Applies to:** Significant institutions supervised by the ECB under the Single Supervisory Mechanism (SSM). Similar requirements are emerging from national supervisors across the EU, UK (PRA/FCA), and international equivalents (FSOC, APRA).
+
+On **7 July 2026**, ECB Chair Claudia Buch issued supervisory letter **SSM-2026-0301** to the CEO of every significant institution, requiring:
+
+1. A comprehensive **action plan** addressing AI-enabled cybersecurity threats, submitted to the Joint Supervisory Team (JST) by **31 October 2026**
+2. The action plan must cover six focus areas (Annex 1 of the letter):
+   - **Attack surface protection**: ICT asset inventory including third-party software and open-source components; minimisation of internet-facing exposure — maps to **Module 01** (Discover) and **Module 07** (Vendor Risk)
+   - **Vulnerability and patch management at scale**: AI-accelerated vulnerability discovery compresses the exploitation window; AI-assisted scanning tools require governance before deployment — maps to **Module 07** point 3 (open source AI platform hardening, CVE-2025-3248)
+   - **Monitoring, detection, and AI-enabled defensive capabilities**: strengthened log monitoring, network traffic analysis, and AI-native detection tools — maps to **Module 05** (Detect & Respond) and **KQL Library P01–P05**
+   - **Governance, supply chain assurance, and awareness**: management body accountability; third-party ICT provider preparedness — maps to **Module 02** (Govern) and **Module 07** (Vendor Risk)
+   - **Defence-in-depth and zero-trust**: zero-trust for users, devices, applications, APIs, and **service accounts** — maps to **Module 03** (Secure Access, CA for agents as service accounts)
+   - **Operational resilience**: ransomware and high-speed attack scenario exercises — maps to **Track C Module 06** (JadePuffer chain simulation) and **KQL P05-Q8**
+
+**The Gap Assessment Template produced across Track B Modules 01–07 is the technical foundation for the ECB-required action plan.** Completing this track gives a bank a structured, evidence-based document ready for JST submission, with KQL-validated findings, control gaps, owners, and a 90-day remediation roadmap.
+
+The letter also references the **ESRB warning on systemic cyber risks stemming from frontier AI models** (published the same day) and notes that **post-quantum cryptography** will be addressed in a separate ECB letter.
 
 ---
 
@@ -144,6 +170,19 @@ Use this checklist as a pre-audit readiness assessment. Each item maps to a clau
 ## Lab Exercise — Classify Your Agent Deployments
 
 For each agent in your Agent 365 Registry (use P01-Q1 output from Module 01):
+
+**Step 0 — DORA scoping (financial institutions only):**
+```
+Is your organization a significant institution supervised by ECB/SSM?  ☐ Yes  ☐ No
+ECB action plan deadline: 31 October 2026
+JST contact: ________________
+Gap Assessment sections that map to action plan focus areas:
+  Attack surface (Module 01 + 07):     ☐ complete  ☐ gap
+  Detection (Module 05 + KQL P01-P05): ☐ complete  ☐ gap
+  Governance + supply chain (Module 02 + 07): ☐ complete  ☐ gap
+  Zero-trust / service accounts (Module 03): ☐ complete  ☐ gap
+  Resilience exercises (Track C Module 06):  ☐ complete  ☐ gap
+```
 
 **Step 1 — EU AI Act classification:**
 ```
