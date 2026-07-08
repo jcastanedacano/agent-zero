@@ -314,6 +314,70 @@ CloudAppEvents
 
 
 // -----------------------------------------------------------------------------
+// Q9: Risky Agent Identities — Identity Protection Risk Signals for Non-Human Identities
+// Use: Surface agent identities flagged as medium/high risk by Entra ID Protection
+//      Risk can derive from the agent's own anomalous actions or from sponsor account compromise
+//      Feed into CA review and sponsor notification workflow
+// Ref: https://learn.microsoft.com/en-us/entra/id-protection/concept-risky-agents
+// -----------------------------------------------------------------------------
+AuditLogs
+| where TimeGenerated > ago(7d)
+| where Category == "RiskyServicePrincipal" or Category == "ServicePrincipalRiskEvents"
+| extend RiskLevel        = tostring(AdditionalDetails[0].value)
+| extend RiskDetail       = tostring(AdditionalDetails[1].value)
+| extend AgentDisplayName = tostring(TargetResources[0].displayName)
+| extend AgentObjectId    = tostring(TargetResources[0].id)
+| where RiskLevel in ("medium", "high")
+| summarize
+    RiskEvents      = count(),
+    RiskDetails     = make_set(RiskDetail),
+    FirstFlagged    = min(TimeGenerated),
+    LastFlagged     = max(TimeGenerated)
+    by AgentDisplayName, AgentObjectId, RiskLevel
+| extend ActionRequired = iff(RiskLevel == "high",
+    "IMMEDIATE: block agent identity + notify sponsor + open incident",
+    "REVIEW: sponsor to confirm agent behavior + check access package scope")
+| sort by RiskLevel asc, RiskEvents desc
+| project
+    AgentDisplayName, AgentObjectId, RiskLevel, RiskEvents,
+    RiskDetails, FirstFlagged, LastFlagged, ActionRequired
+
+
+// -----------------------------------------------------------------------------
+// Q10: Orphaned Agent Identities — Sponsors Who Left the Organization
+// Use: Find agent identities whose sponsor's account is disabled or deleted
+//      Entra Lifecycle Workflows should auto-transfer to manager, but gaps occur
+//      when no manager is assigned or the workflow hasn't triggered yet
+// -----------------------------------------------------------------------------
+let DisabledOrDeletedUsers =
+    AuditLogs
+    | where TimeGenerated > ago(90d)
+    | where OperationName in ("Delete user", "Update user")
+    | extend UPN = tostring(TargetResources[0].userPrincipalName)
+    | extend AccountEnabled = tostring(
+        parse_json(tostring(TargetResources[0].modifiedProperties))
+        | where columnifexists("displayName","") == "AccountEnabled"
+        | project newValue)
+    | where OperationName == "Delete user" or AccountEnabled == "[false]"
+    | project DisabledUPN = UPN, DisabledAt = TimeGenerated;
+AgentsInfo
+| where Timestamp > ago(30d)
+| where LifecycleStatus != "Decommissioned"
+| extend OwnersStr = tostring(Owners)
+| mv-expand Owner = Owners
+| extend OwnerUPN = tostring(Owner)
+| join kind=inner DisabledOrDeletedUsers on $left.OwnerUPN == $right.DisabledUPN
+| project
+    AgentName       = Name,
+    Platform,
+    LifecycleStatus,
+    OrphanedSponsor = OwnerUPN,
+    SponsorDisabledAt = DisabledAt,
+    RiskNote        = "Agent sponsor disabled/deleted — verify Lifecycle Workflow transferred sponsorship to manager"
+| sort by SponsorDisabledAt desc
+
+
+// -----------------------------------------------------------------------------
 // Q5: PIM Activation Patterns for Agent Roles — Anomalous Elevation
 // Use: Detect unusual PIM activation patterns for agent-associated privileged roles
 // -----------------------------------------------------------------------------
