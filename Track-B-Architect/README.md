@@ -58,7 +58,7 @@ Use the [Gap Assessment Template](./Templates/Gap-Assessment-Template.md) to doc
 
 Deploy the Sentinel workspace with demo data before the session starts:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fmicrosoft-agentic-security-labs%2Fmain%2FARM-Templates%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fagent-zero%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
 → See [ARM Templates README](../ARM-Templates/README.md) for parameter details and estimated cost.
 

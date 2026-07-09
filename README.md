@@ -4,7 +4,7 @@
 
 > A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026).
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fmicrosoft-agentic-security-labs%2Fmain%2FARM-Templates%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fagent-zero%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
 ---
 
@@ -39,7 +39,7 @@ Three parallel tracks — pick the one that fits your role:
 ## Repository Structure
 
 ```
-microsoft-agentic-security-labs/
+agent-zero/
 ├── Track-A-Executive/               ← 4h executive track (decision exercises, no lab access)
 │   ├── README.md
 │   ├── Module-01-Discover.md
@@ -107,7 +107,7 @@ microsoft-agentic-security-labs/
 # Option 2 — Azure CLI
 az deployment group create \
   --resource-group <your-rg> \
-  --template-uri https://raw.githubusercontent.com/jcastanedacano/microsoft-agentic-security-labs/main/ARM-Templates/azuredeploy.json \
+  --template-uri https://raw.githubusercontent.com/jcastanedacano/agent-zero/main/ARM-Templates/azuredeploy.json \
   --parameters workspaceName=agentic-security-lab
 ```
 
