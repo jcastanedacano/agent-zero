@@ -24,7 +24,9 @@ By the end of this module, participants will be able to evaluate the data exfilt
 
 3. **Applicable Microsoft controls:** Purview DLP can be configured to detect sensitive data in AI agent interactions (prompts and responses), not just in emails and documents. Sensitivity labels applied to SharePoint sites restrict what the agent can index. SharePoint Advanced Management audits and remediates oversharing at the site and site collection level. Insider Risk Management detects exfiltration patterns by volume and data type.
 
-4. **Remediation order matters:** Enabling agent retrieval on a SharePoint site before applying sensitivity labels and remediating ACL errors creates an active exposure window. The correct order is: label → audit ACLs → enable retrieval.
+4. **The exfiltration trifecta — when risk becomes real:** Data exfiltration through an agent requires three conditions to coexist simultaneously: (1) **attacker-controlled data reaches the agent** (via a poisoned document, an injected tool response, or a manipulated email the agent reads); (2) **the agent has access to sensitive information** (SharePoint sites with confidential content, Key Vault secrets, email inboxes); (3) **the agent has a channel to send data externally** (email tool, HTTP connector, MCP server with outbound capability). When all three are present, exfiltration is viable regardless of other controls. The executive decision framework: assess each agent deployment against all three conditions. An agent that meets only two of the three is significantly safer — removing any one leg collapses the risk. Purview DLP and SharePoint sensitivity labels address leg 2 (limit accessible data); CA policies and APIM allow-lists address leg 3 (restrict outbound channels); Prompt Shield and input validation address leg 1 (filter attacker-controlled content). Reference: OWASP AI Exchange — Agentic AI, "Lethal Trifecta."
+
+5. **Remediation order matters:** Enabling agent retrieval on a SharePoint site before applying sensitivity labels and remediating ACL errors creates an active exposure window. The correct order is: label → audit ACLs → enable retrieval.
 
 ---
 

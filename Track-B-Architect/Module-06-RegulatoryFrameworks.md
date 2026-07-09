@@ -124,6 +124,28 @@ for a human?
 
 ---
 
+## OWASP AI Exchange — GUARD Model Mapping
+
+The OWASP AI Exchange (owaspai.org) is the most comprehensive open-source technical reference for AI security, feeding directly into ISO/IEC 27090, ISO/IEC 27091, and the EU AI Act. Its **GUARD operational model** (Govern, Understand, Adapt, Reduce, Demonstrate) is a practitioner framework complementary to NIST AI RMF — where NIST describes what to do, GUARD describes how an organization operationalizes it. The table below maps GUARD to Agent Zero controls and to NIST AI RMF functions.
+
+| GUARD Step | What it means | Agent Zero implementation | NIST AI RMF mapping |
+|-----------|--------------|--------------------------|---------------------|
+| **Govern** | Establish AI program oversight, policies, roles, compliance checking, security education | Track B Module 02 (governance model, Entra Agent ID ownership, lifecycle policy) + Track A all modules (executive decision framework) | GOVERN-1.1, GOVERN-6.1 |
+| **Understand** | Threat model per use case, identify applicable threats via decision tree, distinguish organizational vs. supplier responsibilities | Track B Module 01 (agent discovery) + Gap Assessment Template (Domain risk scores) + MAESTRO 7-layer analysis | MAP-1.1, MAP-2.1 |
+| **Adapt** | Extend existing security programs to include AI-specific threats, integrate AI security testing, enhance supply chain management | Track B Modules 03-07 (CA for agents, DLP, detection, vendor risk) extending existing IAM/DLP/SOC programs | MAP-1.6, GOVERN-5.1 |
+| **Reduce** | Minimize sensitive data exposure, limit unwanted model behavior impact, manage privileges, apply human oversight | Purview DLP + SharePoint AM (data) + Tiered Autonomy + Logic App revocation (behavior) + APIM allow-list (channels) | MANAGE-2.4, MANAGE-4.1 |
+| **Demonstrate** | Provide transparency through testing, document risk assessments, show compliance evidence, communicate control effectiveness | Gap Assessment Template (evidence base) + KQL P01-P05 (measurable detection coverage) + Purview Compliance Manager templates | MEASURE-2.5, MANAGE-2.4 |
+
+**Key OWASP AI Exchange concepts adopted in this repo:**
+
+- **Lethal Trifecta** (Track A Module 04): three conditions that must coexist for agent-mediated exfiltration — attacker-controlled input + access to sensitive data + outbound channel. Removing any one leg collapses the risk.
+- **Decision tree for threat applicability**: the OWASP AI Exchange provides 6 questions to determine which threat categories apply to a given agent deployment (Is the model GenAI with untrusted input? Does the system insert augmentation data? Does the model trigger actions?). Use this as a complement to the EU AI Act risk classification tree in this module.
+- **Agentic AI "four key properties"** (Action, Autonomy, Complexity, Multi-system): maps directly to why MAESTRO and Agent Zero cover 7 domains rather than a single control domain.
+
+Reference: OWASP AI Exchange, owaspai.org — CC0 1.0 (no copyright restrictions).
+
+---
+
 ## NIST AI RMF — Mapping to This Repository
 
 | RMF Function | Core Activity | Repo Coverage |
