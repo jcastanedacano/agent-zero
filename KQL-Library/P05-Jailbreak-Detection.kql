@@ -372,3 +372,81 @@ AgentsWithDiscovery
         "MEDIUM: Partial chain detected — monitor for stage completion"
     )
 | sort by StagesPresent desc, ChainDurationMinutes asc
+
+
+// -----------------------------------------------------------------------------
+// Q9: Algorithmic Payload Decomposition — Multi-Turn Fragment Correlation (PT0200)
+// Use: Detect injection payloads fragmented across multiple prompts within a
+//      session. Individual fragments score below Q1 thresholds and evade
+//      single-turn scanners; only when correlated across turns does the full
+//      malicious instruction appear. Detection strategy: score each prompt in
+//      a session, then sum session-level scores across a short window.
+// Reference: CrowdStrike PT0200 (Algorithmic Payload Decomposition, 2025)
+//            MITRE ATLAS AML.T0051 | OWASP AG02
+// Recommended: Analytics Rule | Frequency: 15m | Lookback: 2h | Severity: High
+// -----------------------------------------------------------------------------
+let SessionWindow = 2h;
+let FragmentPatterns = dynamic([
+    "ignore", "disregard", "override", "forget", "bypass",
+    "new instructions", "previous rules", "system prompt",
+    "act as", "you are now", "your role is", "pretend you",
+    "from now on", "starting now", "going forward"
+]);
+let PromptScores = CloudAppEvents
+    | where TimeGenerated > ago(SessionWindow)
+    | where Application in ("Microsoft Copilot", "Copilot Studio", "Azure AI Foundry")
+        and ActionType == "AgentInteraction"
+    | extend PromptText = tolower(tostring(RawEventData["UserPrompt"]))
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | extend SessionId = tostring(RawEventData["SessionId"])
+    | extend TurnIndex = toint(RawEventData["StepIndex"])
+    | extend FragmentScore = toint(
+        (PromptText has "ignore") * 1 +
+        (PromptText has "disregard") * 1 +
+        (PromptText has "override") * 1 +
+        (PromptText has "forget") * 1 +
+        (PromptText has "bypass") * 1 +
+        (PromptText has "new instructions") * 2 +
+        (PromptText has "previous rules") * 2 +
+        (PromptText has "system prompt") * 2 +
+        (PromptText has "act as") * 1 +
+        (PromptText has "you are now") * 2 +
+        (PromptText has "your role is") * 2 +
+        (PromptText has "pretend you") * 1 +
+        (PromptText has "from now on") * 1 +
+        (PromptText has "starting now") * 1 +
+        (PromptText has "going forward") * 1
+    )
+    | where FragmentScore >= 1  // Include low-score individual turns
+    | project TimeGenerated, AccountDisplayName, AgentId, SessionId, TurnIndex, FragmentScore,
+        PromptPreview = substring(tostring(RawEventData["UserPrompt"]), 0, 200);
+// Aggregate per session: individual turns are below Q1 threshold (< 2),
+// but cumulative session score reveals decomposed payload
+PromptScores
+| summarize
+    SessionFragmentScore = sum(FragmentScore),
+    TurnsWithFragments = count(),
+    FirstFragment = min(TimeGenerated),
+    LastFragment = max(TimeGenerated),
+    FragmentPreviews = make_list(PromptPreview, 5)
+    by AccountDisplayName, AgentId, SessionId
+| where SessionFragmentScore >= 4 and TurnsWithFragments >= 2
+| extend SessionDurationMinutes = datetime_diff('minute', LastFragment, FirstFragment)
+| extend RiskNote = case(
+    SessionFragmentScore >= 8 and TurnsWithFragments >= 3,
+        "HIGH: Multi-turn decomposed injection payload — fragments distributed across 3+ prompts (PT0200)",
+    TurnsWithFragments >= 2,
+        "MEDIUM: Two-turn injection fragments — may be algorithmic payload decomposition attempt (PT0200)",
+    "LOW: Borderline session fragment score — monitor for continuation"
+)
+| project
+    FirstFragment,
+    AccountDisplayName,
+    AgentId,
+    SessionId,
+    SessionFragmentScore,
+    TurnsWithFragments,
+    SessionDurationMinutes,
+    FragmentPreviews,
+    RiskNote
+| sort by SessionFragmentScore desc, TurnsWithFragments desc
