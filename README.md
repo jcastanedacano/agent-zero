@@ -67,7 +67,7 @@ microsoft-agentic-security-labs/
 │   ├── Module-03-SecureAccess.md
 │   ├── Module-04-ProtectData.md
 │   ├── Module-05-DetectRespond.md
-│   ├── Module-06-RedTeamPerspective.md          ← NEW: attacker perspective, 6 attacks (incl. JadePuffer agentic ransomware)
+│   ├── Module-06-RedTeamPerspective.md          ← NEW: attacker perspective, 6 attacks
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
 ├── KQL-Library/                     ← 40+ production-ready queries for Sentinel + Defender XDR
@@ -76,7 +76,7 @@ microsoft-agentic-security-labs/
 │   ├── P02-Governance-Gaps.kql
 │   ├── P03-Access-Anomalies.kql      ← Q7 membership inference + Q8 model inversion added
 │   ├── P04-Exfiltration-Detection.kql
-│   └── P05-Jailbreak-Detection.kql              ← Q7 LPCI + Q8 agentic ransomware chain (JadePuffer)
+│   └── P05-Jailbreak-Detection.kql              ← Q7 LPCI + Q8 agentic ransomware chain
 ├── skills/                          ← 30 agent skills (agentskills.io format, ATLAS + NIST mapped)
 │   ├── SCHEMA.md                    ← Universal Skill Format security manifest (OWASP AST04/AST10)
 │   ├── discover/   (6 skills)
@@ -265,11 +265,11 @@ The 7 layers, from infrastructure to ecosystem:
 
 | Cross-layer pattern | MAESTRO description | This framework |
 |--------------------|---------------------|----------------|
-| Supply chain → all layers | L3 compromise propagates downstream to L2 data and L7 ecosystem | Track C Module-06 Attack 6 (JadePuffer 7-stage chain); OWASP AST02; KQL P05-Q8 |
+| Supply chain → all layers | L3 compromise propagates downstream to L2 data and L7 ecosystem | Track C Module-06 Attack 6 ( 7-stage chain); OWASP AST02; KQL P05-Q8 |
 | Compromised monitoring (L5→L6) | The monitoring agent itself becomes the attack vector when fed contaminated context | Track B Module-02 point 5 (CAGE: control plane independent of reasoning path); KQL P05-Q7 (LPCI in tool responses reaching Security Copilot) |
 | Lateral movement between layers | Privilege escalation from L4 (infra) to L3 (frameworks) to L7 (ecosystem) | Track C Module-06 (attacker perspective, lateral movement attack steps); MITRE ATLAS `AML.T0051` |
 
-**MAESTRO 6-step methodology** applied to this framework's lab environment: (1) decompose your demo tenant into MAESTRO's 7 layers — which layer does each Copilot Studio agent, MCP server, and Foundry deployment sit in? (2) run layer-specific KQL queries (P01–P05) to surface threats per layer; (3) trace cross-layer propagation paths using the JadePuffer chain as a concrete example; (4) evaluate risk using the P-series severity scores; (5) map mitigations to the Track B/C module controls; (6) deploy Sentinel analytics rules and monitor continuously.
+**MAESTRO 6-step methodology** applied to this framework's lab environment: (1) decompose your demo tenant into MAESTRO's 7 layers — which layer does each Copilot Studio agent, MCP server, and Foundry deployment sit in? (2) run layer-specific KQL queries (P01–P05) to surface threats per layer; (3) trace cross-layer propagation paths; (4) evaluate risk using the P-series severity scores; (5) map mitigations to the Track B/C module controls; (6) deploy Sentinel analytics rules and monitor continuously.
 
 ---
 
@@ -288,7 +288,7 @@ The [CIS Controls AI Agent Companion Guide](https://www.cisecurity.org/controls/
 | **12 — Network Infrastructure Management** | Agents running on internet-exposed infrastructure (open source AI platforms, self-hosted MCP servers) extend the network attack surface. CVE-2025-3248 class vulnerabilities require WAF and network segmentation at the AI platform layer | Track B Module-03 point 6 (CNAPP for Azure-hosted agents); Track B Module-07 point 3 (open source AI platform hardening); Defender for Cloud Containers |
 | **15 — Service Provider Management** | Every external MCP server, foundation model API, and AI-as-a-service provider is a service provider requiring structured assessment. Silent remote tool updates and prompt-logging policies are AI-specific risks not covered by standard vendor questionnaires | Track B Module-07 (20-question vendor evaluation framework, 5 domains); KQL P01-Q6 (MCP server risk scoring) |
 | **16 — Application Software Security** | MCP server tool definitions, skill YAML manifests, and orchestration logic are application software that must be reviewed for injection risks, deserialization vulnerabilities, and supply chain integrity | Track B Module-07 Domain D (MCP server-specific questions); skills/SCHEMA.md (security manifest: `content_hash`, `scan_status`, `signature`) |
-| **18 — Penetration Testing** | Agentic systems require adversarial testing distinct from traditional pen tests: multi-stage chain simulation, LPCI via tool responses, credential exfiltration through agent context, and autonomous ransomware chain (JadePuffer pattern) must be part of the scope | Track C Module-06 (6 attacks + red team perspective); KQL P05-Q7/Q8 (LPCI + agentic ransomware detection) |
+| **18 — Penetration Testing** | Agentic systems require adversarial testing distinct from traditional pen tests: multi-stage chain simulation, LPCI via tool responses, credential exfiltration through agent context, and autonomous ransomware chain must be part of the scope | Track C Module-06 (6 attacks + red team perspective); KQL P05-Q7/Q8 (LPCI + agentic ransomware detection) |
 
 **Implementation Groups:** The CIS Companion Guide uses the IG1/IG2/IG3 prioritization model. Map to this framework: Track A exercises (IG1 baseline understanding) → Track B Architect labs (IG2 enterprise controls) → Track C SOC engineer detection (IG3 advanced detection and response).
 
@@ -302,7 +302,7 @@ The [CIS Controls AI Agent Companion Guide](https://www.cisecurity.org/controls/
 | 02 | No technical owner · Makers without controls · No lifecycle · Graph drift · Multi-agent trust boundaries · Unsafe agent autonomy (no tiered autonomy model) · Control plane collapsed into reasoning path (description laundering / rubber-stamp approval) |
 | 03 | CA inherited from users · Over-permissioned agents · Uncontrolled OAuth consent · Identity laundering · Model extraction via API · Token exfiltration from non-managed-identity agent environments · Internet-exposed AI dev platforms (Langflow CVE-2025-3248 class) |
 | 04 | Prompt injection · Oversharing · API exfiltration · Corpus poisoning (SharePoint) · Model supply chain poisoning · Memory/session poisoning · Membership inference (privacy without exfiltration) · Context gap (agent acting on stale, misrouted, or wrong data at machine speed) |
-| 05 | Jailbreak attempts · Agent anomaly · Structural false negatives · Evasion at inference boundary · Goal hijacking (sustained objective drift) · Capability/architecture disclosure · LPCI via tool responses · Agentic ransomware chain (JadePuffer: autonomous multi-stage, adaptive, no human pause) |
+| 05 | Jailbreak attempts · Agent anomaly · Structural false negatives · Evasion at inference boundary · Goal hijacking (sustained objective drift) · Capability/architecture disclosure · LPCI via tool responses · Agentic ransomware chain (autonomous multi-stage, adaptive, no human pause) |
 | 07 | MCP server tool injection · Credential exposure via tool return values · Silent remote tool updates · Open source AI platform RCE · Model layer risks (prompt logging, training data use, no red team documentation) · Foundry model layer misconfiguration (no content filters, no prompt shields) |
 
 ---
