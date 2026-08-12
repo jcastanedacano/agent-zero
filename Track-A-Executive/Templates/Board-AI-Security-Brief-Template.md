@@ -82,7 +82,7 @@ AI agents differ from traditional software in three ways that affect board risk 
 
 **Regulatory implication:** EU AI Act Article 25, NIST AI RMF GOVERN-5.1, ISO 42001 Clause 8.6 all require documented third-party AI risk management.
 
-**Proposed control:** Vendor assessment process (20-question checklist) + Power Platform DLP policy to block unapproved external connectors.
+**Proposed control:** Vendor assessment process (22-question checklist) + Power Platform DLP policy to block unapproved external connectors.
 
 ---
 

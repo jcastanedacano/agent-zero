@@ -17,7 +17,7 @@ By the end of this module, participants will be able to evaluate third-party AI 
 | Time | Activity | Type |
 |------|----------|------|
 | 15 min | The third-party AI attack surface: MCP servers, plugins, model APIs, AI-as-a-service | Presentation |
-| 15 min | Vendor evaluation framework: 5 domains, 20 questions | Presentation |
+| 15 min | Vendor evaluation framework: 5 domains, 22 questions | Presentation |
 | 50 min | Lab: audit existing external AI connections in your tenant + score one vendor | Exercise |
 | 10 min | Remediation roadmap for vendor gaps | Discussion |
 
@@ -33,13 +33,13 @@ By the end of this module, participants will be able to evaluate third-party AI 
 
    > **Microsoft MCP certification path:** Microsoft requires third-party MCP servers to undergo certification through the Power Platform connector certification program before being made available to all users. Only certified MCP servers appear in the Microsoft 365 admin center **Agents and Tools** section, where IT admins can allow or block them at the tenant level. Uncertified MCP servers connected directly to agents bypass this control. Reference: [Microsoft MCP server certification](https://learn.microsoft.com/microsoft-copilot-studio/mcp-server-certification).
 
-3. **Open source AI development platforms as attack surface:** Beyond commercial MCP servers and model APIs, organizations increasingly run open source AI agent platforms — Langflow, Flowise, n8n, Dify, LangGraph — often on internet-accessible infrastructure without hardening. CVE-2025-3248 (Langflow, unauthenticated RCE) demonstrated that AI development platforms left internet-exposed are high-value attack entry points: they provide direct code execution in an environment that already has credentials, model access, and data connections configured. The JadePuffer ransomware campaign (Sysdig, 2026) used this exact entry point to launch a fully autonomous multi-stage attack. Hardening requirements for open source AI platforms: disable unauthenticated endpoints, require MFA for all administrative access, apply network segmentation (no public internet exposure without WAF), treat them as critical infrastructure in the vulnerability management program, and include them in the vendor assessment process even if self-hosted. Add a row to the AI-as-a-service vendor categories table for this risk tier.
+4. **Open source AI development platforms as attack surface:** Beyond commercial MCP servers and model APIs, organizations increasingly run open source AI agent platforms — Langflow, Flowise, n8n, Dify, LangGraph — often on internet-accessible infrastructure without hardening. CVE-2025-3248 (Langflow, unauthenticated RCE) demonstrated that AI development platforms left internet-exposed are high-value attack entry points: they provide direct code execution in an environment that already has credentials, model access, and data connections configured. The JadePuffer ransomware campaign (Sysdig, 2026) used this exact entry point to launch a fully autonomous multi-stage attack. Hardening requirements for open source AI platforms: disable unauthenticated endpoints, require MFA for all administrative access, apply network segmentation (no public internet exposure without WAF), treat them as critical infrastructure in the vulnerability management program, and include them in the vendor assessment process even if self-hosted. Add a row to the AI-as-a-service vendor categories table for this risk tier.
 
-3a. **Model layer controls for Azure AI Foundry deployments:** When agents use models deployed in Azure AI Foundry, the model layer itself has security controls independent of identity and network: (a) **Prompt shields** — detect jailbreak attempts and indirect prompt injection before the model processes the input; (b) **Content filters** — block harmful outputs across hate, violence, self-harm, and sexual categories with configurable severity thresholds; (c) **Groundedness detection** — flag model responses that are not grounded in the provided context (hallucination detection); (d) **Protected material detection** — identify model outputs that reproduce copyrighted content. These are configured per deployment in Foundry → Safety + Security → Content filters. For vendor assessment: require documentation of equivalent controls from any external model provider (Domain B of the 20-question checklist).
+5. **Model layer controls for Azure AI Foundry deployments:** When agents use models deployed in Azure AI Foundry, the model layer itself has security controls independent of identity and network: (a) **Prompt shields** — detect jailbreak attempts and indirect prompt injection before the model processes the input; (b) **Content filters** — block harmful outputs across hate, violence, self-harm, and sexual categories with configurable severity thresholds; (c) **Groundedness detection** — flag model responses that are not grounded in the provided context (hallucination detection); (d) **Protected material detection** — identify model outputs that reproduce copyrighted content. These are configured per deployment in Foundry → Safety + Security → Content filters. For vendor assessment: require documentation of equivalent controls from any external model provider (Domain B of the 22-question checklist).
 
-4. **Model API risk — what you don't control:** When your agent calls an external model API (non-Microsoft), you don't control the model weights, the inference infrastructure, the logging policy, or the data retention. Key questions: Does the provider log your prompts? Does the provider use your data for training? Is the model's safety training documented? Has the model been independently red-teamed? For Microsoft environments: Azure OpenAI and Azure AI Foundry are the approved paths — external model APIs require explicit approval and security assessment.
+6. **Model API risk — what you don't control:** When your agent calls an external model API (non-Microsoft), you don't control the model weights, the inference infrastructure, the logging policy, or the data retention. Key questions: Does the provider log your prompts? Does the provider use your data for training? Is the model's safety training documented? Has the model been independently red-teamed? For Microsoft environments: Azure OpenAI and Azure AI Foundry are the approved paths — external model APIs require explicit approval and security assessment.
 
-5. **AI-as-a-service vendor categories and their risk profiles:**
+7. **AI-as-a-service vendor categories and their risk profiles:**
 
    | Vendor type | Examples | Risk profile | Key concern |
    |------------|---------|-------------|------------|
@@ -50,20 +50,31 @@ By the end of this module, participants will be able to evaluate third-party AI 
    | On-prem / self-hosted | Ollama, LM Studio | Low cloud risk — endpoint risk instead | Endpoint security, no audit trail |
    | **Open source AI platform** | **Langflow, Flowise, n8n, Dify** | **Critical — RCE if internet-exposed** | **CVE-2025-3248 class vulns, unauthenticated access** |
 
-6. **Regulatory requirements for third-party AI:**
+8. **Regulatory requirements for third-party AI:**
    - **EU AI Act Art. 25:** Importers and distributors of high-risk AI systems must verify supplier compliance documentation. For operators (organizations using AI): contractual obligations must require providers to maintain compliance.
    - **NIST AI RMF GOVERN-5.1:** Organizational policies require AI risk management of third-party entities.
    - **ISO 42001 Clause 8.6:** Externally provided AI systems and components must be controlled. Documented requirements must be communicated to external providers.
-   - **CIS Controls v8.1 Control 2 (Software Asset Inventory) + AI-BOM:** Agent software stacks — orchestration frameworks, MCP clients/servers, SDKs, LLM clients, tool dependencies — are software assets requiring versioned inventory. A change in a SaaS model or a local library dependency can alter agent decision-making; rigorous tracking of these components is required (CIS Controls AI Agent Companion Guide, 2026, Control 2 — Agent Applicability). The industry standard artifact for this inventory is the **AI Bill of Materials (AI-BOM)** — a machine-readable manifest (JSON or SPDX format) that lists: (a) base model name and version, including quantization or fine-tune applied; (b) training dataset provenance and known data licenses; (c) fine-tuning lineage (what data was used, by whom, and when); (d) orchestration framework and version; (e) MCP servers and tool plugins with their version hashes. An AI-BOM is the AI equivalent of an SBOM (Software BOM) and satisfies the same regulatory intent. Under EU AI Act Article 13 (transparency) and NIST AI RMF GOVERN-4, providers of high-risk AI systems must document system components — an AI-BOM is the concrete artifact that satisfies this requirement. Practical step: require AI-BOM delivery as a contract term in Domain B of the 20-question checklist (question B4 — training data provenance). For internal deployments on Azure AI Foundry, the Model Card available in the Azure AI Model Catalog serves as a partial AI-BOM; supplement it with your fine-tuning documentation.
-   - **CIS Controls v8.1 Control 15 (Service Provider Management):** Every external MCP server, foundation model API, and AI-as-a-service provider is a service provider under CIS 15. The 20-question framework in this module (Domains A–E) satisfies the structured assessment requirement. CIS 15.2 requires establishing a process to monitor and validate service provider security controls — map Domain D questions to this ongoing monitoring obligation.
+   - **CIS Controls v8.1 Control 2 (Software Asset Inventory) + AI-BOM:** Agent software stacks — orchestration frameworks, MCP clients/servers, SDKs, LLM clients, tool dependencies — are software assets requiring versioned inventory. A change in a SaaS model or a local library dependency can alter agent decision-making; rigorous tracking of these components is required (CIS Controls AI Agent Companion Guide, 2026, Control 2 — Agent Applicability). The industry standard artifact for this inventory is the **AI Bill of Materials (AI-BOM)** — a machine-readable manifest (JSON or SPDX format) that lists: (a) base model name and version, including quantization or fine-tune applied; (b) training dataset provenance and known data licenses; (c) fine-tuning lineage (what data was used, by whom, and when); (d) orchestration framework and version; (e) MCP servers and tool plugins with their version hashes. An AI-BOM is the AI equivalent of an SBOM (Software BOM) and satisfies the same regulatory intent. Under EU AI Act Article 13 (transparency) and NIST AI RMF GOVERN-4, providers of high-risk AI systems must document system components — an AI-BOM is the concrete artifact that satisfies this requirement. Practical step: require AI-BOM delivery as a contract term in Domain B of the 22-question checklist (question B4 — training data provenance). For internal deployments on Azure AI Foundry, the Model Card available in the Azure AI Model Catalog serves as a partial AI-BOM; supplement it with your fine-tuning documentation.
+   - **CIS Controls v8.1 Control 15 (Service Provider Management):** Every external MCP server, foundation model API, and AI-as-a-service provider is a service provider under CIS 15. The 22-question framework in this module (Domains A–E) satisfies the structured assessment requirement. CIS 15.2 requires establishing a process to monitor and validate service provider security controls — map Domain D questions to this ongoing monitoring obligation.
+
+9. **Ataques de disponibilidad — Denial-of-Wallet y Sponge Examples:** Los controles de supply chain protegen la integridad del modelo y los datos, pero existe una clase de ataque que tiene como objetivo el presupuesto operativo y la disponibilidad del servicio. Un **sponge example** es un input diseñado para maximizar el costo computacional de la inferencia: prompts que activan rutas de atencion maxima en el transformer, cadenas de razonamiento que el modelo expande indefinidamente, o estructuras recursivas que explotan la ventana de contexto. El resultado es latencia extrema y consumo de tokens por encima de lo esperado. Un **Denial-of-Wallet** escala esto a un ataque sostenido: un actor externo inunda un endpoint de API de pago (Azure OpenAI con billing por token) con sponge examples de alto costo, agotando el presupuesto mensual antes de que una alerta de costo se dispare. La diferencia con un DoS tradicional es que el servicio no cae — sigue respondiendo, pero el costo acumulado puede alcanzar decenas de miles de dolares en horas. Controles aplicables: (a) **APIM rate limiting por identidad** — el limite de tokens por minuto (TPM) configurado en Azure APIM por agent identity previene que un solo agente o caller externo consuma cuota desproporcionada; (b) **Azure Cost Management alerts** — alertas en tiempo real cuando el consumo de Azure OpenAI supera el 50% y el 80% del presupuesto mensual; en Azure Cost Management + Billing → Cost alerts → Add a budget alert por servicio; (c) **Input length pre-filter** — Prompt Shield y las politicas de APIM pueden rechazar inputs que superen un token count umbral antes de llegar al modelo; (d) **Quotas de deployment** — en Azure AI Foundry → deployment settings, configurar TPM quotas por deployment para aislar el consumo de agentes de produccion, desarrollo y terceros. El APIM rate limiting (punto 2 de este modulo) es el control primario; las alertas de costo son el control detective cuando el rate limiting no es suficiente. Referencia: CLLMSE §1.6 — Availability Attacks; OWASP LLM Top 10 2025 — LLM10 Unbounded Consumption.
+
+10. **KYC para identidades de agente: el control que la cadena de suministro todavia no tiene:** Los protocolos KYC (Know Your Customer) de proveedores de nube, instituciones financieras y APIs de modelos estan disenados para verificar personas. La comprobacion primaria es un metodo de pago valido; en cuentas empresariales se anade un registro mercantil o una identificacion fiscal. Ninguno de esos controles responde las tres preguntas relevantes cuando quien transacciona es un agente: quien es el operador humano responsable, el agente sigue operando en el interes de ese operador, y el agente ha sido alterado desde su registro. Esta brecha importa por dos razones opuestas y ambas aplican a su organizacion. Como riesgo externo: es el vector por el que un actor malicioso adquiere compute, capacidad de inferencia y servicios sin atribucion posible. Como obligacion propia: es el requisito regulatorio emergente que tendra que cumplir cuando sus propios agentes empiecen a consumir servicios de terceros de forma autonoma.
+
+    **Lo que se puede implementar hoy en el stack de Microsoft:**
+
+    - **Atestacion de operador via Entra Agent ID + sponsor** (Modulo 02, punto 7): cada identidad de agente tiene un humano responsable asignado, y Lifecycle Workflows garantiza que esa asignacion nunca queda vacia cuando el sponsor deja la organizacion. Este es el equivalente funcional de la verificacion de deployer que el KYC de agentes exigira.
+    - **Atribucion por agente en cada llamada externa:** APIM con `validate-jwt` y una subscription key distinta por identidad de agente. Una clave de API compartida entre agentes destruye la atribucion en las dos direcciones: no se puede saber que agente hizo la llamada, ni revocar a uno sin cortar a todos. Este es el error de configuracion mas comun cuando varios agentes consumen el mismo proveedor externo.
+    - **Deteccion de adquisicion anomala de recursos:** presupuesto de Azure Cost Management por deployment con alerta sobre desviacion relativa, no solo sobre umbral absoluto. Un agente que duplica su consumo de compute en 24 horas sin cambio de carga de trabajo es la senal; un umbral absoluto la pierde si el presupuesto es holgado. Complementa el punto 9 (Denial-of-Wallet), que cubre el mismo control desde la perspectiva del ataque externo.
+    - **Prohibicion de instrumentos de pago en manos del agente:** ningun agente debe tener credenciales que permitan completar una compra o una transaccion financiera de forma autonoma. Cualquier flujo de adquisicion debe enrutarse por el tier 3 de Tiered Autonomy, con aprobacion humana previa. Esta es una decision de arquitectura, no una opcion de configuracion, y debe quedar escrita en el registro de gobierno.
+
+    **Seguridad de los pesos del modelo como pregunta de proveedor:** para modelos propietarios, los pesos son el activo cuyo robo transfiere la capacidad completa a un tercero sin necesidad de replicar el entrenamiento. La practica de referencia en la industria es un modelo de niveles de seguridad escalonados, calibrados contra adversarios de sofisticacion creciente, desde el criminal oportunista hasta la operacion estatal de maxima capacidad: almacenamiento aislado de pesos, computo confidencial para protegerlos durante el uso, arquitectura zero-trust con controles reforzados por hardware, programas de amenaza interna con monitorizacion de comportamiento, y limites de subida de datos a nivel de centro de datos (los pesos frontera se miden en terabytes, lo que convierte el limite de egreso en un control eficaz que extiende la exfiltracion de dias a meses). Para su evaluacion de proveedor esto se traduce en una pregunta y una consecuencia: pida la postura documentada de seguridad de pesos, y entienda que si usa un modelo open-weight o self-hosted esa responsabilidad se transfiere integramente a su organizacion, sin excepcion ni matiz.
+
+    Referencia: informe HACCA (2026), Recomendacion V, "Strengthen model, compute, and financial access controls" y "Model Weight Security"; CIS Controls v8.1 Control 15; DORA Art. 28-30.
 
 ---
 
-7. **Ataques de disponibilidad — Denial-of-Wallet y Sponge Examples:** Los controles de supply chain protegen la integridad del modelo y los datos, pero existe una clase de ataque que tiene como objetivo el presupuesto operativo y la disponibilidad del servicio. Un **sponge example** es un input diseñado para maximizar el costo computacional de la inferencia: prompts que activan rutas de atencion maxima en el transformer, cadenas de razonamiento que el modelo expande indefinidamente, o estructuras recursivas que explotan la ventana de contexto. El resultado es latencia extrema y consumo de tokens por encima de lo esperado. Un **Denial-of-Wallet** escala esto a un ataque sostenido: un actor externo inunda un endpoint de API de pago (Azure OpenAI con billing por token) con sponge examples de alto costo, agotando el presupuesto mensual antes de que una alerta de costo se dispare. La diferencia con un DoS tradicional es que el servicio no cae — sigue respondiendo, pero el costo acumulado puede alcanzar decenas de miles de dolares en horas. Controles aplicables: (a) **APIM rate limiting por identidad** — el limite de tokens por minuto (TPM) configurado en Azure APIM por agent identity previene que un solo agente o caller externo consuma cuota desproporcionada; (b) **Azure Cost Management alerts** — alertas en tiempo real cuando el consumo de Azure OpenAI supera el 50% y el 80% del presupuesto mensual; en Azure Cost Management + Billing → Cost alerts → Add a budget alert por servicio; (c) **Input length pre-filter** — Prompt Shield y las politicas de APIM pueden rechazar inputs que superen un token count umbral antes de llegar al modelo; (d) **Quotas de deployment** — en Azure AI Foundry → deployment settings, configurar TPM quotas por deployment para aislar el consumo de agentes de produccion, desarrollo y terceros. El APIM rate limiting (punto 2 de este modulo) es el control primario; las alertas de costo son el control detective cuando el rate limiting no es suficiente. Referencia: CLLMSE §1.6 — Availability Attacks; OWASP LLM Top 10 2025 — LLM10 Unbounded Consumption.
-
----
-
-## Vendor Evaluation Framework — 5 Domains, 20 Questions
+## Vendor Evaluation Framework — 5 Domains, 22 Questions
 
 Use this checklist before connecting any external AI vendor to your agent environment.
 
@@ -83,7 +94,8 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 | B1 | Has the model been independently red-teamed? | Published red team report or third-party attestation |
 | B2 | Does the vendor have documented safety training and alignment process? | Published model card or safety documentation |
 | B3 | Can the model be fine-tuned by other customers on your data? | No cross-customer fine-tuning |
-| B4 | Is the model supply chain (training data provenance) documented? | Data lineage report available |
+| B4 | Is the model supply chain (training data provenance) documented? | Data lineage report available (AI-BOM delivered as a contract term — see point 8) |
+| B5 | What is the provider's documented security posture for model weights? | Isolated weight storage, access logging, insider threat program, data-center egress limits. For open-weight or self-hosted models this responsibility transfers entirely to your organization — score as Fail unless *you* implement it |
 
 ### Domain C — Access & Identity
 
@@ -93,6 +105,7 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 | C2 | Does the vendor support key rotation without service interruption? | Key rotation < 4h downtime |
 | C3 | Is access logging available for all API calls? | Per-call audit log exportable to your SIEM |
 | C4 | Can access be revoked instantly (kill switch)? | Token revocation < 5 minutes |
+| C5 | Can the provider verify and revoke identity at the individual agent level, or only via a shared tenant key? | Per-agent identity attribution and revocation supported. A shared key means no forensic attribution and no granular revocation — document as an accepted gap if unavoidable |
 
 ### Domain D — MCP Server Specific (if applicable)
 
@@ -113,10 +126,10 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 | E4 | Does the vendor contractually accept liability for AI-specific risks? | AI liability clause in contract |
 
 **Scoring:** Each "Pass" = 1 point. Score interpretation:
-- 18–20: Approved for production use
-- 14–17: Conditional approval — remediate gaps within 90 days
-- 10–13: Limited use only — no sensitive data; remediation required before expansion
-- < 10: Do not connect. Escalate to CISO.
+- 20–22: Approved for production use
+- 16–19: Conditional approval — remediate gaps within 90 days
+- 11–15: Limited use only — no sensitive data; remediation required before expansion
+- < 11: Do not connect. Escalate to CISO.
 
 ---
 
@@ -164,14 +177,14 @@ For each MCP server found in Query 1: check whether a vendor assessment exists i
 
 ---
 
-### Step 2 — Score one vendor using the 20-question checklist
+### Step 2 — Score one vendor using the 22-question checklist
 
 Pick the highest-priority external AI connection from Step 1. Complete the Domain A–E checklist. Document:
 
 ```
 Vendor name: ________________
 Connection type: ☐ Foundation model API ☐ MCP server ☐ AI plugin ☐ AI-enhanced SaaS
-Total score: ___ / 20
+Total score: ___ / 22
 Approval status: ☐ Approved ☐ Conditional ☐ Limited use ☐ Do not connect
 Top 3 gaps:
 1.

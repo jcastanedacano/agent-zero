@@ -34,6 +34,24 @@ By the end of this module, participants will be able to design an agent governan
 
 8. **Access packages for agent identities — entitlement management as least privilege:** The formal Microsoft mechanism for granting access to agent identities is **Entitlement Management with access packages**, not static OAuth scope assignment. Access packages can grant: Security Group memberships, Application OAuth API permissions (including Graph application permissions), and Microsoft Entra roles. Three request pathways: (a) the agent identity itself requests programmatically via `POST /entitlementManagement/assignmentRequests` (Graph API) when it needs access for a specific operation; (b) the sponsor requests on behalf of the agent; (c) an administrator directly assigns. Access packages include an **expiry date** — as the date approaches, the sponsor receives a notification and must actively renew (triggering a new approval cycle) or the assignment expires automatically. This is time-bound least privilege with human-in-the-loop renewal, which is architecturally stronger than permanent OAuth scope grants that accumulate via graph drift (point 2 above). Reference: [Access packages for agent identities](https://learn.microsoft.com/en-us/entra/agent-id/agent-access-packages).
 
+9. **Kill switch y fail-safe: el control que Tiered Autonomy no cubre:** El modelo de Tiered Autonomy (punto 6) define cuando un agente se detiene por diseno. El kill switch responde una pregunta distinta: como se detiene un agente que no deberia estar ejecutandose en absoluto, porque fue comprometido, porque derivo de su objetivo, o porque el operador perdio visibilidad de lo que hace. Sin un procedimiento probado, la respuesta por defecto es abrir un ticket, y eso se mide en horas mientras el agente opera en segundos.
+
+   **Tres niveles de apagado en el stack de Microsoft, del mas rapido al mas definitivo:**
+
+   | Nivel | Accion | Efecto | Latencia tipica |
+   |-------|--------|--------|-----------------|
+   | L1 Revocacion de sesion | `POST /users/{id}/revokeSignInSessions` (Graph) | Invalida tokens activos; el agente pierde acceso hasta reautenticar | Segundos (playbook Logic App, Modulo 05) |
+   | L2 Deshabilitacion de identidad | Entra: `accountEnabled = false` sobre el service principal del Entra Agent ID | El agente no puede reautenticar; conserva configuracion y evidencia forense | Minutos |
+   | L3 Parada de runtime | Copilot Studio: despublicar el agente / Azure AI Foundry: eliminar el deployment / APIM: policy de bloqueo sobre la ruta del agente | El codigo deja de ejecutarse | Minutos a horas segun plataforma |
+
+   L1 sin L2 es un apagado que el propio atacante puede revertir: si las credenciales siguen siendo validas, el agente vuelve en el siguiente ciclo de autenticacion. L2 sin L3 detiene la identidad pero no el proceso: un agente self-hosted con una clave de API cacheada puede seguir operando contra endpoints que no validan Entra. El apagado completo requiere los tres niveles, y el orden importa: L1 primero porque es el mas rapido, L3 al final porque destruye estado que puede ser evidencia.
+
+   **Requisito de diseno no negociable:** el kill switch no puede depender del camino de razonamiento del agente. Una instruccion de "detente si detectas X" en el system prompt no es un kill switch, es una sugerencia que un agente comprometido, envenenado o con drift puede ignorar o racionalizar. Este es el punto 5 de este modulo aplicado al peor caso: la parada debe aplicarse en la capa de identidad, red o runtime, fuera de la ventana de contexto del modelo. La literatura de sistemas autonomos lo formula de forma directa: los mecanismos de apagado basados en system prompt seran resistidos de forma natural por cualquier sistema cuya funcion objetivo incluya mantenerse operativo.
+
+   **El kill switch no probado no existe.** Cada agente en el registro de gobierno debe tener documentado: quien puede activarlo (por rol, no por persona), por que ruta tecnica, y cual es el RTO medido en un simulacro real. Ejercicio minimo trimestral: ejecutar L1 + L2 sobre un agente no critico y cronometrar desde la decision hasta la confirmacion de parada. Si nadie ha medido ese numero, el control existe en el documento y no en la operacion.
+
+   **Human-on-the-loop para el tier 3:** para acciones destructivas o irreversibles, la distincion relevante no es human-in-the-loop (la persona aprueba cada paso antes de ejecutar) sino human-on-the-loop (la persona supervisa la ejecucion en continuo y puede interrumpirla en cualquier momento). El tier 3 de Tiered Autonomy debe implementar las dos: aprobacion previa y capacidad de interrupcion durante la ejecucion. Referencia: CIS Controls AI Agent Companion Guide (2026), kill switch guidance; NIST AI RMF GOVERN-6.1; EU AI Act Art. 14 (supervision humana con capacidad de anulacion); informe HACCA (2026), "Fail-safe mechanisms and kill switches".
+
 ---
 
 **Exercise / Lab:**
@@ -45,9 +63,10 @@ By the end of this module, participants will be able to design an agent governan
   2. In Copilot Studio admin center → Settings → Agent publishing, enable the approval flow and configure an approver
   3. In Power Platform admin center, create the DLP policy "Agentic AI — Restrict External Connectors" blocking HTTP and HTTP with Azure AD
   4. Run the governance queries from the KQL Library (P02-Governance-Gaps.kql): agents without Entra Agent ID, agents published without approval, graph drift
-  5. Complete the "Domain 2 — Govern" section of the Gap Assessment Template with real findings from the demo tenant
-- **Required tools:** Entra ID (App registrations + Manifest editor), Copilot Studio admin center, Power Platform admin center, Microsoft Sentinel (Logs), KQL Library P02, Gap Assessment Template
-- **Deliverable:** Entra Agent ID created and verified in Agent 365 Registry + Domain 2 section of the Gap Assessment completed with identified gaps, assigned owners, and target dates
+  5. **Simulacro de kill switch:** sobre el agente `demo-sales-agent` creado en el paso 1, ejecutar el apagado de tres niveles y cronometrar cada uno: (a) L1 revocacion de sesion via Graph Explorer `POST /servicePrincipals/{id}/revokeSignInSessions`; (b) L2 deshabilitar la identidad en Entra ID → Enterprise applications → Properties → Enabled for users to sign-in = No; (c) L3 despublicar el agente en Copilot Studio. Registrar el tiempo total desde la decision hasta la confirmacion de parada, y quien tuvo que intervenir en cada nivel
+  6. Complete the "Domain 2 — Govern" section of the Gap Assessment Template with real findings from the demo tenant
+- **Required tools:** Entra ID (App registrations + Manifest editor + Enterprise applications), Copilot Studio admin center, Power Platform admin center, Microsoft Graph Explorer, Microsoft Sentinel (Logs), KQL Library P02, Gap Assessment Template
+- **Deliverable:** Entra Agent ID created and verified in Agent 365 Registry + procedimiento de kill switch documentado con RTO medido + Domain 2 section of the Gap Assessment completed with identified gaps, assigned owners, and target dates
 
 ---
 

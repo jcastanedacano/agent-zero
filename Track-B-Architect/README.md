@@ -28,7 +28,7 @@
 | [04 — Protect Data](./Module-04-ProtectData.md) | Data protection and AI DLP | Purview DLP + SharePoint Advanced Management | 90 min |
 | [05 — Detect & Respond](./Module-05-DetectRespond.md) | Detection and response architecture | Sentinel rules + Logic App playbook | 90 min |
 | [06 — Regulatory Frameworks](./Module-06-RegulatoryFrameworks.md) | EU AI Act + NIST AI RMF + ISO 42001 | Agent classification + compliance gap assessment | 90 min |
-| [07 — Vendor & Third-Party AI Risk](./Module-07-VendorRisk.md) | Supply chain and MCP server risk | Vendor evaluation (20-question checklist) + MCP audit KQL | 90 min |
+| [07 — Vendor & Third-Party AI Risk](./Module-07-VendorRisk.md) | Supply chain and MCP server risk | Vendor evaluation (22-question checklist) + MCP audit KQL | 90 min |
 
 Total lab time: ~10.5 hours. Reserve 30 minutes for Gap Assessment consolidation and roadmap at close.
 

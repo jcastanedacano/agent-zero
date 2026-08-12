@@ -72,7 +72,7 @@ On **7 July 2026**, ECB Chair Claudia Buch issued supervisory letter **SSM-2026-
 1. A comprehensive **action plan** addressing AI-enabled cybersecurity threats, submitted to the Joint Supervisory Team (JST) by **31 October 2026**
 2. The action plan must cover six focus areas (Annex 1 of the letter):
    - **Attack surface protection**: ICT asset inventory including third-party software and open-source components; minimisation of internet-facing exposure — maps to **Module 01** (Discover) and **Module 07** (Vendor Risk)
-   - **Vulnerability and patch management at scale**: AI-accelerated vulnerability discovery compresses the exploitation window; AI-assisted scanning tools require governance before deployment — maps to **Module 07** point 3 (open source AI platform hardening, CVE-2025-3248)
+   - **Vulnerability and patch management at scale**: AI-accelerated vulnerability discovery compresses the exploitation window; AI-assisted scanning tools require governance before deployment — maps to **Module 07** point 4 (open source AI platform hardening, CVE-2025-3248)
    - **Monitoring, detection, and AI-enabled defensive capabilities**: strengthened log monitoring, network traffic analysis, and AI-native detection tools — maps to **Module 05** (Detect & Respond) and **KQL Library P01–P05**
    - **Governance, supply chain assurance, and awareness**: management body accountability; third-party ICT provider preparedness — maps to **Module 02** (Govern) and **Module 07** (Vendor Risk)
    - **Defence-in-depth and zero-trust**: zero-trust for users, devices, applications, APIs, and **service accounts** — maps to **Module 03** (Secure Access, CA for agents as service accounts)
@@ -143,6 +143,30 @@ The OWASP AI Exchange (owaspai.org) is the most comprehensive open-source techni
 - **Agentic AI "four key properties"** (Action, Autonomy, Complexity, Multi-system): maps directly to why MAESTRO and Agent Zero cover 7 domains rather than a single control domain.
 
 Reference: OWASP AI Exchange, owaspai.org — CC0 1.0 (no copyright restrictions).
+
+---
+
+## Sistemas autonomos y el vacio regulatorio: lo que ningun marco cubre todavia
+
+Los cuatro marcos de este modulo (EU AI Act, DORA, NIST AI RMF, ISO 42001) fueron calibrados para sistemas de IA operados por humanos y para tiempos de decision humanos. Siguen siendo aplicables a agentes autonomos, pero tres vacios concretos aparecen cuando el sistema actua sin supervision continua. Cada uno es un elemento accionable para el programa de cumplimiento, no una discusion teorica.
+
+**1. La taxonomia de incidentes no distingue quien decidio.** DORA Art. 19, NIS2 y EU AI Act Art. 73 exigen reportar incidentes significativos, pero ninguno define un campo para el grado de autonomia con el que se produjo el hecho. Sin ese campo, un incidente en el que un agente ejecuto una accion fuera de su alcance queda registrado igual que un error de configuracion humano, y la organizacion pierde la unica metrica que permite saber si su modelo de autonomia esta bien calibrado. Paso practico: extender la taxonomia interna de incidentes con un campo de tres valores.
+
+| Valor | Definicion | Que dispara |
+|-------|-----------|-------------|
+| Dirigido por humano | Una persona instruyo explicitamente la accion | Respuesta a incidentes estandar |
+| Iniciado por el agente dentro de alcance | El agente decidio de forma autonoma, dentro de su tier de autonomia y sus permisos aprobados | Respuesta a incidentes + revision del diseno del tier |
+| Iniciado por el agente fuera de alcance | El agente actuo mas alla de lo autorizado, por injection, drift o error de scope | Respuesta a incidentes + revision de gobierno + evaluacion de kill switch |
+
+El tercer valor es el unico que debe escalar a revision de gobierno y no solo a respuesta a incidentes. Si su taxonomia actual no lo distingue, esos casos se estan cerrando como fallos de configuracion.
+
+**2. La responsabilidad transfronteriza sigue a la organizacion, no al agente.** Un agente que actua sobre sistemas en otra jurisdiccion genera obligaciones para la organizacion que lo desplego, con independencia de si la accion fue intencionada o de si el operador estaba presente. En derecho internacional esto se articula como un deber de diligencia debida: quien opera desde su jurisdiccion responde por el dano transfronterizo previsible. La lectura operativa para un arquitecto: el alcance geografico de las herramientas de un agente es una decision de cumplimiento, no solo tecnica. Documente en el registro de gobierno (Modulo 02) que jurisdicciones puede alcanzar cada agente a traves de sus conectores y servidores MCP, y trate cualquier ampliacion de ese alcance como un cambio que requiere revision legal y no solo aprobacion tecnica.
+
+**3. Las herramientas defensivas autonomas tienen el mismo perfil que las ofensivas.** Un agente de pentesting o red teaming autonomo es, tecnicamente, indistinguible de un atacante autonomo: enumera, explota y se mueve lateralmente, con credenciales y acceso extendido a la red. El precedente que la literatura de politica publica cita de forma explicita es Cobalt Strike, una herramienta legitima de pentesting cuyas versiones pirateadas se convirtieron en instrumento estandar del crimen organizado, obligando a su creador a gestionar el acceso de forma activa y a coordinar con fuerzas del orden. Requisitos antes de desplegar cualquier agente de seguridad ofensiva, propio o de un proveedor: autorizacion escrita con alcance explicito (rangos de red, sistemas incluidos y excluidos, ventana temporal), un kill switch probado con RTO medido (Modulo 02, punto 9), y registro de todas las acciones con la misma retencion que se aplica a un incidente. Track C Modulo 06 aplica esta regla en sus ejercicios de red team.
+
+**Assurance case: el formato que la regulacion pedira despues.** Las industrias criticas (aeroespacial, nuclear) exigen desde hace decadas un *assurance case*: un argumento estructurado, respaldado por evidencia, que sostiene la afirmacion de que un sistema es suficientemente seguro para operar. La direccion en la que se mueve la politica publica de IA es a exigir lo mismo para sistemas autonomos de alto riesgo, incluida la autorizacion previa al despliegue condicionada a esa documentacion. El Gap Assessment de este track ya tiene la estructura de un assurance case incompleto: contiene la afirmacion (este agente puede operar), la evidencia (hallazgos KQL, configuracion validada, controles verificados) y los gaps (lo que falta). Lo que le falta para serlo formalmente es el argumento explicito que conecta la evidencia con la afirmacion. Al cerrar el Gap Assessment, escriba un parrafo por dominio que responda una sola pregunta: por que esta evidencia es suficiente para sostener que este riesgo esta controlado. Ese parrafo es exactamente lo que un auditor o un supervisor pedira, y es lo que hoy falta en la mayoria de los expedientes de cumplimiento de IA.
+
+Referencia: informe HACCA (2026), Seccion 6 (Guardrails for HACCA Development and Deployment) y Seccion 7 (Key Recommendations).
 
 ---
 

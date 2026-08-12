@@ -48,6 +48,8 @@ At the end of this module, you will be able to execute the five attack technique
 
 6. **Indirect prompt injection via SharePoint corpus (XPIA):** When an attacker plants malicious instructions in a SharePoint document that an agent indexes, every subsequent user who asks that agent a question becomes a potential victim — the attack is persistent across sessions and users until the document is removed. Microsoft refers to this as cross-domain prompt injection (XPIA). Copilot Studio has built-in XPIA detection, but its effectiveness depends on whether the instruction is in the indexed content or the user prompt. P04 queries detect the access pattern (unlabeled document accessed by an agent), not the malicious content itself. The gap is content inspection, not telemetry.
 
+7. **Herramientas de red team autonomas: el problema del doble uso:** Los seis ataques de este modulo se ejecutan de forma manual. La evolucion natural es automatizarlos con un agente que ejecute la cadena completa, y esos sistemas ya existen: en pruebas comparativas publicadas, un sistema autonomo de pentesting igualo el desempeno de un pentester principal con mas de veinte anos de experiencia en un conjunto de aproximadamente cien retos, completando la tarea en 28 minutos frente a las 40 horas del operador humano. La economia es incontestable y la adopcion sera rapida. Dos consideraciones que no son opcionales antes de adoptar una. **Primera, el perfil operativo:** un agente de pentesting autonomo es funcionalmente identico a un atacante autonomo, y tendra acceso extendido a la red que esta evaluando. Si el sistema no es fiable, no esta alineado, o su comportamiento no esta acotado por diseno, el ejercicio de seguridad se convierte en el incidente. **Segunda, la proliferacion:** Cobalt Strike es una herramienta legitima de pentesting cuyas versiones pirateadas son hoy instrumento estandar del crimen organizado; la misma trayectoria aplica a las herramientas de red team con IA, y sus desarrolladores deberian implementar controles KYC por la misma razon. Requisitos minimos antes de desplegar una en su organizacion: autorizacion escrita con alcance explicito (rangos de red, sistemas incluidos y excluidos, ventana temporal), kill switch probado con RTO medido (Track B Modulo 02, punto 9), y registro completo de acciones con retencion equivalente a la de un incidente. Referencia: informe HACCA (2026), "Automated Red Teaming and Pentesting".
+
 ---
 
 ## Background
@@ -84,6 +86,22 @@ At the end of this module, you will be able to execute the five attack technique
 | Exfiltration | P04 + P03-Q6 | Volume anomalies + connector egress | No |
 
 > Built-in protection blocks UPIA/XPIA execution but does not generate Sentinel incidents. Your KQL detects the *attempt* regardless of whether built-in protection blocked the *action*. Both are required: protection for containment, KQL for investigation.
+
+### Calibrar el ejercicio contra un nivel de adversario
+
+Los ataques de este laboratorio simulan un adversario oportunista con acceso al tenant. Para dimensionar contra que nivel de atacante esta probando su deteccion, la escala de capacidad operativa de RAND es un marco util y ampliamente citado en analisis de amenazas:
+
+| Nivel | Perfil | Recursos por operacion |
+|-------|--------|------------------------|
+| OC1 | Aficionado | 1 persona, $1,000, dias |
+| OC2 | Oportunista profesional | 1 persona, $10,000, semanas |
+| OC3 | Sindicato de cibercrimen o amenaza interna (Conti, REvil) | 10 personas, $1M, meses |
+| OC4 | Estado-nacion estandar (aliados, Iran, Corea del Norte) | 100 personas, $10M |
+| OC5 | Estado-nacion de maxima capacidad (EE.UU., China, Rusia) | 1,000 personas, $1B |
+
+Los ataques 1 a 5 de este modulo se situan en OC1-OC2: no requieren zero-days, ni infraestructura dedicada, ni persistencia de semanas. El ataque 6 (cadena JadePuffer) es el primero que se aproxima a OC3, porque exige persistencia, adaptacion ante fallo y ejecucion multi-etapa coordinada. La proyeccion de la literatura de politica publica sobre agentes ciber altamente autonomos usa precisamente OC3 como umbral de definicion: capacidad equivalente a diez operadores experimentados durante varios meses, ejecutada sin supervision humana continua. Ese umbral se elige porque es donde las operaciones dejan de ser oportunistas y pasan a ser campanas estrategicas con dano significativo, y donde la defensa se convierte en prioridad de seguridad nacional.
+
+**Consecuencia practica para su SOC:** las reglas calibradas contra OC1-OC2 (umbrales de volumen, firmas conocidas, listas de IOC) no trasladan a un adversario agentico de nivel OC3. Ese es exactamente el gap que los puntos 11 y 12 del Modulo 05 de Track B intentan cerrar con firmas de secuencia y honeypots de agente, en lugar de firmas de artefacto.
 
 ---
 
