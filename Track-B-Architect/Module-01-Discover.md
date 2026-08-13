@@ -28,6 +28,25 @@ By the end of this module, participants will be able to design an agent inventor
 
 4. **The cost of an incomplete inventory:** An agent not listed in the inventory does not appear in Conditional Access policies, has no technical owner for escalation, and is not subject to Sentinel analytics rules. The inventory gap is the gap across every subsequent security layer.
 
+5. **PHANTOM-B: la lente de threat modeling para cada agente que el inventario encuentra:** Un inventario responde que agentes existen. La pregunta inmediatamente siguiente es que puede salir mal con cada uno, y ahi la mayoria de los equipos se queda sin metodo. PHANTOM-B (Adam Shostack, 2026) es el analogo de STRIDE para LLMs, escrito por el mismo autor: un mnemonico de ocho amenazas pensado para quien **consume** un LLM, no para quien lo entrena, que es exactamente la posicion de una organizacion que despliega Copilot o agentes en Azure AI Foundry.
+
+   | Letra | Amenaza | Pregunta que dispara sobre cada agente del inventario |
+   |-------|---------|------------------------------------------------------|
+   | **P** | Prompt injection | Que entradas no confiables llegan a este agente, directas o via corpus y respuestas de herramientas? |
+   | **H** | Hallucination | Que pasa aguas abajo si la respuesta es plausible y falsa? |
+   | **A** | Anthropomorphization | Estamos asumiendo intencion, culpa o cumplimiento donde solo hay prediccion de tokens? |
+   | **N** | Non-explainability | Cuando tenemos que justificar la salida, ante quien, y con que evidencia? |
+   | **T** | Training issues | Que sabemos del origen del modelo, sus datos y su fine-tuning? |
+   | **O** | Over-reliance | Que decisiones toma este agente sin revision, y cual es el radio de impacto? |
+   | **M** | Missing security engineering | Hicimos la ingenieria de seguridad de siempre, o el LLM la desplazo? |
+   | **B** | Biases | Que sesgos hereda, y en este caso de uso son aceptables o son un problema legal? |
+
+   Tres razones para usarlo en este modulo y no mas adelante: (a) es barato de aprender y de aplicar, a diferencia de MAESTRO o ATLAS, lo que lo hace el unico framework de esta serie que un equipo puede adoptar en una reunion; (b) Shostack lo diseno como **prompts, no como taxonomia**: no se trata de clasificar cada amenaza en su casilla sino de verificar que se considero al menos una de cada tipo, que es justo lo que hace falta cuando se recorre un inventario recien construido; (c) no incluye controles ni mitigaciones, por decision explicita del autor, lo que lo vuelve complementario y no competidor de los Modulos 02 a 07 de este track, que son precisamente los controles.
+
+   **La incomodidad que vale discutir con el grupo:** Shostack sostiene que llamar "agentic" a la IA es en si mismo un caso de antropomorfizacion, una de sus ocho amenazas. Es una critica directa al vocabulario de este workshop y conviene ponerla sobre la mesa en lugar de esquivarla. El argumento operativo detras: si se asume que el sistema tiene intencion, se asume tambien que entiende una instruccion de "no hagas X" y que la respetara. De ahi salen dos errores concretos que este track corrige mas adelante: aprobar lo que el agente *dice* que va a hacer en lugar del comando real (Modulo 02, punto 5) y creer que un "detente" en el system prompt es un kill switch (Modulo 02, punto 9).
+
+   Referencia: Adam Shostack, "PHANTOM-B: A STRIDE Analog for LLMs", Shostack + Associates White Paper #6, julio 2026, CC-BY.
+
 ---
 
 **Exercise / Lab:**
@@ -39,9 +58,10 @@ By the end of this module, participants will be able to design an agent inventor
   2. In Sentinel → Logs, run the full `AgentsInfo` inventory query from the KQL Library (P01-Agent-Discovery.kql) and document the count by platform and lifecycle status
   3. Identify which categories of agents in the organization's environment will NOT appear in this inventory (local agents, third-party without connector, etc.) — document as blind spots
   4. Design a telemetry flow diagram: which agent → which connector → which table → which query detects it → which control applies
-  5. Complete the "Domain 1 — Discover" section of the Gap Assessment Template
-- **Required tools:** Microsoft Defender XDR (AI Agent Inventory), Microsoft Sentinel (Logs), KQL Library (repository), Gap Assessment Template
-- **Deliverable:** Telemetry flow diagram + Domain 1 section of the Gap Assessment completed with real agent count, identified blind spots, and control recommendations
+  5. **Pasada PHANTOM-B sobre el inventario:** elegir los 3 agentes de mayor exposicion del paso 2 y, para cada uno, recorrer las ocho letras respondiendo con una frase por amenaza. No buscar exhaustividad: el objetivo es detectar en cual de las ocho el equipo no tiene ninguna respuesta, porque ese es el gap real. Registrar el resultado como una matriz de 3 agentes por 8 amenazas
+  6. Complete the "Domain 1 — Discover" section of the Gap Assessment Template
+- **Required tools:** Microsoft Defender XDR (AI Agent Inventory), Microsoft Sentinel (Logs), KQL Library (repository), PHANTOM-B (tabla del punto 5 de este modulo), Gap Assessment Template
+- **Deliverable:** Telemetry flow diagram + matriz PHANTOM-B de 3 agentes x 8 amenazas + Domain 1 section of the Gap Assessment completed with real agent count, identified blind spots, and control recommendations
 
 ---
 
