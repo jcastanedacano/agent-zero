@@ -2,15 +2,134 @@
 
 **Practical security workshops for AI agents on the Microsoft stack.**
 
-> A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
+[![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
+[![Modules](https://img.shields.io/badge/Modules-19-0078D4)](#choose-your-track)
+[![KQL Queries](https://img.shields.io/badge/KQL_Queries-45%2B-5E2750)](./KQL-Library/README.md)
+[![Agent Skills](https://img.shields.io/badge/Agent_Skills-30-2D7D9A)](./skills/)
+[![Frameworks](https://img.shields.io/badge/Frameworks-10%2B_mapped-107C10)](#framework-coverage)
+[![Tracks](https://img.shields.io/badge/Tracks-3-FF8C00)](#choose-your-track)
+
+Seven security domains for agentic AI in the enterprise. Three audience tracks. Everything runs in a Microsoft 365 E5 demo tenant.
+
+|  |  |
+|---|---|
+| **19 modules** across Executive, Architect, and SOC Engineer tracks | **45+ KQL queries** validated against a live M365 tenant (June 2026) |
+| **30 agent skills** in agentskills.io format | **ARM template** deploys a preconfigured Sentinel workspace in one click |
+| **10+ frameworks mapped** to concrete Microsoft controls | **Facilitator kit** with prerequisites, checklists, and impact signals |
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fagent-zero%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
+<details>
+<summary><b>Full scope — every framework, control, and threat vector covered</b></summary>
+
+<br>
+
+A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
+
+</details>
+
 ---
 
-## What This Is
+## Contents
 
-A community lab framework covering seven security domains for AI agents on the Microsoft stack:
+<details>
+<summary><b>Expand table of contents</b></summary>
+
+<br>
+
+**Start here**
+- [Choose your track](#choose-your-track)
+- [The seven domains](#the-seven-domains)
+- [Quick start](#quick-start)
+- [Prerequisites](#prerequisites)
+
+**What's inside**
+- [Repository structure](#repository-structure)
+- [Skills library](#skills-library)
+- [KQL library — schema validation status](#kql-library--schema-validation-status)
+- [Microsoft controls coverage](#microsoft-controls-coverage)
+
+**How the threat model is built**
+- [The agent attack surface](#the-agent-attack-surface)
+- [Design principles](#design-principles)
+- [Framework coverage](#framework-coverage)
+- [Risk vectors covered](#risk-vectors-covered)
+
+**Reference**
+- [How to use these labs](#how-to-use-these-labs)
+- [Contributing](#contributing)
+- [Related projects](#related-projects)
+- [References](#references)
+
+</details>
+
+---
+
+## Choose your track
+
+Three parallel tracks. Pick by role and by how much lab access you have.
+
+```mermaid
+flowchart TD
+    Start([What is your role?]) --> Exec{Do you need<br/>hands-on lab access?}
+    Exec -->|No — I decide budget<br/>and set policy| A["<b>Track A — Executive</b><br/>CISO · CTO · Director<br/>4 hours"]
+    Exec -->|Yes| Tech{Do you <b>design</b> controls<br/>or <b>operate</b> detections?}
+    Tech -->|Design the architecture| B["<b>Track B — Architect</b><br/>Security Architect · Consultant<br/>10.5 hours"]
+    Tech -->|Run the SOC| C["<b>Track C — SOC Engineer</b><br/>SOC Analyst · Security Engineer<br/>9.5 hours"]
+
+    A --> AOut[/"Risk Posture Map<br/>+ Board Brief"/]
+    B --> BOut[/"Gap Assessment<br/>+ 90-day roadmap"/]
+    C --> COut[/"Agentic incident<br/>response playbook"/]
+
+    style A fill:#FF8C00,stroke:#333,color:#fff
+    style B fill:#0078D4,stroke:#333,color:#fff
+    style C fill:#5E2750,stroke:#333,color:#fff
+    style AOut fill:#fff4e6,stroke:#FF8C00
+    style BOut fill:#e6f2fb,stroke:#0078D4
+    style COut fill:#f0e6f0,stroke:#5E2750
+```
+
+| Track | Audience | Format | Duration | Output |
+|-------|----------|--------|----------|--------|
+| [**A — Executive**](./Track-A-Executive/README.md) | CISO / CTO / Director | Decision exercises, risk scenarios, roleplay — no lab access required | 4 hours | Risk Posture Map + Board Brief |
+| [**B — Architect**](./Track-B-Architect/README.md) | Security Architect / Consultant | Hands-on labs in M365 E5 demo tenant + Azure AI Foundry | 10.5 hours | Gap Assessment + 90-day roadmap |
+| [**C — SOC Engineer**](./Track-C-SOC-Engineer/README.md) | SOC Analyst / Security Engineer | KQL labs, Sentinel analytics rules, Purview, Entra CA, Logic Apps | 9.5 hours | Agentic incident response playbook |
+
+> **Running a team event?** All three tracks can run in parallel. Share a 30-minute opening keynote on the seven domains, then split into track-specific rooms.
+
+---
+
+## The seven domains
+
+Every track walks the same seven domains. Each one answers a question the previous one exposes.
+
+```mermaid
+flowchart LR
+    D1["<b>01</b><br/>Discover"] --> D2["<b>02</b><br/>Govern"]
+    D2 --> D3["<b>03</b><br/>Secure Access"]
+    D3 --> D4["<b>04</b><br/>Protect Data"]
+    D4 --> D5["<b>05</b><br/>Detect &amp; Respond"]
+    D5 --> D6["<b>06</b><br/>Regulatory"]
+    D6 --> D7["<b>07</b><br/>Vendor Risk"]
+
+    D1 -.-> Q1[/"What is running?"/]
+    D2 -.-> Q2[/"Who owns it?"/]
+    D3 -.-> Q3[/"What can it reach?"/]
+    D4 -.-> Q4[/"Can it leak?"/]
+    D5 -.-> Q5[/"Would we see it?"/]
+    D6 -.-> Q6[/"Can we prove it?"/]
+    D7 -.-> Q7[/"Who else is in the chain?"/]
+
+    style D1 fill:#0078D4,stroke:#333,color:#fff
+    style D2 fill:#0078D4,stroke:#333,color:#fff
+    style D3 fill:#0078D4,stroke:#333,color:#fff
+    style D4 fill:#0078D4,stroke:#333,color:#fff
+    style D5 fill:#0078D4,stroke:#333,color:#fff
+    style D6 fill:#107C10,stroke:#333,color:#fff
+    style D7 fill:#107C10,stroke:#333,color:#fff
+```
+
+**The dependency that matters:** an agent missing from Domain 01 is missing from every domain after it. It has no Conditional Access policy, no owner to escalate to, and no Sentinel rule watching it. The inventory gap is the gap in every subsequent layer.
 
 | # | Domain | Core Question | Outcome |
 |---|--------|---------------|---------|
@@ -24,19 +143,12 @@ A community lab framework covering seven security domains for AI agents on the M
 
 ---
 
-## Who This Is For
+## Repository structure
 
-Three parallel tracks — pick the one that fits your role:
+<details>
+<summary><b>Expand full directory tree</b></summary>
 
-| Track | Audience | Format | Duration | Output |
-|-------|----------|--------|----------|--------|
-| [**A — Executive**](./Track-A-Executive/README.md) | CISO / CTO / Director | Decision exercises, risk scenarios, roleplay — no lab access required | 4 hours | Risk Posture Map + Board Brief |
-| [**B — Architect**](./Track-B-Architect/README.md) | Security Architect / Consultant | Hands-on labs in M365 E5 demo tenant + Azure AI Foundry | 10.5 hours | Gap Assessment + 90-day roadmap |
-| [**C — SOC Engineer**](./Track-C-SOC-Engineer/README.md) | SOC Analyst / Security Engineer | KQL labs, Sentinel analytics rules, Purview, Entra CA, Logic Apps | 9.5 hours | Agentic incident response playbook |
-
----
-
-## Repository Structure
+<br>
 
 ```
 agent-zero/
@@ -95,6 +207,8 @@ agent-zero/
     ├── Lab-Environment-Checklist.md
     └── Impact-Indicators.md
 ```
+
+</details>
 
 ---
 
@@ -181,17 +295,176 @@ All queries in the KQL Library have been validated against a live Microsoft 365 
 
 ---
 
-## Microsoft Controls Coverage
+## Microsoft controls coverage
 
-| Domain | Primary Controls |
-|--------|-----------------|
-| 01 Discover & Prioritize | Purview DSPM for AI · Defender AI Agent Inventory · Agent 365 Registry · SharePoint Advanced Management · CloudAppEvents (third-party agent discovery) |
-| 02 Govern & Control | Entra Agent ID · Copilot Studio governance + approval flow · Foundry RBAC + API controls · Power Platform DLP · Tiered Autonomy (Logic Apps playbook tiers) · CAGE model (independent control plane from reasoning path) · Entitlement Management access packages (time-bound least privilege) · Three-level kill switch (Graph `revokeSignInSessions` → Entra `accountEnabled=false` → runtime unpublish/deployment delete) with measured RTO · Human-on-the-loop override for tier 3 actions · Direct tool invocation awareness (approval events must be cryptographically bound to the request, not readable claims in session history) · Multi-owner agent governance (org-wide sharing policy default hardening, accountable-owner tracking outside the product, deletion-event monitoring for multi-owner agents) · Named Conditional Access templates for agents (On behalf of / Autonomous agent access policy, Agent execution environments condition, Custom Security Attribute targeting at scale) |
-| 03 Secure Access | Entra CA for Agents (`clientApplications.includeAgentIdServicePrincipals`) · Named CA templates (On behalf of / Autonomous agent access policy) · Entra ID Protection · PIM just-in-time · Defender for Cloud Apps · Foundry rate limiting (model extraction prevention) · Placeholder token/proxy pattern (non-Azure agents, RFC 8705 mTLS) · Credential brokering vs. credential injection (token never enters agent memory) · Defender for Cloud CNAPP (Azure-hosted agent workloads; AI agent inventory requires Microsoft Agent 365 license as of 1 Jul 2026) · Direct tool invocation defenses (cryptographically-bound approval events, tool-call telemetry independent of model telemetry) · AI gateway hardening (default credential rotation, admin/API credential separation, metadata-endpoint egress block, runtime-vs-config drift audit) |
-| 04 Protect Data | Purview DLP (AI interactions workload) · Insider Risk Management · Sensitivity labels · SharePoint Advanced Management · Foundry RBAC (membership inference prevention) · Context governance: ABAC + data minimization at data-to-agent boundary · Context gap detection (audit of what data agent received as input) · Cross-tenant vector search leakage (Azure AI Search security trimming + row-level access control per document + separate index per tenant — OWASP LLM09:2026) |
-| 05 Detect & Respond | Defender XDR · Microsoft Sentinel + native MCP server · Security Copilot agents · Purview Audit · Agent 365 · Logic Apps (tiered automated response) · KQL P05-Q8 agentic ransomware chain detection · Behavioral drift monitoring (refusal rate baseline per agent, Sentinel Workbook 90-day rolling window) · Canary tokens (decoy credentials for exfiltration detection) · Honeytokens (decoy RAG documents for corpus access control validation) · Agent-to-agent prompt injection (Prompt Shield indirect mode on subagent outputs, AgentId audit trail) · Sequence signatures for autonomous operations (retry-with-variation, inter-action latency distribution, post-access verification) · Agent honeypots (decoy environment with LLM-only discrimination instruction, placement, interaction depth, canary mechanism) · Security agent configuration integrity (prompt/tool-set hashing + change-record correlation) |
-| 06 Regulatory Compliance | Microsoft Purview Compliance Manager (EU AI Act + ISO 42001 + NIST AI RMF 1.0 templates) · Purview Audit (immutable record keeping) · Copilot Studio disclosure settings (Art. 13) · Autonomy-graded incident taxonomy (human-directed / agent-initiated in scope / agent-initiated out of scope) · Jurisdictional reach documented per agent connector and MCP server · Assurance case structure over the Gap Assessment |
-| 07 Vendor & Third-Party AI Risk | Power Platform DLP (block unapproved connectors) · Microsoft 365 admin center Agents and Tools (MCP server allow/block) · AgentsInfo.McpServers + CloudAppEvents ExecuteToolByGateway (audit) · Azure AI Foundry model layer controls (prompt shields, content filters, groundedness detection) · Open source AI platform hardening (Langflow, Flowise, n8n) · Denial-of-Wallet mitigation (APIM rate limiting + Azure Cost Management alerts + input token pre-filter + per-deployment TPM quotas) · AI-BOM (machine-readable bill of materials: model version, dataset provenance, fine-tuning lineage, MCP server hashes — maps to EU AI Act Art. 13 and NIST AI RMF GOVERN-4) · Agent KYC (Entra Agent ID sponsor as deployer attestation + per-agent APIM subscription key for attribution and granular revocation + no payment instruments held by agents) · Model weight security posture as a vendor question (B5) · Purview Claude Enterprise connector (prompt/response visibility into a monitored external model vendor) |
+Every domain maps to named, configurable Microsoft controls. Expand a domain to see what it deploys.
+
+<details>
+<summary><b>01 — Discover & Prioritize</b> · 5 controls</summary>
+
+
+- Purview DSPM for AI
+- Defender AI Agent Inventory
+- Agent 365 Registry
+- SharePoint Advanced Management
+- CloudAppEvents (third-party agent discovery)
+
+</details>
+
+<details>
+<summary><b>02 — Govern & Control</b> · 12 controls</summary>
+
+
+- Entra Agent ID
+- Copilot Studio governance + approval flow
+- Foundry RBAC + API controls
+- Power Platform DLP
+- Tiered Autonomy (Logic Apps playbook tiers)
+- CAGE model (independent control plane from reasoning path)
+- Entitlement Management access packages (time-bound least privilege)
+- Three-level kill switch (Graph `revokeSignInSessions` → Entra `accountEnabled=false` → runtime unpublish/deployment delete) with measured RTO
+- Human-on-the-loop override for tier 3 actions
+- Direct tool invocation awareness (approval events must be cryptographically bound to the request, not readable claims in session history)
+- Multi-owner agent governance (org-wide sharing policy default hardening, accountable-owner tracking outside the product, deletion-event monitoring for multi-owner agents)
+- Named Conditional Access templates for agents (On behalf of / Autonomous agent access policy, Agent execution environments condition, Custom Security Attribute targeting at scale)
+
+</details>
+
+<details>
+<summary><b>03 — Secure Access</b> · 11 controls</summary>
+
+
+- Entra CA for Agents (`clientApplications.includeAgentIdServicePrincipals`)
+- Named CA templates (On behalf of / Autonomous agent access policy)
+- Entra ID Protection
+- PIM just-in-time
+- Defender for Cloud Apps
+- Foundry rate limiting (model extraction prevention)
+- Placeholder token/proxy pattern (non-Azure agents, RFC 8705 mTLS)
+- Credential brokering vs. credential injection (token never enters agent memory)
+- Defender for Cloud CNAPP (Azure-hosted agent workloads; AI agent inventory requires Microsoft Agent 365 license as of 1 Jul 2026)
+- Direct tool invocation defenses (cryptographically-bound approval events, tool-call telemetry independent of model telemetry)
+- AI gateway hardening (default credential rotation, admin/API credential separation, metadata-endpoint egress block, runtime-vs-config drift audit)
+
+</details>
+
+<details>
+<summary><b>04 — Protect Data</b> · 8 controls</summary>
+
+
+- Purview DLP (AI interactions workload)
+- Insider Risk Management
+- Sensitivity labels
+- SharePoint Advanced Management
+- Foundry RBAC (membership inference prevention)
+- Context governance: ABAC + data minimization at data-to-agent boundary
+- Context gap detection (audit of what data agent received as input)
+- Cross-tenant vector search leakage (Azure AI Search security trimming + row-level access control per document + separate index per tenant — OWASP LLM09:2026)
+
+</details>
+
+<details>
+<summary><b>05 — Detect & Respond</b> · 14 controls</summary>
+
+
+- Defender XDR
+- Microsoft Sentinel + native MCP server
+- Security Copilot agents
+- Purview Audit
+- Agent 365
+- Logic Apps (tiered automated response)
+- KQL P05-Q8 agentic ransomware chain detection
+- Behavioral drift monitoring (refusal rate baseline per agent, Sentinel Workbook 90-day rolling window)
+- Canary tokens (decoy credentials for exfiltration detection)
+- Honeytokens (decoy RAG documents for corpus access control validation)
+- Agent-to-agent prompt injection (Prompt Shield indirect mode on subagent outputs, AgentId audit trail)
+- Sequence signatures for autonomous operations (retry-with-variation, inter-action latency distribution, post-access verification)
+- Agent honeypots (decoy environment with LLM-only discrimination instruction, placement, interaction depth, canary mechanism)
+- Security agent configuration integrity (prompt/tool-set hashing + change-record correlation)
+
+</details>
+
+<details>
+<summary><b>06 — Regulatory Compliance</b> · 6 controls</summary>
+
+
+- Microsoft Purview Compliance Manager (EU AI Act + ISO 42001 + NIST AI RMF 1.0 templates)
+- Purview Audit (immutable record keeping)
+- Copilot Studio disclosure settings (Art. 13)
+- Autonomy-graded incident taxonomy (human-directed / agent-initiated in scope / agent-initiated out of scope)
+- Jurisdictional reach documented per agent connector and MCP server
+- Assurance case structure over the Gap Assessment
+
+</details>
+
+<details>
+<summary><b>07 — Vendor & Third-Party AI Risk</b> · 10 controls</summary>
+
+
+- Power Platform DLP (block unapproved connectors)
+- Microsoft 365 admin center Agents and Tools (MCP server allow/block)
+- AgentsInfo.McpServers + CloudAppEvents ExecuteToolByGateway (audit)
+- Azure AI Foundry model layer controls (prompt shields, content filters, groundedness detection)
+- Open source AI platform hardening (Langflow, Flowise, n8n)
+- Denial-of-Wallet mitigation (APIM rate limiting + Azure Cost Management alerts + input token pre-filter + per-deployment TPM quotas)
+- AI-BOM (machine-readable bill of materials: model version, dataset provenance, fine-tuning lineage, MCP server hashes — maps to EU AI Act Art. 13 and NIST AI RMF GOVERN-4)
+- Agent KYC (Entra Agent ID sponsor as deployer attestation + per-agent APIM subscription key for attribution and granular revocation + no payment instruments held by agents)
+- Model weight security posture as a vendor question (B5)
+- Purview Claude Enterprise connector (prompt/response visibility into a monitored external model vendor)
+
+</details>
+
+---
+
+## The agent attack surface
+
+Agents introduce four surfaces that traditional security tooling does not cover. Every domain in this framework maps to closing one of them.
+
+```mermaid
+flowchart TB
+    subgraph Untrusted["Attacker-controlled input"]
+        U1[User prompt]
+        U2[SharePoint corpus<br/>documents]
+        U3["Tool / MCP<br/>responses"]
+        U4[Web content the<br/>agent browses]
+    end
+
+    subgraph Agent["The agent"]
+        LLM{{"Model<br/><i>cannot distinguish<br/>data from instruction</i>"}}
+        RT["Runtime / SDK"]
+    end
+
+    subgraph Blast["What it can reach"]
+        T1[Declared tools]
+        T2[Connectors<br/>and APIs]
+        T3["Identity<br/>(Entra Agent ID)"]
+    end
+
+    U1 --> LLM
+    U2 --> LLM
+    U3 --> LLM
+    U4 --> LLM
+    LLM --> RT
+    RT --> T1 & T2 & T3
+
+    RT -. "direct tool invocation<br/>bypasses the model entirely" .-> T1
+
+    C1["<b>04</b> Protect Data<br/>DLP · labels · security trimming"] -.guards.-> Untrusted
+    C2["<b>05</b> Detect &amp; Respond<br/>Prompt Shield · KQL · Sentinel"] -.watches.-> Agent
+    C3["<b>03</b> Secure Access<br/>CA · least agency · PIM"] -.constrains.-> Blast
+    C4["<b>02</b> Govern<br/>ownership · tiers · kill switch"] -.authorizes.-> Blast
+
+    style LLM fill:#5E2750,stroke:#333,color:#fff
+    style RT fill:#5E2750,stroke:#333,color:#fff
+    style C1 fill:#107C10,stroke:#333,color:#fff
+    style C2 fill:#107C10,stroke:#333,color:#fff
+    style C3 fill:#107C10,stroke:#333,color:#fff
+    style C4 fill:#107C10,stroke:#333,color:#fff
+    style Untrusted fill:#fdecea,stroke:#a8452a
+    style Blast fill:#fff4e6,stroke:#FF8C00
+```
+
+The dotted line matters most. Every prompt-layer control assumes the model sits in the execution path. Research presented at BlackHat USA 2026 documented agent runtimes across three major SDKs that execute a supplied tool-call block **with no model invocation in between** — which means Prompt Shield, content filters, and every prompt-scoring KQL query never fire, because they were never in the path. See [Track B Module-02 point 11](./Track-B-Architect/Module-02-Govern.md).
 
 ---
 
@@ -209,7 +482,25 @@ Two concepts from Anthropic's [Zero Trust for AI Agents](https://www.anthropic.c
 
 ---
 
-## OWASP Top 10 for Agentic AI (2026) — Coverage Map
+## Framework coverage
+
+This framework does not invent a taxonomy. It maps six published threat models to the same Microsoft controls, so a finding in one vocabulary is traceable in the others.
+
+| Framework | Scope | Effort to adopt | Best used for |
+|---|---|---|---|
+| **PHANTOM-B** | The LLM call | Low | First pass on every agent in the inventory (Module 01) |
+| **OWASP Agentic Top 10** | Agent system | Low | Vulnerability classification and reporting |
+| **OWASP Agentic Skills Top 10** | Skill / MCP layer | Low | Third-party tool and plugin review (Module 07) |
+| **CIS Controls v8.1** | Control catalog | Medium | Mapping agent work into an existing CIS program |
+| **MAESTRO** | Multi-agent architecture | High | Cross-layer propagation in agent-to-agent designs |
+| **HACCA** | Autonomous adversary | Strategic | Executive framing and defense-in-depth prioritization |
+
+**Which to start with:** PHANTOM-B per agent, escalate to MAESTRO only when agents call other agents. The two answer different questions and the effort difference is real.
+
+<details>
+<summary><b>OWASP Agentic AI Top 10 (2026)</b> — AG01–AG10 · agent system level</summary>
+
+<br>
 
 | OWASP Category | This Framework | Primary Pillar |
 |----------------|---------------|----------------|
@@ -224,9 +515,12 @@ Two concepts from Anthropic's [Zero Trust for AI Agents](https://www.anthropic.c
 | AG09 — Shadow AI / Ungoverned Agents | Discover pillar; Defender AI Inventory; Agent 365 Registry; KQL P01 | 01 Discover |
 | AG10 — Denial of AI Service | KQL P03-Q1 scope expansion; rate limit monitoring via Q6 | 03 Secure |
 
----
+</details>
 
-## OWASP Agentic Skills Top 10 (2026) — Coverage Map
+<details>
+<summary><b>OWASP Agentic Skills Top 10 (2026)</b> — AST01–AST10 · skill and plugin layer</summary>
+
+<br>
 
 The [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-top-10/) (AST01–AST10) covers risks specific to the **skill/plugin layer** — the MCP servers, tools, and agent extensions that load into agent runtimes at execution time. Distinct from the Agentic AI Top 10 (AG01–AG10) which covers the agent system level.
 
@@ -243,9 +537,12 @@ The [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-t
 | AST09 — No Governance | Shadow AI skills; no enterprise skill inventory; skills invisible to endpoint scanners | Medium | Track B Module-02 (govern & control); Track B Module-07 (vendor registry); KQL P01-Q2 (shadow AI) |
 | AST10 — Cross-Platform Reuse | Security metadata lost when porting skills across platforms; Universal Skill Format not adopted | Medium | skills/SCHEMA.md (Universal Skill Format security fields: `risk_tier`, `permissions`, `scan_status`, `content_hash`) |
 
----
+</details>
 
-## MAESTRO — 7-Layer Agentic AI Threat Model Coverage Map
+<details>
+<summary><b>MAESTRO (Cloud Security Alliance)</b> — 7 layers · cross-layer threat propagation</summary>
+
+<br>
 
 [MAESTRO](https://cloudsecurityalliance.org/blog/2025/02/06/agentic-ai-threat-modeling-framework-maestro) (Multi-Agent Environment, Security, Threat, Risk & Outcome) is the Cloud Security Alliance's structured threat modeling framework for autonomous AI systems. Unlike OWASP (vulnerability taxonomy) or CIS Controls (control catalog), MAESTRO is a **threat modeling methodology**: it provides a 7-layer reference architecture and a 6-step analysis process for identifying how threats originate in one layer and propagate across others. It is the CSA equivalent of STRIDE/PASTA, purpose-built for agentic systems.
 
@@ -271,9 +568,12 @@ The 7 layers, from infrastructure to ecosystem:
 
 **MAESTRO 6-step methodology** applied to this framework's lab environment: (1) decompose your demo tenant into MAESTRO's 7 layers — which layer does each Copilot Studio agent, MCP server, and Foundry deployment sit in? (2) run layer-specific KQL queries (P01–P05) to surface threats per layer; (3) trace cross-layer propagation paths; (4) evaluate risk using the P-series severity scores; (5) map mitigations to the Track B/C module controls; (6) deploy Sentinel analytics rules and monitor continuously.
 
----
+</details>
 
-## PHANTOM-B — STRIDE Analog for LLMs Coverage Map
+<details>
+<summary><b>PHANTOM-B (Adam Shostack)</b> — 8 threats · the lightest to adopt</summary>
+
+<br>
 
 [PHANTOM-B](https://shostack.org) (Adam Shostack, White Paper #6, July 2026, CC-BY) is a STRIDE-analogous mnemonic for the LLM parts of a system, written by the author of STRIDE itself. It is deliberately the **lightest** framework in this repository: low effort to learn, low effort to use, and scoped to organizations that *call* an LLM rather than train one — which is the position of every enterprise deploying Copilot, Copilot Studio, or Azure AI Foundry agents. Shostack designed it as a set of **prompts, not categories**: the goal is not to file each threat into a bucket but to confirm you considered at least one of each kind. By explicit design it contains no controls or mitigations, which makes it complementary to this framework rather than overlapping with it.
 
@@ -292,9 +592,12 @@ The 7 layers, from infrastructure to ecosystem:
 
 **Note on the "agentic" label.** PHANTOM-B lists anthropomorphization as a first-class threat and names calling AI "agentic" as an instance of it. This repository uses that term throughout. The critique is included here rather than omitted because it has an operational payload: assuming intent leads directly to approving what an agent *says* it will do and to trusting a system prompt as a control boundary. Track B Module-02 points 5 and 9 exist to counter exactly those two errors.
 
----
+</details>
 
-## CIS Controls v8.1 — AI Agent Coverage Map
+<details>
+<summary><b>CIS Controls v8.1 — AI Agent Companion Guide</b> — 10 controls · IG1/IG2/IG3 prioritization</summary>
+
+<br>
 
 The [CIS Controls AI Agent Companion Guide](https://www.cisecurity.org/controls/ai-agent-companion-guide) (CIS, 2026) interprets each CIS Control through the lens of autonomous agent systems: their runtimes, orchestration logic, tool interfaces, memory stores, and retrieval pipelines. The table below maps the Controls most relevant to agentic environments to this framework's content.
 
@@ -313,9 +616,12 @@ The [CIS Controls AI Agent Companion Guide](https://www.cisecurity.org/controls/
 
 **Implementation Groups:** The CIS Companion Guide uses the IG1/IG2/IG3 prioritization model. Map to this framework: Track A exercises (IG1 baseline understanding) → Track B Architect labs (IG2 enterprise controls) → Track C SOC engineer detection (IG3 advanced detection and response).
 
----
+</details>
 
-## HACCA Defense-in-Depth — Coverage Map
+<details>
+<summary><b>HACCA Defense-in-Depth</b> — Delay · Defend · Detect · Disrupt</summary>
+
+<br>
 
 The 2026 policy report *Highly Autonomous Cyber-Capable Agents: Anticipating Capabilities, Tactics, and Strategic Implications* projects the emergence of AI systems able to run end-to-end offensive cyber campaigns for weeks to months without human supervision, at the capability level of an organized criminal group (RAND OC3: ~10 experienced operators, $1M, multi-month). Its practical contribution for defenders is a four-layer framework — **Delay, Defend, Detect, Disrupt** — that organizes countermeasures by strategic objective rather than by product. The table below maps each layer to what this repository already implements and where the gaps sit.
 
@@ -328,18 +634,111 @@ The 2026 policy report *Highly Autonomous Cyber-Capable Agents: Anticipating Cap
 
 **What the report adds that is not a control:** a strategic frame for the *why now*. Its central empirical anchor is the September 2025 campaign in which AI agents autonomously executed an estimated 80–90% of tactical operations against approximately 30 global targets — the first documented case of the tool becoming the operator. Its second contribution is naming the loss-of-control failure mode as a distinct risk class from the misuse failure mode: a rogue autonomous system is a *threat actor*, not a *threat tool*, and the two require different countermeasures. That distinction maps directly onto MAESTRO Layer 5 (compromised monitoring agents) and onto the kill switch requirement in Module 02.
 
+</details>
+
 ---
 
-## Risk Vectors Covered
+## Risk vectors covered
 
-| Domain | Vectors |
-|--------|---------|
-| 01 | Shadow AI · Identity exposure · Data exposure · Local AI agents without endpoint connector · Third-party agents (ISV plugins, MCP servers) |
-| 02 | No technical owner · Makers without controls · No lifecycle · Graph drift · Multi-agent trust boundaries · Unsafe agent autonomy (no tiered autonomy model) · Control plane collapsed into reasoning path (description laundering / rubber-stamp approval) · No tested emergency shutdown (untested kill switch, or a kill switch that depends on the agent's own reasoning path) · Diffused accountability under equal-rights multi-owner agents (any owner can delete the agent, remove co-owners, or enable org-wide sharing) |
-| 03 | CA inherited from users · Over-permissioned agents · Uncontrolled OAuth consent · Identity laundering · Model extraction via API · Token exfiltration from non-managed-identity agent environments · Internet-exposed AI dev platforms (Langflow CVE-2025-3248 class) · Direct tool invocation bypassing the reasoning path entirely (no model call, no prompt-layer detection) · Forged approval events collapsing tiered autonomy to full automation · AI gateway compromise (auth bypass, guardrail sandbox escape to root, SSRF defeating IMDSv2, config-vs-runtime drift) |
-| 04 | Prompt injection · Oversharing · API exfiltration · Corpus poisoning (SharePoint) · Model supply chain poisoning · Memory/session poisoning · Membership inference (privacy without exfiltration) · Context gap (agent acting on stale, misrouted, or wrong data at machine speed) |
-| 05 | Jailbreak attempts · Agent anomaly · Structural false negatives · Evasion at inference boundary · Goal hijacking (sustained objective drift) · Capability/architecture disclosure · LPCI via tool responses · Agentic ransomware chain (autonomous multi-stage, adaptive, no human pause) · Behavioral drift (silent safety degradation without config change) · Agent-to-agent prompt injection (multi-agent trust boundary compromise) · Exfiltration confirmation gap (no detection signal when controls fail — addressed by canary tokens and honeytokens) · Signature-varying autonomous operations (IOC-based detection fails against an attacker that regenerates artifacts on every attempt) · Compromised or subverted monitoring agent (security agent configuration altered without a change record) |
-| 07 | MCP server tool injection · Credential exposure via tool return values · Silent remote tool updates · Open source AI platform RCE · Model layer risks (prompt logging, training data use, no red team documentation) · Foundry model layer misconfiguration (no content filters, no prompt shields) · Denial-of-Wallet (high-cost sponge example flooding of pay-per-token API depleting monthly budget) · AI supply chain opacity (no model provenance, no dataset lineage, no fine-tuning documentation) · No agent-level identity verification at the provider (shared tenant key destroys attribution and granular revocation) · Model weight exposure (open-weight or self-hosted deployments transfer the entire weight-security burden to your organization) · Autonomous offensive tooling adopted without scoped written authorization (dual-use, Cobalt Strike trajectory) |
+What each domain is defending against. These are the vectors the labs actually exercise and the KQL actually detects. **56 distinct vectors** across 6 domains.
+
+<details>
+<summary><b>01 — Discover & Prioritize</b> · 5 vectors</summary>
+
+
+- Shadow AI
+- Identity exposure
+- Data exposure
+- Local AI agents without endpoint connector
+- Third-party agents (ISV plugins, MCP servers)
+
+</details>
+
+<details>
+<summary><b>02 — Govern & Control</b> · 9 vectors</summary>
+
+
+- No technical owner
+- Makers without controls
+- No lifecycle
+- Graph drift
+- Multi-agent trust boundaries
+- Unsafe agent autonomy (no tiered autonomy model)
+- Control plane collapsed into reasoning path (description laundering / rubber-stamp approval)
+- No tested emergency shutdown (untested kill switch, or a kill switch that depends on the agent's own reasoning path)
+- Diffused accountability under equal-rights multi-owner agents (any owner can delete the agent, remove co-owners, or enable org-wide sharing)
+
+</details>
+
+<details>
+<summary><b>03 — Secure Access</b> · 10 vectors</summary>
+
+
+- CA inherited from users
+- Over-permissioned agents
+- Uncontrolled OAuth consent
+- Identity laundering
+- Model extraction via API
+- Token exfiltration from non-managed-identity agent environments
+- Internet-exposed AI dev platforms (Langflow CVE-2025-3248 class)
+- Direct tool invocation bypassing the reasoning path entirely (no model call, no prompt-layer detection)
+- Forged approval events collapsing tiered autonomy to full automation
+- AI gateway compromise (auth bypass, guardrail sandbox escape to root, SSRF defeating IMDSv2, config-vs-runtime drift)
+
+</details>
+
+<details>
+<summary><b>04 — Protect Data</b> · 8 vectors</summary>
+
+
+- Prompt injection
+- Oversharing
+- API exfiltration
+- Corpus poisoning (SharePoint)
+- Model supply chain poisoning
+- Memory/session poisoning
+- Membership inference (privacy without exfiltration)
+- Context gap (agent acting on stale, misrouted, or wrong data at machine speed)
+
+</details>
+
+<details>
+<summary><b>05 — Detect & Respond</b> · 13 vectors</summary>
+
+
+- Jailbreak attempts
+- Agent anomaly
+- Structural false negatives
+- Evasion at inference boundary
+- Goal hijacking (sustained objective drift)
+- Capability/architecture disclosure
+- LPCI via tool responses
+- Agentic ransomware chain (autonomous multi-stage, adaptive, no human pause)
+- Behavioral drift (silent safety degradation without config change)
+- Agent-to-agent prompt injection (multi-agent trust boundary compromise)
+- Exfiltration confirmation gap (no detection signal when controls fail — addressed by canary tokens and honeytokens)
+- Signature-varying autonomous operations (IOC-based detection fails against an attacker that regenerates artifacts on every attempt)
+- Compromised or subverted monitoring agent (security agent configuration altered without a change record)
+
+</details>
+
+<details>
+<summary><b>07 — Vendor & Third-Party AI Risk</b> · 11 vectors</summary>
+
+
+- MCP server tool injection
+- Credential exposure via tool return values
+- Silent remote tool updates
+- Open source AI platform RCE
+- Model layer risks (prompt logging, training data use, no red team documentation)
+- Foundry model layer misconfiguration (no content filters, no prompt shields)
+- Denial-of-Wallet (high-cost sponge example flooding of pay-per-token API depleting monthly budget)
+- AI supply chain opacity (no model provenance, no dataset lineage, no fine-tuning documentation)
+- No agent-level identity verification at the provider (shared tenant key destroys attribution and granular revocation)
+- Model weight exposure (open-weight or self-hosted deployments transfer the entire weight-security burden to your organization)
+- Autonomous offensive tooling adopted without scoped written authorization (dual-use, Cobalt Strike trajectory)
+
+</details>
 
 ---
 
