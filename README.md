@@ -72,10 +72,10 @@ Three parallel tracks. Pick by role and by how much lab access you have.
 ```mermaid
 flowchart TD
     Start([What is your role?]) --> Exec{Do you need<br/>hands-on lab access?}
-    Exec -->|No — I decide budget<br/>and set policy| A["<b>Track A — Executive</b><br/>CISO · CTO · Director<br/>4 hours"]
+    Exec -->|No — I decide budget<br/>and set policy| A["<b>Track A — Executive</b><br/>CISO · CTO · Director"]
     Exec -->|Yes| Tech{Do you <b>design</b> controls<br/>or <b>operate</b> detections?}
-    Tech -->|Design the architecture| B["<b>Track B — Architect</b><br/>Security Architect · Consultant<br/>10.5 hours"]
-    Tech -->|Run the SOC| C["<b>Track C — SOC Engineer</b><br/>SOC Analyst · Security Engineer<br/>9.5 hours"]
+    Tech -->|Design the architecture| B["<b>Track B — Architect</b><br/>Security Architect · Consultant"]
+    Tech -->|Run the SOC| C["<b>Track C — SOC Engineer</b><br/>SOC Analyst · Security Engineer"]
 
     A --> AOut[/"Risk Posture Map<br/>+ Board Brief"/]
     B --> BOut[/"Gap Assessment<br/>+ 90-day roadmap"/]
@@ -89,11 +89,11 @@ flowchart TD
     style COut fill:#f0e6f0,stroke:#5E2750,color:#24292f
 ```
 
-| Track | Audience | Format | Duration | Output |
-|-------|----------|--------|----------|--------|
-| [**A — Executive**](./Track-A-Executive/README.md) | CISO / CTO / Director | Decision exercises, risk scenarios, roleplay — no lab access required | 4 hours | Risk Posture Map + Board Brief |
-| [**B — Architect**](./Track-B-Architect/README.md) | Security Architect / Consultant | Hands-on labs in M365 E5 demo tenant + Azure AI Foundry | 10.5 hours | Gap Assessment + 90-day roadmap |
-| [**C — SOC Engineer**](./Track-C-SOC-Engineer/README.md) | SOC Analyst / Security Engineer | KQL labs, Sentinel analytics rules, Purview, Entra CA, Logic Apps | 9.5 hours | Agentic incident response playbook |
+| Track | Audience | Format | Output |
+|-------|----------|--------|--------|
+| [**A — Executive**](./Track-A-Executive/README.md) | CISO / CTO / Director | Decision exercises, risk scenarios, roleplay — no lab access required | Risk Posture Map + Board Brief |
+| [**B — Architect**](./Track-B-Architect/README.md) | Security Architect / Consultant | Hands-on labs in M365 E5 demo tenant + Azure AI Foundry | Gap Assessment + 90-day roadmap |
+| [**C — SOC Engineer**](./Track-C-SOC-Engineer/README.md) | SOC Analyst / Security Engineer | KQL labs, Sentinel analytics rules, Purview, Entra CA, Logic Apps | Agentic incident response playbook |
 
 > **Running a team event?** All three tracks can run in parallel. Share a 30-minute opening keynote on the seven domains, then split into track-specific rooms.
 
