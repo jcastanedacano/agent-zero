@@ -81,12 +81,12 @@ flowchart TD
     B --> BOut[/"Gap Assessment<br/>+ 90-day roadmap"/]
     C --> COut[/"Agentic incident<br/>response playbook"/]
 
-    style A fill:#FF8C00,stroke:#333,color:#fff
+    style A fill:#FF8C00,stroke:#333,color:#24292f
     style B fill:#0078D4,stroke:#333,color:#fff
     style C fill:#5E2750,stroke:#333,color:#fff
-    style AOut fill:#fff4e6,stroke:#FF8C00
-    style BOut fill:#e6f2fb,stroke:#0078D4
-    style COut fill:#f0e6f0,stroke:#5E2750
+    style AOut fill:#fff4e6,stroke:#FF8C00,color:#24292f
+    style BOut fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    style COut fill:#f0e6f0,stroke:#5E2750,color:#24292f
 ```
 
 | Track | Audience | Format | Duration | Output |
@@ -459,7 +459,7 @@ flowchart TB
     C03["<b>03</b> Secure Access<br/>CA · least agency · PIM"] -.constrains.-> Blast
     C02["<b>02</b> Govern<br/>ownership · tiers · kill switch"] -.authorizes.-> Blast
 
-    style D01 fill:#FF8C00,stroke:#333,color:#fff
+    style D01 fill:#FF8C00,stroke:#333,color:#24292f
     style LLM fill:#5E2750,stroke:#333,color:#fff
     style RT fill:#5E2750,stroke:#333,color:#fff
     style C02 fill:#107C10,stroke:#333,color:#fff
@@ -467,8 +467,8 @@ flowchart TB
     style C04 fill:#107C10,stroke:#333,color:#fff
     style C05 fill:#107C10,stroke:#333,color:#fff
     style C07 fill:#107C10,stroke:#333,color:#fff
-    style Untrusted fill:#fdecea,stroke:#a8452a
-    style Blast fill:#fff4e6,stroke:#FF8C00
+    style Untrusted fill:#fdecea,stroke:#a8452a,color:#24292f
+    style Blast fill:#fff4e6,stroke:#FF8C00,color:#24292f
 ```
 
 **Domain 01 is the precondition, not a peer.** It sits above the others in orange because it does not guard a surface — it establishes that the agent exists at all. An agent absent from the inventory has no Conditional Access policy applied, no owner to escalate to, and no Sentinel rule watching it. Every green control below is silently inapplicable to it.
