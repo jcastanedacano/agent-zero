@@ -4,9 +4,10 @@ version: "1.0"
 pillar: secure
 subdomain: ms-foundry
 description: >-
-  Implementa aislamiento de red para agentes Azure AI Foundry y Copilot Studio
-  usando Private Endpoints, VNet integration y NSG rules, limitando la superficie
-  de red expuesta y previniendo exfiltración via canales de red no autorizados.
+  Implements network isolation for Azure AI Foundry and Copilot Studio agents
+  using Private Endpoints, VNet integration, and NSG rules, limiting the
+  exposed network surface and preventing exfiltration via unauthorized
+  network channels.
 tags: [secure, network, private-endpoint, vnet, nsg, foundry, isolation]
 atlas_techniques: [AML.T0048, AML.T0040]
 d3fend_techniques: [D3-NI, D3-NTF, D3-ANCI]
@@ -19,34 +20,34 @@ effort_hours: 8
 
 ## When to use
 
-- Agentes Foundry que procesan datos confidenciales
+- Foundry agents that process confidential data
 - When the risk register flags agents with generic HTTP connectors (unknown destination)
 - A compliance requirement that AI traffic must not egress to the public internet
 
-## Alcance de esta skill
+## Scope of this skill
 
-Cubre aislamiento de red para:
+Covers network isolation for:
 1. Azure AI Foundry endpoints (Private Endpoint + VNet)
-2. Copilot Studio (a través de controles en Power Platform / salida vía APIM)
+2. Copilot Studio (through Power Platform controls / egress via APIM)
 
-Para Copilot Studio el aislamiento completo requiere Power Platform environments
-con Virtual Network support (licencia premium) — documentado en Paso 4.
+For Copilot Studio, full isolation requires Power Platform environments
+with Virtual Network support (premium license) — documented in Step 6.
 
 ## Workflow
 
-### Step 1 — Evaluar superficie de red actual
+### Step 1 — Assess the current network surface
 
 ```bash
-# Ver configuración de red del workspace Foundry
+# View the network configuration of the Foundry workspace
 az ml workspace show \
   --name {foundry-workspace} \
   --resource-group {resource-group} \
   --query "{PublicAccess:publicNetworkAccess, ManagedNetwork:managedNetwork}"
 ```
 
-`publicNetworkAccess: Enabled` = superficie expuesta a internet — objetivo a cambiar.
+`publicNetworkAccess: Enabled` = surface exposed to the internet — the target to change.
 
-### Step 2 — Habilitar managed network isolation en Foundry workspace
+### Step 2 — Enable managed network isolation on the Foundry workspace
 
 ```bash
 az ml workspace update \
@@ -55,21 +56,21 @@ az ml workspace update \
   --managed-network allow_only_approved_outbound
 ```
 
-Modos disponibles:
-- `disabled`: sin aislamiento (default)
-- `allow_internet_outbound`: permite salida a internet (modo básico)
-- `allow_only_approved_outbound`: solo destinos explícitamente aprobados (recomendado)
+Available modes:
+- `disabled`: no isolation (default)
+- `allow_internet_outbound`: allows internet egress (basic mode)
+- `allow_only_approved_outbound`: only explicitly approved destinations (recommended)
 
-### Step 3 — Crear Private Endpoint para el workspace
+### Step 3 — Create a Private Endpoint for the workspace
 
 ```bash
-# Deshabilitar acceso público
+# Disable public access
 az ml workspace update \
   --name {foundry-workspace} \
   --resource-group {resource-group} \
   --public-network-access Disabled
 
-# Crear Private Endpoint
+# Create the Private Endpoint
 az network private-endpoint create \
   --name "pe-foundry-{agent-name}" \
   --resource-group {resource-group} \
@@ -83,28 +84,28 @@ az network private-endpoint create \
   --connection-name "foundry-private-conn"
 ```
 
-### Step 4 — Configurar outbound rules para destinos aprobados
+### Step 4 — Configure outbound rules for approved destinations
 
-Para `allow_only_approved_outbound`, declarar destinos explícitos:
+For `allow_only_approved_outbound`, declare explicit destinations:
 
 ```bash
-# Permitir solo Azure OpenAI del tenant (no internet abierto)
+# Allow only the tenant's Azure OpenAI (not open internet)
 az ml workspace outbound-rule set \
   --workspace-name {foundry-workspace} \
   --resource-group {resource-group} \
   --rule '{"type":"PrivateEndpoint","destination":{"serviceResourceId":"{openai-resource-id}","subresourceTarget":"account"}}'
 ```
 
-### Step 5 — NSG para la subnet del agente
+### Step 5 — NSG for the agent subnet
 
 ```bash
-# Crear NSG
+# Create the NSG
 az network nsg create \
   --name "nsg-agents-{env}" \
   --resource-group {resource-group} \
   --location centralus
 
-# Regla: denegar tráfico saliente a internet excepto Azure services
+# Rule: deny outbound traffic to the internet except Azure services
 az network nsg rule create \
   --name "Deny-Internet-Outbound" \
   --nsg-name "nsg-agents-{env}" \
@@ -116,7 +117,7 @@ az network nsg rule create \
   --destination-address-prefixes Internet \
   --destination-port-ranges "*"
 
-# Regla: permitir Azure (antes de la de denegación)
+# Rule: allow Azure (evaluated before the deny rule)
 az network nsg rule create \
   --name "Allow-AzureCloud-Outbound" \
   --nsg-name "nsg-agents-{env}" \
@@ -131,32 +132,32 @@ az network nsg rule create \
 
 ### Step 6 — Copilot Studio (Power Platform VNet)
 
-Copilot Studio no soporta VNet nativo en licencias estándar.
-Opciones de mitigación disponibles:
+Copilot Studio does not support native VNet on standard licenses.
+Available mitigation options:
 
-**Opción A — APIM como gateway**: enrutar llamadas de Copilot Studio a backends
-a través de Azure API Management desplegado en VNet. El agente llama a APIM,
-APIM llama al backend interno.
+**Option A — APIM as gateway**: route Copilot Studio calls to backends
+through Azure API Management deployed in a VNet. The agent calls APIM,
+APIM calls the internal backend.
 
-**Opción B — Power Platform Managed Environment + VNet**: requiere
-Power Apps Premium y configuración de VNet support en el environment.
-Disponible para tenants con licencias enterprise.
+**Option B — Power Platform Managed Environment + VNet**: requires
+Power Apps Premium and VNet support configuration on the environment.
+Available for tenants with enterprise licenses.
 
-**Opción C — Restricción de conectores por DLP**: controlar qué conectores
-puede usar Copilot Studio (ver skill `govern-dlp-policy-copilot-prompts`).
-Menos control de red pero más pragmático sin licencias adicionales.
+**Option C — Connector restriction via DLP**: control which connectors
+Copilot Studio can use (see the `govern-dlp-policy-copilot-prompts` skill).
+Less network control, but more pragmatic without additional licenses.
 
 ## Verification
 
-- [ ] `publicNetworkAccess: Disabled` en workspace Foundry
-- [ ] Private Endpoint creado y conectado (`provisioningState: Succeeded`)
-- [ ] DNS privado resolviendo el workspace endpoint
-- [ ] NSG aplicado a subnet con regla de denegación de internet
-- [ ] Test de llamada al endpoint exitoso desde dentro de VNet
-- [ ] Test de llamada desde internet falla (expected)
+- [ ] `publicNetworkAccess: Disabled` on the Foundry workspace
+- [ ] Private Endpoint created and connected (`provisioningState: Succeeded`)
+- [ ] Private DNS resolving the workspace endpoint
+- [ ] NSG applied to the subnet with an internet-deny rule
+- [ ] Endpoint call test succeeds from inside the VNet
+- [ ] Endpoint call test fails from the internet (expected)
 
 ## Implementation notes
 
 - `allow_only_approved_outbound` in Azure AI Foundry can take up to 30 minutes to propagate — verify state before assuming the control is active
-- Private Endpoint requiere zona DNS privada para resolver correctamente: `privatelink.api.azureml.ms` y `privatelink.notebooks.azure.net`
+- Private Endpoint requires a private DNS zone to resolve correctly: `privatelink.api.azureml.ms` and `privatelink.notebooks.azure.net`
 - In environments without a configured VNet: start with `publicNetworkAccess: Disabled` on Foundry resources as a first step, and plan the VNet and Private Endpoint afterward

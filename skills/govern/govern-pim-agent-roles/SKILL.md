@@ -4,9 +4,9 @@ version: "1.0"
 pillar: govern
 subdomain: ms-entra
 description: >-
-  Implementa Privileged Identity Management (PIM) para managed identities y
-  service principals de agentes AI, eliminando privilegio permanente y
-  requiriendo activación just-in-time con justificación auditada.
+  Implements Privileged Identity Management (PIM) for AI agent managed
+  identities and service principals, eliminating standing privilege and
+  requiring just-in-time activation with audited justification.
 tags: [govern, entra, pim, privileged-identity, just-in-time, agent-identity]
 atlas_techniques: [AML.T0046, AML.T0040]
 d3fend_techniques: [D3-UAP, D3-JIT]
@@ -18,19 +18,19 @@ effort_hours: 8
 
 ## When to use
 
-- Agentes con roles Azure RBAC de alto privilegio (Contributor, Owner, User Access Administrator)
-- Agentes con Graph API permissions sensibles que no necesitan acceso continuo
+- Agents with high-privilege Azure RBAC roles (Contributor, Owner, User Access Administrator)
+- Agents with sensitive Graph API permissions that do not need continuous access
 - When the Pillar 1 risk register identifies agents with excessive permanent access
 
-## Restricción de licencia
+## License constraint
 
-PIM para workload identities (service principals) requiere **Entra Workload ID Premium**.
-PIM para usuarios y grupos: Entra ID P2.
-Verificar licencias antes de iniciar.
+PIM for workload identities (service principals) requires **Entra Workload ID Premium**.
+PIM for users and groups: Entra ID P2.
+Verify licensing before starting.
 
 ## Workflow
 
-### Step 1 — Identificar roles permanentes de agentes
+### Step 1 — Identify agents' permanent roles
 
 ```http
 GET https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments
@@ -38,9 +38,9 @@ GET https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments
   &$expand=roleDefinition
 ```
 
-Buscar assignments con `directoryScopeId: "/"` (scope global) — mayor riesgo.
+Look for assignments with `directoryScopeId: "/"` (global scope) — highest risk.
 
-También revisar Azure RBAC:
+Also review Azure RBAC:
 ```bash
 az role assignment list \
   --assignee {service-principal-app-id} \
@@ -48,62 +48,62 @@ az role assignment list \
   --query "[].{Role:roleDefinitionName, Scope:scope}"
 ```
 
-### Step 2 — Configurar PIM para Azure resources (agentes con roles RBAC)
+### Step 2 — Configure PIM for Azure resources (agents with RBAC roles)
 
 ```
 Entra ID → Privileged Identity Management → Azure resources
-→ [Suscripción / RG objetivo]
-→ Roles → [Rol del agente]
+→ [Target subscription / RG]
+→ Roles → [Agent's role]
 → Settings → Edit
 ```
 
-Configuración recomendada para agentes AI:
-- **Activation maximum duration**: 1-4 horas (no 8h)
+Recommended configuration for AI agents:
+- **Activation maximum duration**: 1-4 hours (not 8h)
 - **Require justification on activation**: Yes
-- **Require approval**: Yes (para roles Contributor+)
+- **Require approval**: Yes (for Contributor+ roles)
 - **Approvers**: Security team group
 - **On activation require**: MFA (for the approving human, not the agent)
 
-### Step 3 — Convertir assignment permanente a eligible
+### Step 3 — Convert the permanent assignment to eligible
 
 ```
-PIM → Azure resources → Assignments → [Rol] → Add assignments
-→ Assignment type: Eligible (no Active)
-→ Principal: [Service Principal del agente]
-→ Duration: Sin expiración (o 6-12 meses con renovación)
+PIM → Azure resources → Assignments → [Role] → Add assignments
+→ Assignment type: Eligible (not Active)
+→ Principal: [Agent's Service Principal]
+→ Duration: No expiration (or 6-12 months with renewal)
 ```
 
-Remover el assignment permanente existente después de crear el eligible.
+Remove the existing permanent assignment after creating the eligible one.
 
-### Step 4 — Para Entra ID roles (Graph API permissions)
+### Step 4 — For Entra ID roles (Graph API permissions)
 
-PIM para Entra roles con service principals:
+PIM for Entra roles with service principals:
 ```
-PIM → Entra roles → Settings → [Rol]
-→ Habilitar "Allow permanent eligible assignments" = No
+PIM → Entra roles → Settings → [Role]
+→ Enable "Allow permanent eligible assignments" = No
 → Require justification: Yes
 ```
 
 **Note**: PIM for Graph API app roles (OAuth permissions) has limited support.
-Para permisos Graph críticos, considerar revocación y re-consent bajo demanda
-como alternativa a PIM nativo.
+For critical Graph permissions, consider revoke-and-re-consent on demand
+as an alternative to native PIM.
 
-### Step 5 — Monitorear activaciones en Sentinel
+### Step 5 — Monitor activations in Sentinel
 
 ```kql
-// Ver queries/sentinel-pim-activations.kql
+// See queries/sentinel-pim-activations.kql
 ```
 
 ## Verification
 
-- [ ] Roles permanentes de agentes convertidos a eligible
-- [ ] Settings de PIM configurados (duración, justificación, aprobación)
-- [ ] Assignment permanente original removido
-- [ ] Alerta en Sentinel para activaciones fuera de horario configurada
-- [ ] Test de activación realizado exitosamente
+- [ ] Agents' permanent roles converted to eligible
+- [ ] PIM settings configured (duration, justification, approval)
+- [ ] Original permanent assignment removed
+- [ ] Sentinel alert configured for off-hours activations
+- [ ] Activation test performed successfully
 
 ## Implementation notes
 
-- PIM para identidades de workload (Workload ID Premium) requiere licencia separada de Entra ID P2 — verificar disponibilidad en el tenant antes de diseñar el flujo JIT
-- PIM eligible assignments para service principals usan el endpoint `/roleManagement/directory/roleEligibilityScheduleRequests` — diferente al endpoint de assignment permanente
+- PIM for workload identities (Workload ID Premium) requires a separate license from Entra ID P2 — verify availability in the tenant before designing the JIT flow
+- Eligible PIM assignments for service principals use the `/roleManagement/directory/roleEligibilityScheduleRequests` endpoint — different from the permanent assignment endpoint
 - To demo JIT value: show the difference between an agent with a permanent role (always active) vs. an agent with an eligible role (active only during the window)

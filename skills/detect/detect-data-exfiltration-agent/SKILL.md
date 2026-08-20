@@ -4,10 +4,10 @@ version: "1.0"
 pillar: detect
 subdomain: ms-sentinel-aisoc
 description: >-
-  Detecta patrones de exfiltración de datos a través de agentes AI, incluyendo
-  descarga masiva de archivos vía agente, transferencia de datos sensibles a
-  conectores externos, y uso de agentes como proxy para extraer información
-  corporativa hacia destinos no autorizados.
+  Detects data exfiltration patterns through AI agents, including bulk file
+  downloads via an agent, sensitive data transfer to external connectors,
+  and use of agents as a proxy to extract corporate information toward
+  unauthorized destinations.
 tags: [detect, sentinel, exfiltration, data-loss, sharepoint, exchange, aisoc]
 atlas_techniques: [AML.T0048, AML.T0057]
 d3fend_techniques: [D3-NTA, D3-DLP, D3-EAC]
@@ -20,77 +20,77 @@ effort_hours: 5
 
 ## When to use
 
-- Agentes con acceso a SharePoint, Exchange o bases de datos de producción
-- Cuando DLP de outputs está activo (Pilar 4) y se necesita correlación en Sentinel
-- Para detectar el vector de agente como intermediario de exfiltración:
-  usuario solicita al agente que resuma/exporte datos → agente accede a volumen
-  grande → datos salen vía canal no monitoreado
+- Agents with access to SharePoint, Exchange, or production databases
+- When output DLP is active (Pillar 4) and correlation in Sentinel is needed
+- To detect the agent-as-intermediary exfiltration vector:
+  a user asks the agent to summarize/export data → the agent accesses a large
+  volume → the data leaves via an unmonitored channel
 
-## Vectores de exfiltración cubiertos
+## Exfiltration vectors covered
 
-1. **Bulk access**: agente accede a N archivos en corto tiempo por solicitud de usuario
-2. **Summary as exfil**: usuario pide resumen de documentos confidenciales → copia texto
-3. **Connector abuse**: agente usa conector HTTP genérico para enviar datos a URL externa
-4. **Email relay**: agente con permisos Mail.Send envía datos a cuenta externa
-5. **Cross-tenant**: agente en multi-tenant comparte datos entre tenants
+1. **Bulk access**: an agent accesses N files in a short time from a single user request
+2. **Summary as exfil**: a user asks for a summary of confidential documents → copies the text out
+3. **Connector abuse**: an agent uses a generic HTTP connector to send data to an external URL
+4. **Email relay**: an agent with `Mail.Send` permission sends data to an external account
+5. **Cross-tenant**: an agent in a multi-tenant context shares data across tenants
 
 ## Workflow
 
-### Step 1 — Crear regla: acceso masivo a archivos via agente
+### Step 1 — Create rule: bulk file access via an agent
 
 ```kql
-// Ver queries/sentinel-exfiltration.kql — Query 1
-// Umbral: > 50 archivos únicos en 30 minutos por el mismo usuario via agente
+// See queries/sentinel-exfiltration.kql — Query 1
+// Threshold: > 50 unique files in 30 minutes by the same user via an agent
 ```
 
-Configuración Sentinel:
-- **Nombre**: `AISEC-Agent-Bulk-File-Access`
-- **Frecuencia**: cada 15 minutos
-- **Lookback**: últimas 2 horas
-- **Severidad**: High
+Sentinel configuration:
+- **Name**: `AISEC-Agent-Bulk-File-Access`
+- **Frequency**: every 15 minutes
+- **Lookback**: last 2 hours
+- **Severity**: High
 
-### Step 2 — Crear regla: agente enviando email a dominios externos
+### Step 2 — Create rule: agent sending email to external domains
 
 ```kql
-// Ver queries/sentinel-exfiltration.kql — Query 2
+// See queries/sentinel-exfiltration.kql — Query 2
 ```
 
-Configuración:
-- **Nombre**: `AISEC-Agent-Email-External-Domain`
-- **Frecuencia**: cada 5 minutos
-- **Lookback**: últimas 24 horas
-- **Severidad**: High (si contiene datos sensibles: Critical)
+Configuration:
+- **Name**: `AISEC-Agent-Email-External-Domain`
+- **Frequency**: every 5 minutes
+- **Lookback**: last 24 hours
+- **Severity**: High (Critical if it contains sensitive data)
 
 ### Step 3 — Create rule: outbound HTTP calls from agents to unapproved URLs
 
 ```kql
-// Ver queries/sentinel-exfiltration.kql — Query 3
-// Requiere que los agentes Foundry tengan network logging activo
+// See queries/sentinel-exfiltration.kql — Query 3
+// Requires Foundry agents to have network logging active
 ```
 
-### Step 4 — Correlacionar con DLP events de Purview
+### Step 4 — Correlate with Purview DLP events
 
 ```kql
-// Ver queries/sentinel-exfiltration.kql — Query 4
+// See queries/sentinel-exfiltration.kql — Query 4
 // Join agent events with DLP matches to prioritize by sensitivity
 ```
 
-### Step 5 — Configurar alerta de alto volumen en Purview AI Hub
+### Step 5 — Configure a high-volume alert in Purview AI Hub
 
 ```
 Purview AI Hub → Policies → Create policy
-→ Tipo: Data volume threshold
-→ Umbral: > 100 interacciones en 1 hora por usuario
+→ Type: Data volume threshold
+→ Threshold: > 100 interactions in 1 hour per user
 → Action: Alert + Restrict
 ```
 
 ## Verification
 
-- [ ] Regla bulk access creada y probada con datos sintéticos
-- [ ] Regla email externo creada (si agentes tienen Mail.Send)
-- [ ] Correlación con Purview DLP activa
-- [ ] Incident de prueba generado con acceso masivo simulado
-- [ ] Playbook de contención vinculado a las reglas (ver skill siguiente)
+- [ ] Bulk access rule created and tested with synthetic data
+- [ ] External email rule created (if agents have Mail.Send)
+- [ ] Correlation with Purview DLP active
+- [ ] Test incident generated with simulated bulk access
+- [ ] Containment playbook linked to the rules (see next skill)
 
 ## Implementation notes
 

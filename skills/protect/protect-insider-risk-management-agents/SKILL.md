@@ -4,9 +4,9 @@ version: "1.0"
 pillar: protect
 subdomain: ms-purview
 description: >-
-  Configura Microsoft Purview Insider Risk Management para detectar patrones
-  de exfiltración de datos a través de agentes de IA, correlacionando actividad
-  de agentes con indicadores de riesgo de usuario e identidad de agente.
+  Configures Microsoft Purview Insider Risk Management to detect data
+  exfiltration patterns through AI agents, correlating agent activity with
+  user risk indicators and agent identity.
 tags: [protect, purview, insider-risk, exfiltration, behavioral-analytics, agent-activity]
 atlas_techniques: [AML.T0057, AML.T0025]
 d3fend_techniques: [D3-DAM, D3-UBA]
@@ -26,32 +26,32 @@ effort_hours: 4
 
 ## Prerequisites
 
-- M365 E5 o Microsoft 365 E5 Insider Risk Management
+- M365 E5 or Microsoft 365 E5 Insider Risk Management
 - Insider Risk Management role (a standalone role, not included in Compliance Admin by default)
-- Purview Audit habilitado y retención configurada (mínimo 90 días)
+- Purview Audit enabled with retention configured (minimum 90 days)
 - Microsoft 365 Copilot or Copilot Studio active in the tenant to generate agent activity signals
 
 ## Workflow
 
-### Step 1 — Habilitar indicadores de actividad de IA en IRM
+### Step 1 — Enable AI activity indicators in IRM
 
 1. **Microsoft Purview** → **Insider Risk Management** → **Settings** → **Policy indicators**
-2. En la sección **AI activity indicators**, habilitar:
+2. In the **AI activity indicators** section, enable:
    - `Sensitive info types accessed by AI`
    - `AI interactions with high volume`
    - `Files accessed by AI without sensitivity label`
-3. Guardar
+3. Save
 
-### Step 2 — Crear política de detección de exfiltración via agentes
+### Step 2 — Create a policy to detect exfiltration via agents
 
 1. **Insider Risk Management** → **Policies** → **Create policy**
-2. Seleccionar template: **Data leaks by risky users**
-3. Ajustar con indicadores de IA:
-   - Incluir: AI activity indicators del Paso 1
-   - Umbral de detección: 3 desviaciones estándar del baseline del usuario
-   - Ventana: 30 días rolling
+2. Select the template: **Data leaks by risky users**
+3. Tune with AI indicators:
+   - Include: the AI activity indicators from Step 1
+   - Detection threshold: 3 standard deviations from the user's baseline
+   - Window: 30-day rolling
 
-### Step 3 — Correlacionar señales de IRM con actividad de agentes en Sentinel
+### Step 3 — Correlate IRM signals with agent activity in Sentinel
 
 ```kql
 // Correlate IRM alerts with agent activity in the same period
@@ -70,10 +70,10 @@ IRMAlerts
 | sort by AgentCalls desc
 ```
 
-### Step 4 — Configurar umbrales de volumen adaptativo
+### Step 4 — Configure adaptive volume thresholds
 
 ```kql
-// Establecer baseline de interacciones normales por usuario
+// Establish a baseline of normal interactions per user
 CloudAppEvents
 | where TimeGenerated between (ago(30d) .. ago(1d))
 | where ActionType == "AgentInteraction"
@@ -89,26 +89,26 @@ CloudAppEvents
 | sort by UserP90 desc
 ```
 
-Usar `UserP90` como umbral de alerta en lugar de umbrales fijos.
+Use `UserP90` as the alert threshold instead of a fixed threshold.
 
-### Step 5 — Integrar casos IRM con incidentes de Sentinel
+### Step 5 — Integrate IRM cases with Sentinel incidents
 
-1. En **Sentinel** → **Analytics** → crear regla de tipo **Microsoft Security**
-2. Fuente: **Microsoft 365 Insider Risk Management**
-3. Filtro de severidad: **Medium** y **High**
+1. In **Sentinel** → **Analytics** → create a **Microsoft Security** rule
+2. Source: **Microsoft 365 Insider Risk Management**
+3. Severity filter: **Medium** and **High**
 4. This automatically creates Sentinel incidents from IRM alerts for unified investigation
 
 ## Verification
 
-- [ ] Indicadores de actividad de IA habilitados en IRM Settings
-- [ ] Política de detección creada y en estado Active
+- [ ] AI activity indicators enabled in IRM Settings
+- [ ] Detection policy created and in Active state
 - [ ] At least one IRM case generated (may require real or synthetic data)
-- [ ] Correlación KQL entre alertas IRM y actividad de agentes validada
-- [ ] Integración con Sentinel configurada para investigación unificada
+- [ ] KQL correlation between IRM alerts and agent activity validated
+- [ ] Sentinel integration configured for unified investigation
 
 ## Implementation notes
 
-- IRM requiere Purview Audit habilitado con retención de al menos 90 días — configurar antes de habilitar IRM
-- Los indicadores de actividad de IA en IRM están en preview en algunos tenants — verificar disponibilidad en IRM Settings
+- IRM requires Purview Audit enabled with a minimum of 90 days retention — configure before enabling IRM
+- The AI activity indicators in IRM are in preview on some tenants — verify availability in IRM Settings
 - IRM generates sustained-behavior alerts that Sentinel does not detect well (slow exfiltration below volume thresholds) — this is the complement
 - IRM cases are confidential by design — only the Insider Risk Management role can view them, not even Security Admin has access

@@ -4,40 +4,40 @@ version: "1.0"
 pillar: secure
 subdomain: ms-foundry
 description: >-
-  Reemplaza credenciales estáticas (API keys) en agentes Azure AI Foundry por
-  managed identities, eliminando secretos en código y configuración, y aplicando
-  RBAC granular sobre recursos Azure que el agente necesita acceder.
+  Replaces static credentials (API keys) in Azure AI Foundry agents with
+  managed identities, eliminating secrets in code and configuration, and
+  applying granular RBAC over the Azure resources the agent needs to access.
 tags: [secure, foundry, managed-identity, azure-rbac, no-secrets, workload-identity]
 atlas_techniques: [AML.T0046, AML.T0040]
 d3fend_techniques: [D3-CH, D3-UAP]
 nist_ai_rmf: [MANAGE-1.3, GOVERN-2.2]
 nist_csf: [PR.AA-02, PR.AC-01]
 ms_license: [Azure AI Foundry, Azure Subscription]
-ms_roles: [Owner o User Access Administrator (para role assignments), Azure AI Developer]
+ms_roles: [Owner or User Access Administrator (for role assignments), Azure AI Developer]
 effort_hours: 5
 ---
 
 ## When to use
 
-- Pilar 1 detectó endpoints Foundry con `auth_mode: key`
-- Agentes que acceden a Storage, Key Vault, Cognitive Services via API key
-- Antes de mover cualquier agente Foundry a producción
+- Pillar 1 detected Foundry endpoints with `auth_mode: key`
+- Agents that access Storage, Key Vault, or Cognitive Services via API key
+- Before moving any Foundry agent to production
 
-## Por qué managed identity sobre API keys
+## Why managed identity over API keys
 
-Las API keys son secretos estáticos: no rotan automáticamente, pueden filtrarse
-en logs, variables de entorno o repositorios, y no tienen scope granular.
-Managed Identity elimina el secreto completamente — Entra ID provee tokens
-efímeros automáticamente.
+API keys are static secrets: they do not rotate automatically, they can leak
+into logs, environment variables, or repositories, and they have no granular
+scope. Managed Identity eliminates the secret entirely — Entra ID provides
+ephemeral tokens automatically.
 
-## Tipos de managed identity para agentes Foundry
+## Managed identity types for Foundry agents
 
 - **System-assigned**: tied to the resource lifecycle (deleted with the resource). Recommended for single-purpose agents.
 - **User-assigned**: independent of the resource, reusable. Recommended when multiple agents share the same permission set.
 
 ## Workflow
 
-### Step 1 — Identificar agentes con API key activos
+### Step 1 — Identify agents with active API keys
 
 ```bash
 az ml online-endpoint list \
@@ -47,7 +47,7 @@ az ml online-endpoint list \
   --output table
 ```
 
-### Step 2 — Habilitar system-assigned managed identity en el endpoint
+### Step 2 — Enable system-assigned managed identity on the endpoint
 
 ```bash
 az ml online-endpoint update \
@@ -57,16 +57,16 @@ az ml online-endpoint update \
   --set identity.type=SystemAssigned
 ```
 
-O crear user-assigned managed identity primero:
+Or create the user-assigned managed identity first:
 
 ```bash
-# Crear user-assigned identity
+# Create the user-assigned identity
 az identity create \
   --name "mi-agent-{agent-name}" \
   --resource-group {resource-group} \
   --location centralus
 
-# Asignar al endpoint
+# Assign it to the endpoint
 az ml online-endpoint update \
   --name {endpoint-name} \
   --workspace-name {foundry-workspace} \
@@ -75,7 +75,7 @@ az ml online-endpoint update \
   --set "identity.user_assigned_identities[0].resource_id={managed-identity-resource-id}"
 ```
 
-### Step 3 — Cambiar auth_mode de key a aad_token
+### Step 3 — Change auth_mode from key to aad_token
 
 ```bash
 az ml online-endpoint update \
@@ -85,37 +85,37 @@ az ml online-endpoint update \
   --auth-mode aad_token
 ```
 
-### Step 4 — Asignar RBAC mínimo a la managed identity
+### Step 4 — Assign minimal RBAC to the managed identity
 
-Roles por recurso accedido:
+Roles by accessed resource:
 
 ```bash
-# Storage — solo lectura si el agente solo lee datos
+# Storage — read-only if the agent only reads data
 az role assignment create \
   --assignee {managed-identity-principal-id} \
   --role "Storage Blob Data Reader" \
   --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.Storage/storageAccounts/{storage-account}"
 
-# Key Vault — solo secrets get si necesita leer secretos
+# Key Vault — secrets-get only if it needs to read secrets
 az role assignment create \
   --assignee {managed-identity-principal-id} \
   --role "Key Vault Secrets User" \
   --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.KeyVault/vaults/{kv-name}"
 
-# Cognitive Services — solo usuario si llama a OpenAI / Azure AI
+# Cognitive Services — user role only if calling OpenAI / Azure AI
 az role assignment create \
   --assignee {managed-identity-principal-id} \
   --role "Cognitive Services User" \
   --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}"
 ```
 
-### Step 5 — Actualizar código del agente para usar DefaultAzureCredential
+### Step 5 — Update the agent's code to use DefaultAzureCredential
 
 ```python
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 
-# Sin secretos — DefaultAzureCredential usa managed identity automáticamente
+# No secrets — DefaultAzureCredential uses the managed identity automatically
 credential = DefaultAzureCredential()
 blob_client = BlobServiceClient(
     account_url="https://{storage}.blob.core.windows.net",
@@ -123,10 +123,10 @@ blob_client = BlobServiceClient(
 )
 ```
 
-### Step 6 — Revocar API keys previas
+### Step 6 — Revoke previous API keys
 
 ```bash
-# Regenerar keys para invalidar las anteriores
+# Regenerate keys to invalidate the old ones
 az ml online-endpoint regenerate-keys \
   --name {endpoint-name} \
   --workspace-name {foundry-workspace} \
@@ -138,12 +138,12 @@ Verify no external system is still using the keys before revoking them.
 
 ## Verification
 
-- [ ] `auth_mode` del endpoint es `aad_token` (no `key`)
-- [ ] Managed identity visible en el endpoint: `az ml online-endpoint show --query identity`
+- [ ] The endpoint's `auth_mode` is `aad_token` (not `key`)
+- [ ] Managed identity visible on the endpoint: `az ml online-endpoint show --query identity`
 - [ ] Role assignments assigned to the managed identity (not to the app SP)
-- [ ] Código del agente usa `DefaultAzureCredential` sin secrets hardcoded
-- [ ] API keys anteriores invalidadas
-- [ ] Test de llamada exitoso con nuevo auth mode
+- [ ] Agent code uses `DefaultAzureCredential` with no hardcoded secrets
+- [ ] Previous API keys invalidated
+- [ ] Call test succeeds with the new auth mode
 
 ## Implementation notes
 

@@ -4,10 +4,10 @@ version: "1.0"
 pillar: govern
 subdomain: ms-entra
 description: >-
-  Implementa Conditional Access policies en Entra ID para workload identities
-  de agentes AI, bloqueando acceso fuera de rangos IP corporativos y aplicando
-  controles de sesión. grantControls mfa es inválido para non-human identities;
-  solo block o sin grantControls aplica.
+  Implements Conditional Access policies in Entra ID for AI agent workload
+  identities, blocking access outside corporate IP ranges and applying
+  session controls. grantControls mfa is invalid for non-human identities;
+  only block or no grantControls applies.
 tags: [govern, entra, conditional-access, workload-identity, agent-identity]
 atlas_techniques: [AML.T0056, AML.T0046]
 d3fend_techniques: [D3-UAP, D3-NTF]
@@ -20,30 +20,30 @@ effort_hours: 8
 
 ## When to use
 
-- Post Pilar 1: agentes clasificados como riesgo Alto requieren controles de acceso
-- Cliente tiene Entra ID P1 (prerequisito duro para CA)
-- Workload ID license requerida para CA policies en service principals específicos
+- Post Pillar 1: agents classified as High risk require access controls
+- The customer has Entra ID P1 (a hard prerequisite for CA)
+- Workload ID license required for CA policies on specific service principals
 
-## Restricciones críticas de implementación
+## Critical implementation constraints
 
-**`grantControls: mfa` es INVÁLIDO para workload identities.** Solo aplica:
-- `grantControls: { builtInControls: ["block"] }` — bloqueo total
-- Sin `grantControls` + `sessionControls` — restricciones de sesión
+**`grantControls: mfa` is INVALID for workload identities.** Only these apply:
+- `grantControls: { builtInControls: ["block"] }` — full block
+- No `grantControls` + `sessionControls` — session restrictions
 
-**`continuousAccessEvaluation`** no puede estar en `enabledForReportingButNotEnforced`.
-Debe ser `disabled` o `enabled` directamente.
+**`continuousAccessEvaluation`** cannot be in `enabledForReportingButNotEnforced`.
+It must be `disabled` or `enabled` directly.
 
-Iniciar siempre en `enabledForReportingButNotEnforced` → monitorear 5-7 días → activar.
+Always start in `enabledForReportingButNotEnforced` → monitor for 5-7 days → enable.
 
 ## Prerequisites
 
-- Service principals de agentes identificados (output de Pilar 1)
-- Named Locations configurados con IPs corporativas del tenant
-- Entra Workload ID license asignada (para CA en non-human identities)
+- Agent service principals identified (Pillar 1 output)
+- Named Locations configured with the tenant's corporate IPs
+- Entra Workload ID license assigned (for CA on non-human identities)
 
 ## Workflow
 
-### Step 1 — Obtener object ID del service principal
+### Step 1 — Get the service principal's object ID
 
 ```http
 GET https://graph.microsoft.com/v1.0/servicePrincipals
@@ -51,9 +51,9 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals
   &$select=id,appId,displayName
 ```
 
-Registrar `id` (object ID) — no el `appId`.
+Record the `id` (object ID) — not the `appId`.
 
-### Step 2 — Crear Named Location (si no existe)
+### Step 2 — Create a Named Location (if it does not exist)
 
 ```http
 POST https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations
@@ -72,9 +72,9 @@ Content-Type: application/json
 }
 ```
 
-Registrar el `id` del Named Location creado.
+Record the created Named Location's `id`.
 
-### Step 3 — Crear CA policy en report-only
+### Step 3 — Create the CA policy in report-only
 
 ```http
 POST https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
@@ -99,17 +99,17 @@ Content-Type: application/json
 }
 ```
 
-### Step 4 — Monitorear en Sign-in logs (5-7 días)
+### Step 4 — Monitor in Sign-in logs (5-7 days)
 
 ```
 Entra ID → Monitoring → Sign-in logs
 → Filter: Service principal sign-ins
-→ Buscar: Conditional Access = "Report-only: Would be blocked"
+→ Search for: Conditional Access = "Report-only: Would be blocked"
 ```
 
-Confirmar que no hay falsos positivos (accesos legítimos que serían bloqueados).
+Confirm there are no false positives (legitimate access that would be blocked).
 
-### Step 5 — Activar enforcement
+### Step 5 — Activate enforcement
 
 ```http
 PATCH https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/{policy-id}
@@ -122,15 +122,15 @@ Content-Type: application/json
 
 ## Verification
 
-- [ ] Named Location creado con IPs correctas
-- [ ] Policy en report-only sin falsos positivos después de 5-7 días
-- [ ] Policy activada (`state: enabled`)
-- [ ] Sign-in logs muestran bloqueos desde IPs externas
-- [ ] Sin impacto en accesos legítimos de agentes
+- [ ] Named Location created with correct IPs
+- [ ] Policy in report-only with no false positives after 5-7 days
+- [ ] Policy activated (`state: enabled`)
+- [ ] Sign-in logs show blocks from external IPs
+- [ ] No impact on legitimate agent access
 
 ## Implementation notes
 
 - Known error `AADSTS500011`: the resource principal does not exist in the tenant — verify the agent SP exists with `GET /servicePrincipals/`
-- Mantener las CA policies de agentes en modo report-only durante al menos 7 días para identificar falsos positivos antes de pasar a enforce
+- Keep agent CA policies in report-only mode for at least 7 days to identify false positives before enforcing
 - Blueprint-level CA (applied to SP groups via `includeAgentIdServicePrincipals`) scales better than per-instance — use this pattern from the start
 - `grantControls: mfa` is invalid for agent identities — use only `block` or `sessionControls`

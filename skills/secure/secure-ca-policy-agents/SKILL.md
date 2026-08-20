@@ -4,9 +4,10 @@ version: "1.0"
 pillar: secure
 subdomain: ms-entra
 description: >-
-  Crea y valida políticas de Conditional Access específicas para identidades
-  de agentes de IA usando clientApplications.includeAgentIdServicePrincipals,
-  evitando la misconfiguration crítica de grantControls mfa inválido para agentes.
+  Creates and validates Conditional Access policies specific to AI agent
+  identities using clientApplications.includeAgentIdServicePrincipals,
+  avoiding the critical misconfiguration of grantControls mfa being invalid
+  for agents.
 tags: [secure, entra, conditional-access, workload-identity, least-privilege, mfa-trap]
 atlas_techniques: [AML.T0012, AML.T0040]
 d3fend_techniques: [D3-MAN, D3-UAP]
@@ -21,20 +22,20 @@ effort_hours: 3
 
 - When registering any agent with Entra Agent ID — the CA policy comes immediately after
 - When agents are found with access unrestricted by CA (output of `govern-ca-policy-workload-identity`)
-- Para migrar de policies heredadas de usuario a policies específicas de agente
-- Como prerequisito antes de habilitar cualquier agente en producción
+- To migrate from inherited user policies to agent-specific policies
+- As a prerequisite before enabling any agent in production
 
 ## Prerequisites
 
-- Entra ID P1 mínimo (Workload ID Premium para condiciones de riesgo)
-- Rol Conditional Access Administrator
-- Agentes registrados con Entra Agent ID (ver `govern-entra-agent-id`)
-- Acceso a Entra ID → Security → Conditional Access
+- Entra ID P1 minimum (Workload ID Premium for risk conditions)
+- Conditional Access Administrator role
+- Agents registered with Entra Agent ID (see `govern-entra-agent-id`)
+- Access to Entra ID → Security → Conditional Access
 
-## La trampa crítica: `grantControls: mfa`
+## The critical trap: `grantControls: mfa`
 
 ```json
-// ❌ INCORRECTO — no usar para agentes
+// ❌ WRONG — do not use for agents
 {
   "grantControls": {
     "operator": "OR",
@@ -42,7 +43,7 @@ effort_hours: 3
   }
 }
 
-// ✅ CORRECTO — bloqueo explícito para agentes con riesgo
+// ✅ CORRECT — explicit block for at-risk agents
 {
   "grantControls": {
     "operator": "OR",
@@ -55,7 +56,7 @@ effort_hours: 3
 
 ## Workflow
 
-### Step 1 — Crear la CA policy Blueprint-level
+### Step 1 — Create the Blueprint-level CA policy
 
 ```json
 POST https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
@@ -79,26 +80,26 @@ Content-Type: application/json
 }
 ```
 
-### Step 2 — Validar con la herramienta What If
+### Step 2 — Validate with the What If tool
 
 1. Entra ID → Security → Conditional Access → **What If**
-2. Configurar:
+2. Configure:
    - User: `None (service principal)`
-   - Cloud app: seleccionar el SP del agente
+   - Cloud app: select the agent's SP
    - Sign-in risk: `Medium`
-3. Ejecutar — confirmar que la policy aparece como **Applied** con acción **Block**
+3. Run it — confirm the policy shows as **Applied** with action **Block**
 4. Repeat with a human user account — confirm the policy does **NOT** apply
 
-### Step 3 — Validar que `grantControls: mfa` no aplica
+### Step 3 — Validate that `grantControls: mfa` does not apply
 
-1. Crear una segunda policy de prueba con `"builtInControls": ["mfa"]`
-2. Ejecutar What If con el SP del agente
+1. Create a second test policy with `"builtInControls": ["mfa"]`
+2. Run What If with the agent's SP
 3. Confirm the policy shows as **Not applied** or generates no enforcement
-4. **Eliminar la policy de prueba** — documentar el hallazgo
+4. **Delete the test policy** — document the finding
 
-### Step 4 — Pasar a Enforced después del período de report-only
+### Step 4 — Move to Enforced after the report-only period
 
-Después de 7 días en `enabledForReportingButNotEnforced`:
+After 7 days in `enabledForReportingButNotEnforced`:
 
 ```http
 PATCH https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/{policy-id}
@@ -109,7 +110,7 @@ Content-Type: application/json
 }
 ```
 
-### Step 5 — KQL: Monitorear aplicaciones de CA policy en Sentinel
+### Step 5 — KQL: monitor CA policy applications in Sentinel
 
 ```kql
 AADServicePrincipalSignInLogs
@@ -127,16 +128,16 @@ AADServicePrincipalSignInLogs
 
 ## Verification
 
-- [ ] CA policy creada con `includeAgentIdServicePrincipals: "All"`
+- [ ] CA policy created with `includeAgentIdServicePrincipals: "All"`
 - [ ] What If confirms the policy applies to the agent SP at Medium risk
-- [ ] What If confirma que policy NO aplica a cuentas de usuario
-- [ ] `grantControls: mfa` validado como inefectivo y documentado
-- [ ] Policy en report-only durante mínimo 7 días antes de enforce
-- [ ] KQL de monitoreo corriendo en Sentinel como Scheduled Rule
+- [ ] What If confirms the policy does NOT apply to user accounts
+- [ ] `grantControls: mfa` validated as ineffective and documented
+- [ ] Policy in report-only for a minimum of 7 days before enforcing
+- [ ] Monitoring KQL running in Sentinel as a Scheduled Rule
 
 ## Implementation notes
 
 - Blueprint-level CA (`includeAgentIdServicePrincipals: All`) covers all current and future agents — this is the correct scaling pattern vs. per-instance
 - `Entra Workload ID Premium` is required to add service principal risk conditions (sign-in risk) — without this license only the base condition is available
 - Always document the What If result as evidence in the Gap Assessment Template — it is the only validation mechanism that does not require generating real traffic
-- Referencia oficial: [Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)
+- Official reference: [Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)

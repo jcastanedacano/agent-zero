@@ -4,9 +4,9 @@ version: "1.0"
 pillar: detect
 subdomain: ms-sentinel-aisoc
 description: >-
-  Regla de analítica en Sentinel para detectar prompt injection y jailbreak
-  en conversaciones de agentes Copilot Studio y Azure AI Foundry, con
-  correlación de Purview para priorizar por sensibilidad de datos involucrados.
+  Sentinel analytics rule to detect prompt injection and jailbreak in
+  Copilot Studio and Azure AI Foundry agent conversations, with Purview
+  correlation to prioritize by the sensitivity of the data involved.
 tags: [detect, sentinel, prompt-injection, jailbreak, copilot-studio, foundry, aisoc]
 atlas_techniques: [AML.T0051, AML.T0054]
 d3fend_techniques: [D3-PA, D3-SBV]
@@ -19,14 +19,14 @@ effort_hours: 4
 
 ## When to use
 
-- Conectores CopilotStudio_CL y/o FoundryAgents_CL activos con datos en {workspace-name}
-- Como primera regla de analítica del AISOC — mayor ROI de detección
-- Cubre MITRE ATLAS AML.T0051 (LLM Prompt Injection)
+- CopilotStudio_CL and/or FoundryAgents_CL connectors active with data in {workspace-name}
+- As the first analytics rule in the AISOC — highest detection ROI
+- Covers MITRE ATLAS AML.T0051 (LLM Prompt Injection)
 
-## Restricción crítica
+## Critical constraint
 
-Sentinel rechaza reglas que referencian tablas `_CL` inexistentes o sin datos.
-Verificar antes de crear la regla:
+Sentinel rejects rules that reference nonexistent or empty `_CL` tables.
+Verify before creating the rule:
 
 ```kql
 union CopilotStudio_CL, FoundryAgents_CL
@@ -34,18 +34,18 @@ union CopilotStudio_CL, FoundryAgents_CL
 | where LastEvent > ago(24h)
 ```
 
-Si no retorna filas — resolver ingestion antes de continuar.
+If it returns no rows — resolve ingestion before continuing.
 
-## Patrones de prompt injection cubiertos
+## Prompt injection patterns covered
 
-Categoría 1 — Instrucción directa: `ignore previous instructions`, `forget your instructions`
-Categoría 2 — Suplantación de rol: `you are now`, `act as`, `pretend you are`, `DAN mode`
-Categoría 3 — Bypass de sistema: `bypass your`, `jailbreak`, `override your constraints`
-Categoría 4 — Indirect injection: contenido malicioso en documentos que el agente lee
+Category 1 — Direct instruction: `ignore previous instructions`, `forget your instructions`
+Category 2 — Role impersonation: `you are now`, `act as`, `pretend you are`, `DAN mode`
+Category 3 — System bypass: `bypass your`, `jailbreak`, `override your constraints`
+Category 4 — Indirect injection: malicious content in documents the agent reads
 
 ## Workflow
 
-### Step 1 — Verificar existencia de tablas (obligatorio)
+### Step 1 — Verify table existence (mandatory)
 
 ```kql
 union CopilotStudio_CL, FoundryAgents_CL
@@ -53,23 +53,23 @@ union CopilotStudio_CL, FoundryAgents_CL
 | where LastEvent > ago(24h)
 ```
 
-### Step 2 — Validar query base en Log Analytics antes de crear la regla
+### Step 2 — Validate the base query in Log Analytics before creating the rule
 
 ```kql
-// Ver queries/sentinel-prompt-injection.kql — Query 1
+// See queries/sentinel-prompt-injection.kql — Query 1
 // Run manually and verify it returns results or No results without error
 ```
 
-### Step 3 — Crear Scheduled Analytics Rule en Sentinel
+### Step 3 — Create the Scheduled Analytics Rule in Sentinel
 
-Parámetros:
-- **Nombre**: `AISEC-Prompt-Injection-Detection`
-- **Frecuencia**: cada 5 minutos
-- **Lookback**: últimas 24 horas
-- **Umbral**: >= 1 resultado
-- **Severidad**: dinámica desde KQL (High/Medium/Low)
-- **Tácticas MITRE**: Initial Access + AML.T0051 (ATLAS)
-- **Incident grouping**: por `UserId` + `AgentName`, ventana 24h
+Parameters:
+- **Name**: `AISEC-Prompt-Injection-Detection`
+- **Frequency**: every 5 minutes
+- **Lookback**: last 24 hours
+- **Threshold**: >= 1 result
+- **Severity**: dynamic from KQL (High/Medium/Low)
+- **MITRE tactics**: Initial Access + AML.T0051 (ATLAS)
+- **Incident grouping**: by `UserId` + `AgentName`, 24h window
 
 Via ARM (`2022-12-01-preview`):
 
@@ -79,7 +79,7 @@ Via ARM (`2022-12-01-preview`):
   "properties": {
     "displayName": "AISEC-Prompt-Injection-Detection",
     "enabled": true,
-    "query": "<KQL de queries/sentinel-prompt-injection.kql>",
+    "query": "<KQL from queries/sentinel-prompt-injection.kql>",
     "queryFrequency": "PT5M",
     "queryPeriod": "P1D",
     "triggerOperator": "GreaterThan",
@@ -99,32 +99,32 @@ Via ARM (`2022-12-01-preview`):
 }
 ```
 
-### Step 4 — Crear playbook de enriquecimiento (Logic App)
+### Step 4 — Create an enrichment playbook (Logic App)
 
-Al crear incident:
-1. Enriquecer `UserId` → perfil Entra ID (GET /users/{id})
-2. Consultar actividad reciente del usuario en AuditLogs (últimas 8h)
-3. Si `AttemptCount >= 10`: suspender sesión activa del agente
-4. Notificar canal Teams AISOC con resumen
+On incident creation:
+1. Enrich `UserId` → Entra ID profile (GET /users/{id})
+2. Query the user's recent activity in AuditLogs (last 8h)
+3. If `AttemptCount >= 10`: suspend the agent's active session
+4. Notify the AISOC Teams channel with a summary
 
-### Step 5 — Validar con datos sintéticos en {workspace-name}
+### Step 5 — Validate with synthetic data in {workspace-name}
 
-Si no hay tráfico real, inyectar evento de prueba via DCR:
+If there is no real traffic, inject a test event via DCR:
 ```bash
-# Usar Data Collection Rule para enviar evento sintético a CopilotStudio_CL
+# Use a Data Collection Rule to send a synthetic event to CopilotStudio_CL
 ```
 
 ## Verification
 
 - [ ] Validation query returns rows or No results without a table error
-- [ ] Regla en estado Enabled en Sentinel Analytics
-- [ ] Incident de prueba generado con datos sintéticos
-- [ ] Playbook ejecuta sin errores en modo test
-- [ ] Tiempo de detección < 10 minutos desde evento
+- [ ] Rule in Enabled state in Sentinel Analytics
+- [ ] Test incident generated with synthetic data
+- [ ] Playbook runs with no errors in test mode
+- [ ] Time to detect < 10 minutes from the event
 
 ## Implementation notes
 
 - Verify the `CopilotStudio_CL` and `FoundryAgents_CL` tables exist and hold data before creating the analytics rule
-- Sentinel API version recomendada: `2022-12-01-preview` para recursos SecurityInsights
+- Recommended Sentinel API version: `2022-12-01-preview` for SecurityInsights resources
 - Incident grouping by `UserId` plus `AgentName` reduces noise significantly in environments with multiple users testing
 - In production: tune the minimum `JailbreakScore` against the false positive rate observed in the first 30 days

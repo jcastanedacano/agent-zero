@@ -4,43 +4,43 @@ version: "1.0"
 pillar: secure
 subdomain: ms-entra
 description: >-
-  Centraliza y controla secretos, connection strings y API keys de agentes AI
-  en Azure Key Vault, aplicando RBAC granular por agente, habilitando rotación
-  automática y auditando todo acceso via Sentinel.
+  Centralizes and controls AI agent secrets, connection strings, and API
+  keys in Azure Key Vault, applying granular per-agent RBAC, enabling
+  automatic rotation, and auditing every access via Sentinel.
 tags: [secure, keyvault, secrets, rotation, agent-credentials, azure-rbac]
 atlas_techniques: [AML.T0046]
 d3fend_techniques: [D3-CH, D3-SCL]
 nist_ai_rmf: [MANAGE-1.3, GOVERN-6.2]
 nist_csf: [PR.DS-01, PR.AC-01]
-ms_license: [Azure Key Vault (incluido en Azure subscription)]
+ms_license: [Azure Key Vault (included in Azure subscription)]
 ms_roles: [Key Vault Administrator, User Access Administrator]
 effort_hours: 4
 ---
 
 ## When to use
 
-- Agentes que aún requieren secretos estáticos (no migrables a managed identity)
-- Connection strings a bases de datos externas, APIs de terceros
-- Cuando se detectan secretos hardcoded en código o variables de entorno de agentes
-- Como control transitorio mientras se migra a managed identity
+- Agents that still require static secrets (not migratable to managed identity)
+- Connection strings to external databases, third-party APIs
+- When hardcoded secrets are found in agent code or environment variables
+- As a transitional control while migrating to managed identity
 
-## Cuándo NO usar esta skill (preferir managed identity)
+## When NOT to use this skill (prefer managed identity)
 
 If the target resource is in Azure and supports Entra auth, use managed identity
 instead of Key Vault. Key Vault is for secrets belonging to external resources
-o casos donde managed identity no es viable.
+or cases where managed identity is not viable.
 
 ## Workflow
 
-### Step 1 — Auditar secretos actuales del agente
+### Step 1 — Audit the agent's current secrets
 
-Buscar secretos en:
-- Variables de entorno del endpoint / deployment
-- Archivos de configuración en el repositorio
-- Connection strings en Copilot Studio connectors
-- Azure App Configuration si se usa
+Look for secrets in:
+- Endpoint / deployment environment variables
+- Configuration files in the repository
+- Connection strings in Copilot Studio connectors
+- Azure App Configuration, if used
 
-### Step 2 — Crear o usar Key Vault existente
+### Step 2 — Create or reuse an existing Key Vault
 
 {workspace-name} has `{kv-name}` available. For new agents, create a dedicated KV:
 
@@ -53,12 +53,12 @@ az keyvault create \
   --sku standard
 ```
 
-`--enable-rbac-authorization true` — usar RBAC en lugar de access policies (modelo moderno).
+`--enable-rbac-authorization true` — use RBAC instead of access policies (the modern model).
 
-### Step 3 — Migrar secretos al Key Vault
+### Step 3 — Migrate secrets into the Key Vault
 
 ```bash
-# Por cada secreto del agente
+# For each of the agent's secrets
 az keyvault secret set \
   --vault-name "kv-agent-{agent-name}" \
   --name "{secret-name}" \
@@ -66,12 +66,12 @@ az keyvault secret set \
   --expires "$(date -u -d '+90 days' '+%Y-%m-%dT%H:%M:%SZ')"
 ```
 
-Usar `--expires` para forzar rotación. 90 días para API keys externas.
+Use `--expires` to force rotation. 90 days for external API keys.
 
-### Step 4 — Asignar RBAC por agente (principio de least privilege)
+### Step 4 — Assign per-agent RBAC (least privilege principle)
 
 ```bash
-# Solo el SP del agente puede leer sus propios secretos
+# Only the agent's SP can read its own secrets
 az role assignment create \
   --assignee {agent-sp-or-managed-identity-principal-id} \
   --role "Key Vault Secrets User" \
@@ -80,9 +80,9 @@ az role assignment create \
 
 `Key Vault Secrets User` = read secrets only. No listing, no writing, no administration.
 
-### Step 5 — Actualizar agente para leer desde Key Vault
+### Step 5 — Update the agent to read from Key Vault
 
-**Python con managed identity:**
+**Python with managed identity:**
 ```python
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -96,9 +96,9 @@ secret = client.get_secret("{secret-name}")
 api_key = secret.value
 ```
 
-**Copilot Studio:** usar Azure Key Vault connector (disponible en Power Platform).
+**Copilot Studio:** use the Azure Key Vault connector (available in Power Platform).
 
-### Step 6 — Habilitar diagnósticos y envío a Sentinel
+### Step 6 — Enable diagnostics and forward to Sentinel
 
 ```bash
 az monitor diagnostic-settings create \
@@ -108,30 +108,30 @@ az monitor diagnostic-settings create \
   --workspace "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.OperationalInsights/workspaces/{workspace-name}"
 ```
 
-### Step 7 — Configurar alertas de rotación
+### Step 7 — Configure rotation alerts
 
 ```bash
-# Alertar 15 días antes de expiración del secreto
+# Alert 15 days before secret expiry
 az keyvault create-notification \
   --vault-name "kv-agent-{agent-name}" \
   --secret-name "{secret-name}" \
   --days-before-expiry 15
 ```
 
-O via Event Grid + Logic App para notificación al equipo de seguridad.
+Or via Event Grid + Logic App for notification to the security team.
 
 ## Verification
 
-- [ ] Secretos migrados al Key Vault (no en variables de entorno ni código)
-- [ ] RBAC asignado solo al SP/managed identity del agente
-- [ ] Agente lee secretos desde KV sin credenciales hardcoded
-- [ ] Diagnósticos enviando AuditEvent a Sentinel
-- [ ] Fechas de expiración configuradas en todos los secretos
-- [ ] Alerta de rotación configurada
+- [ ] Secrets migrated to Key Vault (not in environment variables or code)
+- [ ] RBAC assigned only to the agent's SP/managed identity
+- [ ] Agent reads secrets from KV with no hardcoded credentials
+- [ ] Diagnostics sending AuditEvent to Sentinel
+- [ ] Expiry dates configured on every secret
+- [ ] Rotation alert configured
 
 ## Implementation notes
 
-- API version Key Vault ARM recomendada: `2023-07-01`
+- Recommended Key Vault ARM API version: `2023-07-01`
 - `enable-rbac-authorization` must be `true` to use role assignments on the Key Vault; if the KV uses access policies (legacy model), migrate first
 - Automatic secret rotation requires the agent to use the version-neutral URL so Key Vault resolves the current version
 - Use the naming convention agent-environment-type for secrets, for example `sales-agent-prod-graph-secret`

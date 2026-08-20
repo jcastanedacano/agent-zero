@@ -5,8 +5,8 @@ pillar: govern
 subdomain: ms-copilot-studio
 description: >-
   Manages the full lifecycle of AI agents from approval through
-  descomisión, incluyendo detección de agentes huérfanos con acceso activo,
-  revocación de permisos y eliminación de service principals en Entra ID.
+  decommission, including detection of orphaned agents with active access,
+  permission revocation, and deletion of service principals in Entra ID.
 tags: [govern, copilot-studio, entra, lifecycle, decommission, agent-hygiene]
 atlas_techniques: [AML.T0040]
 d3fend_techniques: [D3-UAP, D3-AM]
@@ -19,99 +19,99 @@ effort_hours: 4
 
 ## When to use
 
-- Auditoría periódica (mensual/trimestral) de agentes activos
-- Cuando un empleado que creó un agente abandona la organización
-- Post-proyecto: agentes creados para casos de uso temporales
-- Detección de agentes sin actividad en 30+ días con conectores activos
+- Periodic (monthly/quarterly) audit of active agents
+- When an employee who created an agent leaves the organization
+- Post-project: agents created for temporary use cases
+- Detection of agents with no activity in 30+ days that still have active connectors
 
 ## Prerequisites
 
-- Lista de agentes del Pilar 1 (con owner y fecha de creación)
-- Power Platform Admin Center accesible
-- Graph API para revocar permisos en Entra ID
-- Proceso de offboarding que incluya revisión de agentes del empleado
+- Pillar 1 agent list (with owner and creation date)
+- Power Platform Admin Center access
+- Graph API to revoke permissions in Entra ID
+- An offboarding process that includes reviewing the departing employee's agents
 
 ## Workflow
 
-### Step 1 — Identificar agentes candidatos a descomisión
+### Step 1 — Identify decommission candidates
 
-Criterios:
-- Sin actividad en los últimos 30 días (cruzar con KQL en `queries/`)
-- Owner/creador fuera de la organización (verificar en Entra)
-- Caso de uso original completado (verificar con business owner)
-- Proyecto finalizado al que estaba asociado
+Criteria:
+- No activity in the last 30 days (cross-reference with the KQL in `queries/`)
+- Owner/creator no longer with the organization (verify in Entra)
+- Original use case completed (verify with the business owner)
+- The project it was associated with has ended
 
 ```kql
-// Ver queries/sentinel-inactive-agents.kql
+// See queries/sentinel-inactive-agents.kql
 ```
 
-### Step 2 — Notificar a owner y confirmar
+### Step 2 — Notify the owner and confirm
 
-Antes de descomisionar, confirmar con:
-- Owner directo del agente
+Before decommissioning, confirm with:
+- The agent's direct owner
 - The owner manager if the owner is no longer with the organization
-- Business owner del caso de uso
+- The use case's business owner
 
-Plazo de respuesta: 5 días hábiles. Sin respuesta = proceder con descomisión.
+Response window: 5 business days. No response = proceed with decommission.
 
-### Step 3 — Deshabilitar agente en Copilot Studio
+### Step 3 — Disable the agent in Copilot Studio
 
 ```
 Copilot Studio → [Agent] → Settings → General → Status → Disabled
 ```
 
-O via Power Platform Admin Center:
+Or via the Power Platform Admin Center:
 ```
 Environments → [Env] → Copilot Studio → Agents → [Agent] → Disable
 ```
 
-Mantener deshabilitado 7 días antes de eliminar (ventana de rollback).
+Keep it disabled for 7 days before deleting (rollback window).
 
-### Step 4 — Revocar OAuth consent grants en Entra ID
+### Step 4 — Revoke OAuth consent grants in Entra ID
 
 ```http
-# Obtener consent grants del service principal
+# Get the service principal's consent grants
 GET https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/oauth2PermissionGrants
 
-# Revocar cada grant
+# Revoke each grant
 DELETE https://graph.microsoft.com/v1.0/oauth2PermissionGrants/{grant-id}
 ```
 
-### Step 5 — Revocar app role assignments
+### Step 5 — Revoke app role assignments
 
 ```http
 GET https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/appRoleAssignments
 
-# Por cada assignment:
+# For each assignment:
 DELETE https://graph.microsoft.com/v1.0/servicePrincipals/{resource-sp-id}/appRoleAssignedTo/{assignment-id}
 ```
 
-### Step 6 — Eliminar service principal y app registration
+### Step 6 — Delete the service principal and app registration
 
 ```http
-# Eliminar service principal
+# Delete the service principal
 DELETE https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}
 
-# Eliminar app registration (si aplica — confirmar que no hay otras instancias)
+# Delete the app registration (if applicable — confirm no other instances exist)
 DELETE https://graph.microsoft.com/v1.0/applications/{app-object-id}
 ```
 
-### Step 7 — Documentar en registro de governance
+### Step 7 — Document in the governance registry
 
-Registrar en log:
-- Fecha de descomisión
-- Owner notificado
-- Motivo
-- Recursos revocados
-- Ejecutado por
+Record in the log:
+- Decommission date
+- Owner notified
+- Reason
+- Resources revoked
+- Executed by
 
 ## Verification
 
-- [ ] Agente en estado Disabled (no Deleted) por 7 días
-- [ ] OAuth consent grants revocados (GET retorna array vacío)
-- [ ] App role assignments revocados
-- [ ] Service principal eliminado (GET retorna 404)
-- [ ] Entrada en log de governance creada
+- [ ] Agent in Disabled state (not Deleted) for 7 days
+- [ ] OAuth consent grants revoked (GET returns an empty array)
+- [ ] App role assignments revoked
+- [ ] Service principal deleted (GET returns 404)
+- [ ] Governance log entry created
 
 ## Implementation notes
 
