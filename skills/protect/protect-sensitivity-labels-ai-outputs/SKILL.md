@@ -4,10 +4,10 @@ version: "1.0"
 pillar: protect
 subdomain: ms-purview-ai
 description: >-
-  Configura auto-labeling en Purview para que documentos y archivos generados
-  o procesados por agentes AI hereden sensitivity labels apropiados, garantizando
-  que outputs de agentes con datos sensibles sean clasificados y protegidos
-  con cifrado y restricciones de acceso automáticamente.
+  Configures auto-labeling in Purview so that documents and files generated
+  or processed by AI agents inherit appropriate sensitivity labels, ensuring
+  agent outputs containing sensitive data are automatically classified and
+  protected with encryption and access restrictions.
 tags: [protect, purview, sensitivity-labels, auto-labeling, classification, ai-outputs]
 atlas_techniques: [AML.T0048, AML.T0057]
 d3fend_techniques: [D3-DLP, D3-EAC]
@@ -18,122 +18,122 @@ ms_roles: [Compliance Administrator, Information Protection Administrator]
 effort_hours: 6
 ---
 
-## Cuándo usar
+## When to use
 
-- Agentes que generan documentos, reportes o archivos como output
-- Agentes con acceso a datos ya clasificados que podrían copiar/transformar contenido
-- Cuando los outputs de agentes necesitan heredar la clasificación de los datos fuente
+- Agents that generate documents, reports, or files as output
+- Agents with access to already-classified data that could copy or transform content
+- When agent outputs need to inherit the classification of the source data
 
-## Restricción de implementación
+## Implementation constraint
 
-La creación de sensitivity labels y auto-labeling policies tiene soporte
-limitado vía ARM/API. Configurar via **Microsoft Purview Compliance Portal**
-es el camino confiable para la configuración inicial.
-La activación y ajustes menores pueden hacerse vía Graph API
+Creating sensitivity labels and auto-labeling policies has limited support
+via ARM/API. Configuring through the **Microsoft Purview Compliance Portal**
+is the reliable path for initial configuration.
+Activation and minor adjustments can be done via Graph API
 (`/beta/informationProtection/policy/labels`).
 
-## Jerarquía recomendada de labels para outputs de AI
+## Recommended label hierarchy for AI outputs
 
 ```
 Public
   └── Internal Use Only
         └── Confidential
-              ├── Confidential \ AI-Generated        ← outputs de agentes
+              ├── Confidential \ AI-Generated        ← agent outputs
               └── Confidential \ Customer Data
                     └── Highly Confidential
                           └── Highly Confidential \ AI-Generated
 ```
 
-El sub-label `AI-Generated` permite identificar qué contenido fue producido
-o procesado por un agente, independientemente del nivel de sensibilidad.
+The `AI-Generated` sub-label identifies which content was produced or
+processed by an agent, independent of the sensitivity level.
 
 ## Workflow
 
-### Paso 1 — Auditar sensitivity labels existentes en el tenant
+### Step 1 — Audit existing sensitivity labels in the tenant
 
 ```
 Purview Compliance Portal → Information protection → Labels
 ```
 
-Si no hay estructura de labels: crear jerarquía base antes de continuar.
-Si ya existe: evaluar si necesita sub-labels para AI-Generated content.
+If no label structure exists: create the base hierarchy before continuing.
+If one already exists: assess whether it needs sub-labels for AI-generated content.
 
-### Paso 2 — Crear sub-label AI-Generated
+### Step 2 — Create the AI-Generated sub-label
 
 ```
 Information protection → Labels → [Confidential] → Add sub-label
 ```
 
-Configuración del sub-label:
+Sub-label configuration:
 - **Name**: `AI-Generated`
 - **Display name**: `Confidential / AI-Generated`
-- **Description**: "Contenido generado o procesado por un agente AI"
-- **Encryption**: heredar del label padre o configurar específico
-- **Content marking**: agregar watermark "AI Generated - Review before sharing"
-- **Auto-labeling**: No (se configura en política separada)
+- **Description**: "Content generated or processed by an AI agent"
+- **Encryption**: inherit from the parent label or configure specifically
+- **Content marking**: add the watermark "AI Generated - Review before sharing"
+- **Auto-labeling**: No (configured in a separate policy)
 
-### Paso 3 — Crear política de auto-labeling para outputs de agentes
+### Step 3 — Create the auto-labeling policy for agent outputs
 
 ```
 Information protection → Auto-labeling policies → Create policy
 ```
 
-Configuración:
+Configuration:
 - **Name**: `AutoLabel-AI-Agent-Outputs`
-- **Locations**: SharePoint sites donde agentes depositan outputs,
-  OneDrive de usuarios que usan agentes, Exchange si aplica
+- **Locations**: SharePoint sites where agents deposit outputs,
+  OneDrive of users who use agents, Exchange if applicable
 - **Rules**:
-  - Content contains sensitive info types: [tipos relevantes del tenant]
-  - OR content was created/modified by: [service principals de agentes conocidos]
+  - Content contains sensitive info types: [tenant-relevant types]
+  - OR content was created/modified by: [known agent service principals]
 - **Label to apply**: `Confidential / AI-Generated`
-- **Mode**: Simulation first (7 días), luego enforcement
+- **Mode**: Simulation first (7 days), then enforcement
 
-### Paso 4 — Configurar herencia de label en Copilot Studio
+### Step 4 — Configure label inheritance in Copilot Studio
 
-Para agentes que acceden a documentos ya clasificados:
+For agents that access already-classified documents:
 
 ```
 Purview → Information protection → Settings → Inheritance
 → Enable label inheritance from email attachments and documents
 ```
 
-Cuando un agente extrae contenido de un documento `Confidential`,
-el output debe heredar al menos ese nivel de clasificación.
+When an agent extracts content from a `Confidential` document,
+the output must inherit at least that classification level.
 
-### Paso 5 — Validar en simulation mode
+### Step 5 — Validate in simulation mode
 
 ```
 Auto-labeling policies → [PolicyName] → Simulation results
 ```
 
-Revisar qué archivos serían etiquetados. Ajustar reglas para eliminar
-falsos positivos antes de activar enforcement.
+Review which files would be labeled. Tune rules to eliminate
+false positives before activating enforcement.
 
-### Paso 6 — Activar y monitorear
+### Step 6 — Activate and monitor
 
 ```
 Auto-labeling policies → [PolicyName] → Turn on policy
 ```
 
-Monitorear en Sentinel con queries de `MicrosoftDataLossPrevention`
-y `PurviewAuditLog`.
+Monitor in Sentinel with `MicrosoftDataLossPrevention`
+and `PurviewAuditLog` queries.
 
 ```kql
-// Ver queries/sentinel-label-coverage.kql
+// See queries/sentinel-label-coverage.kql
 ```
 
-## Verificación
+## Verification
 
-- [ ] Sub-label `AI-Generated` creado bajo `Confidential`
-- [ ] Auto-labeling policy en simulation mode retorna matches esperados
-- [ ] Falsos positivos revisados y reglas ajustadas
-- [ ] Policy en enforcement activo
-- [ ] Documentos de output de agentes muestran label aplicado
-- [ ] Watermark visible en documentos etiquetados
+- [ ] `AI-Generated` sub-label created under `Confidential`
+- [ ] Auto-labeling policy in simulation mode returns the expected matches
+- [ ] False positives reviewed and rules tuned
+- [ ] Policy in active enforcement
+- [ ] Agent output documents show the applied label
+- [ ] Watermark visible on labeled documents
 
-## Notas de implementación
+## Implementation notes
 
-- Graph API beta endpoint para labels: `/beta/informationProtection/policy/labels` — verificar disponibilidad y estabilidad antes de usar en scripts de producción
-- Auto-labeling puede tardar hasta 24 horas en procesar archivos existentes en SharePoint — no asumir cobertura inmediata al activar la policy
-- Para validar auto-labeling: crear un documento de prueba con datos sintéticos tipo tarjeta de crédito y confirmar que la label se aplica automáticamente dentro de las 24h
-- Priorizar el etiquetado manual de sitios SharePoint usados como fuentes de conocimiento de agentes antes de habilitar retrieval
+- Graph API beta endpoint for labels: `/beta/informationProtection/policy/labels` — verify availability and stability before using it in production scripts
+- Auto-labeling can take up to 24 hours to process existing files in SharePoint — do not assume immediate coverage on activation
+- To validate auto-labeling: create a test document with synthetic credit-card-type data and confirm the label is applied
+- Prioritize manual labeling of SharePoint sites used as agent knowledge sources before enabling retrieval

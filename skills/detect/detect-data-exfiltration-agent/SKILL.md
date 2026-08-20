@@ -18,7 +18,7 @@ ms_roles: [Microsoft Sentinel Contributor, Security Reader]
 effort_hours: 5
 ---
 
-## Cuándo usar
+## When to use
 
 - Agentes con acceso a SharePoint, Exchange o bases de datos de producción
 - Cuando DLP de outputs está activo (Pilar 4) y se necesita correlación en Sentinel
@@ -36,7 +36,7 @@ effort_hours: 5
 
 ## Workflow
 
-### Paso 1 — Crear regla: acceso masivo a archivos via agente
+### Step 1 — Crear regla: acceso masivo a archivos via agente
 
 ```kql
 // Ver queries/sentinel-exfiltration.kql — Query 1
@@ -49,7 +49,7 @@ Configuración Sentinel:
 - **Lookback**: últimas 2 horas
 - **Severidad**: High
 
-### Paso 2 — Crear regla: agente enviando email a dominios externos
+### Step 2 — Crear regla: agente enviando email a dominios externos
 
 ```kql
 // Ver queries/sentinel-exfiltration.kql — Query 2
@@ -61,21 +61,21 @@ Configuración:
 - **Lookback**: últimas 24 horas
 - **Severidad**: High (si contiene datos sensibles: Critical)
 
-### Paso 3 — Crear regla: llamadas HTTP salientes desde agentes a URLs no aprobadas
+### Step 3 — Create rule: outbound HTTP calls from agents to unapproved URLs
 
 ```kql
 // Ver queries/sentinel-exfiltration.kql — Query 3
 // Requiere que los agentes Foundry tengan network logging activo
 ```
 
-### Paso 4 — Correlacionar con DLP events de Purview
+### Step 4 — Correlacionar con DLP events de Purview
 
 ```kql
 // Ver queries/sentinel-exfiltration.kql — Query 4
-// Join de events de agente con DLP matches para priorizar por sensibilidad
+// Join agent events with DLP matches to prioritize by sensitivity
 ```
 
-### Paso 5 — Configurar alerta de alto volumen en Purview AI Hub
+### Step 5 — Configurar alerta de alto volumen en Purview AI Hub
 
 ```
 Purview AI Hub → Policies → Create policy
@@ -84,7 +84,7 @@ Purview AI Hub → Policies → Create policy
 → Action: Alert + Restrict
 ```
 
-## Verificación
+## Verification
 
 - [ ] Regla bulk access creada y probada con datos sintéticos
 - [ ] Regla email externo creada (si agentes tienen Mail.Send)
@@ -92,9 +92,9 @@ Purview AI Hub → Policies → Create policy
 - [ ] Incident de prueba generado con acceso masivo simulado
 - [ ] Playbook de contención vinculado a las reglas (ver skill siguiente)
 
-## Notas de implementación
+## Implementation notes
 
-- Activar el conector de Purview Audit en Sentinel para habilitar la correlación DLP en las queries de exfiltración
-- Para simular exfiltración en un tenant de prueba: crear una carpeta en SharePoint con 60+ archivos de prueba y accederlos todos en < 30 minutos para disparar la regla de volumen
-- El vector de email relay requiere que el SP del agente tenga `Mail.Send` asignado — verificar con la skill `secure-least-privilege-agent-identity` que ese permiso esté revocado si no es necesario
-- Si el conector HTTP del agente no tiene logging habilitado: usar NSG flow logs como proxy para detectar egress (ver skill `secure-network-isolation-agent`)
+- Activate the Purview Audit connector in Sentinel to enable DLP correlation in the exfiltration queries
+- To simulate exfiltration in a test tenant: create a SharePoint folder with 60+ test files and access them all in one session
+- The email relay vector requires the agent SP to hold `Mail.Send` — verify with the `secure-least-privilege-agent-identity` skill
+- If the agent HTTP connector has no logging enabled: use NSG flow logs as a proxy to detect egress

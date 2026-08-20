@@ -32,19 +32,19 @@ role_requirements:
   - Compliance Administrator
 ---
 
-## Objetivo
+## Objective
 
 Identificar y evaluar todos los agentes de IA de terceros activos en el tenant — plugins de Copilot de ISVs, servidores MCP externos, extensiones de Agent 365, y agentes de Power Platform de proveedores externos — y asignarles un nivel de riesgo antes de que accedan a datos organizacionales.
 
 ## Por qué importa
 
-Los agentes de primera parte (creados por el equipo interno) pasan por Entra Agent ID y Copilot Studio governance. Los agentes de terceros tipicamente se instalan desde el marketplace de M365 o se conectan como plugins de Copilot sin el mismo proceso de aprobación — y operan con los mismos permisos de usuario, accediendo a los mismos datos. Un MCP server comprometido o un plugin malicioso del marketplace es funcionalmente equivalente a un agente insider malicioso.
+First-party agents (built by the internal team) go through Entra Agent ID and Copilot Studio governance. Third-party agents are typically installed from the
 
 El marco de referencia es OWASP Agentic AI AG05 (Supply Chain Compromise) y MITRE ATLAS AML.T0010 (ML Supply Chain Compromise).
 
 ## Workflow
 
-### Paso 1 — Inventariar plugins y extensiones de Copilot de terceros
+### Step 1 — Inventariar plugins y extensiones de Copilot de terceros
 
 ```powershell
 # PowerShell — Microsoft Graph API
@@ -56,7 +56,7 @@ $response.value | Where-Object { $_.publisher -ne "Microsoft" } |
     Sort-Object publisher
 ```
 
-### Paso 2 — Auditar permisos de aplicaciones de terceros en Entra
+### Step 2 — Auditar permisos de aplicaciones de terceros en Entra
 
 ```kql
 // Entra App registrations de terceros con permisos de alto privilegio
@@ -80,7 +80,7 @@ AuditLogs
 | sort by TimeGenerated desc
 ```
 
-### Paso 3 — Detectar servidores MCP externos conectados a agentes
+### Step 3 — Detectar servidores MCP externos conectados a agentes
 
 ```kql
 // CloudAppEvents — conexiones de agentes a endpoints externos (posibles MCP servers)
@@ -102,23 +102,23 @@ CloudAppEvents
 | sort by InvocationCount desc
 ```
 
-### Paso 4 — Evaluar riesgo de cada agente de terceros
+### Step 4 — Evaluar riesgo de cada agente de terceros
 
 Para cada agente identificado, completar la siguiente tabla:
 
 | Campo | Preguntas clave |
 |-------|----------------|
-| **Publisher verification** | ¿El publisher está en el marketplace oficial de Microsoft? ¿Tiene certificación? |
+| **Publisher verification** | Is the publisher in the official Microsoft marketplace? Is it certified? |
 | **Data access scope** | ¿Qué permisos de Graph API tiene? ¿Accede a correo, calendario, SharePoint? |
-| **Data residency** | ¿Los prompts y respuestas se procesan fuera del tenant de Microsoft? |
-| **Audit trail** | ¿Las acciones del agente de terceros aparecen en Purview audit? |
-| **Update mechanism** | ¿El código del agente se actualiza automáticamente sin re-aprobación? |
-| **Supply chain** | ¿El agente depende de modelos de terceros (no Azure OpenAI)? |
+| **Data residency** | Are prompts and responses processed outside the Microsoft tenant? |
+| **Audit trail** | Do the third-party agent's actions appear in Purview audit? |
+| **Update mechanism** | Is the agent code updated automatically without re-approval? |
+| **Supply chain** | Does the agent depend on third-party models (not Azure OpenAI)? |
 
-### Paso 5 — Aplicar controles por nivel de riesgo
+### Step 5 — Aplicar controles por nivel de riesgo
 
 **Riesgo alto** (acceso a datos sensibles + publisher no verificado):
-- Bloquear via Power Platform DLP o CA policy sobre el App ID
+- Block via Power Platform DLP or a CA policy on the App ID
 - Requerir revisión de seguridad antes de re-activar
 
 **Riesgo medio** (acceso a datos de negocio + publisher verificado):
@@ -130,7 +130,7 @@ Para cada agente identificado, completar la siguiente tabla:
 - Documentar en inventario
 - Incluir en ciclo anual de revisión de app registrations
 
-## Verificación
+## Verification
 
 - [ ] Inventario de plugins y extensiones de terceros completado con publisher, scopes y fecha de instalación
 - [ ] Todos los agentes de terceros con acceso a datos de alta sensibilidad tienen CA policy o DLP activa
@@ -138,9 +138,9 @@ Para cada agente identificado, completar la siguiente tabla:
 - [ ] MCP servers externos identificados y evaluados contra política de allowlist
 - [ ] Registros de terceros añadidos al Gap Assessment Template (Domain 1 — Discover)
 
-## Notas de implementación
+## Implementation notes
 
-- Los plugins instalados desde el Microsoft 365 App Store pasan por el proceso de certificación de Microsoft, pero no son inmunes a compromiso post-certificación — el vector de supply chain ataca el código del publisher, no el marketplace.
-- Los servidores MCP externos son el vector de mayor riesgo: un servidor MCP comprometido puede inyectar instrucciones maliciosas en cualquier agente que lo invoque, con acceso a todos los datos del usuario que autorizó la conexión.
-- Power Platform DLP puede bloquear conectores externos a nivel de entorno, lo que es el control más efectivo para MCP servers no autorizados.
-- La tabla `CloudAppEvents` con `ActionType == "ExternalToolInvoked"` puede no existir en todos los tenants según la configuración de Defender — validar disponibilidad antes del workshop.
+- Plugins installed from the Microsoft 365 App Store go through Microsoft's certification process, but they are not immune to post-certification compromise — the
+- External MCP servers are the highest-risk vector: a compromised MCP server can inject malicious instructions into any agent that invokes it, with
+- Power Platform DLP can block external connectors at the environment level, which is the most effective control for unauthorized MCP servers.
+- The `CloudAppEvents` table with `ActionType == "ExternalToolInvoked"` may not exist in every tenant depending on Defender configuration — validate availability

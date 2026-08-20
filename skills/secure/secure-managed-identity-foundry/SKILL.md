@@ -17,7 +17,7 @@ ms_roles: [Owner o User Access Administrator (para role assignments), Azure AI D
 effort_hours: 5
 ---
 
-## Cuándo usar
+## When to use
 
 - Pilar 1 detectó endpoints Foundry con `auth_mode: key`
 - Agentes que acceden a Storage, Key Vault, Cognitive Services via API key
@@ -32,12 +32,12 @@ efímeros automáticamente.
 
 ## Tipos de managed identity para agentes Foundry
 
-- **System-assigned**: vinculada al ciclo de vida del recurso (se elimina con el recurso). Recomendada para agentes de propósito único.
-- **User-assigned**: independiente del recurso, reutilizable. Recomendada cuando múltiples agentes comparten el mismo conjunto de permisos.
+- **System-assigned**: tied to the resource lifecycle (deleted with the resource). Recommended for single-purpose agents.
+- **User-assigned**: independent of the resource, reusable. Recommended when multiple agents share the same permission set.
 
 ## Workflow
 
-### Paso 1 — Identificar agentes con API key activos
+### Step 1 — Identificar agentes con API key activos
 
 ```bash
 az ml online-endpoint list \
@@ -47,7 +47,7 @@ az ml online-endpoint list \
   --output table
 ```
 
-### Paso 2 — Habilitar system-assigned managed identity en el endpoint
+### Step 2 — Habilitar system-assigned managed identity en el endpoint
 
 ```bash
 az ml online-endpoint update \
@@ -75,7 +75,7 @@ az ml online-endpoint update \
   --set "identity.user_assigned_identities[0].resource_id={managed-identity-resource-id}"
 ```
 
-### Paso 3 — Cambiar auth_mode de key a aad_token
+### Step 3 — Cambiar auth_mode de key a aad_token
 
 ```bash
 az ml online-endpoint update \
@@ -85,7 +85,7 @@ az ml online-endpoint update \
   --auth-mode aad_token
 ```
 
-### Paso 4 — Asignar RBAC mínimo a la managed identity
+### Step 4 — Asignar RBAC mínimo a la managed identity
 
 Roles por recurso accedido:
 
@@ -109,7 +109,7 @@ az role assignment create \
   --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}"
 ```
 
-### Paso 5 — Actualizar código del agente para usar DefaultAzureCredential
+### Step 5 — Actualizar código del agente para usar DefaultAzureCredential
 
 ```python
 from azure.identity import DefaultAzureCredential
@@ -123,7 +123,7 @@ blob_client = BlobServiceClient(
 )
 ```
 
-### Paso 6 — Revocar API keys previas
+### Step 6 — Revocar API keys previas
 
 ```bash
 # Regenerar keys para invalidar las anteriores
@@ -134,19 +134,19 @@ az ml online-endpoint regenerate-keys \
   --key-type primary
 ```
 
-Verificar que ningún sistema externo siga usando las keys antes de revocar.
+Verify no external system is still using the keys before revoking them.
 
-## Verificación
+## Verification
 
 - [ ] `auth_mode` del endpoint es `aad_token` (no `key`)
 - [ ] Managed identity visible en el endpoint: `az ml online-endpoint show --query identity`
-- [ ] Role assignments asignados a la managed identity (no al SP de la app)
+- [ ] Role assignments assigned to the managed identity (not to the app SP)
 - [ ] Código del agente usa `DefaultAzureCredential` sin secrets hardcoded
 - [ ] API keys anteriores invalidadas
 - [ ] Test de llamada exitoso con nuevo auth mode
 
-## Notas de implementación
+## Implementation notes
 
-- La creación de managed identities requiere Azure CLI o Bicep/ARM — Graph API no soporta la creación directa de managed identities de usuario asignado
-- Para migrar de client secret a managed identity: crear la MI, asignar los roles equivalentes, actualizar la configuración del agente, verificar funcionamiento y luego revocar el secret — nunca revocar antes de verificar
-- `sp-*` (service principals con secret) deben ser reemplazados progresivamente; priorizar los que tienen permisos de escritura sobre `Mail`, `Files` o `Directory`
+- Creating managed identities requires Azure CLI or Bicep/ARM — Graph API does not support direct creation of user-assigned managed identities
+- To migrate from client secret to managed identity: create the MI, assign equivalent roles, update the agent configuration, verify function, then revoke the secret
+- `sp-*` (service principals with a secret) should be replaced progressively; prioritize those with write permissions over `Mail`, `Files`, or `Sites`

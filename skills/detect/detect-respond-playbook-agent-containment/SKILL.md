@@ -4,10 +4,10 @@ version: "1.0"
 pillar: detect
 subdomain: ms-sentinel-aisoc
 description: >-
-  Playbook de respuesta a incidentes para contener un agente AI comprometido,
-  incluyendo suspensión inmediata del agente, revocación de tokens activos,
-  preservación de evidencia forense y notificación al equipo de seguridad,
-  orquestado via Logic App vinculado a reglas de analítica de Sentinel.
+  Incident response playbook to contain a compromised AI agent, including
+  immediate agent suspension, revocation of active tokens, preservation of
+  forensic evidence, and notification to the security team, orchestrated
+  via a Logic App linked to Sentinel analytics rules.
 tags: [detect, respond, sentinel, playbook, logic-app, containment, incident-response, aisoc]
 atlas_techniques: [AML.T0051, AML.T0048, AML.T0046]
 d3fend_techniques: [D3-OTA, D3-RTA, D3-ANET]
@@ -18,36 +18,36 @@ ms_roles: [Microsoft Sentinel Contributor, Logic Apps Contributor]
 effort_hours: 8
 ---
 
-## Cuándo usar
+## When to use
 
-- Como playbook adjunto a cualquier regla de analítica del Pilar 5
-- Activar manualmente cuando se confirma un agente comprometido
-- Automatizar para los incidents de severidad High y Critical
+- As a playbook attached to any Pillar 5 analytics rule
+- Trigger manually when a compromised agent is confirmed
+- Automate for High and Critical severity incidents
 
-## Fases del playbook
+## Playbook phases
 
 ```
-Detección → Triage → Contención → Preservación → Notificación → Remediación
+Detection → Triage → Containment → Preservation → Notification → Remediation
 ```
 
-Esta skill cubre las primeras cuatro fases (automatizables).
-La remediación requiere revisión humana.
+This skill covers the first four phases (automatable).
+Remediation requires human review.
 
-## Acciones de contención por severidad
+## Containment actions by severity
 
-| Severidad | Acción automática | Requiere aprobación |
+| Severity | Automatic action | Requires approval |
 |---|---|---|
-| Low | Enriquecer incident + notificar | No |
-| Medium | Suspender agente + notificar + abrir ticket | No |
-| High | Suspender agente + revocar tokens + notificar | Sí (para pasos 3+) |
-| Critical | Bloquear SP + revocar tokens + notificar + escalar | Sí |
+| Low | Enrich incident + notify | No |
+| Medium | Suspend agent + notify + open ticket | No |
+| High | Suspend agent + revoke tokens + notify | Yes (for steps 3+) |
+| Critical | Block SP + revoke tokens + notify + escalate | Yes |
 
 ## Workflow
 
-### Paso 1 — Crear Logic App en Azure
+### Step 1 — Create the Logic App in Azure
 
 ```bash
-# Crear Logic App en {workspace-name}
+# Create the Logic App in {workspace-name}
 az logic workflow create \
   --resource-group {resource-group} \
   --location centralus \
@@ -55,27 +55,27 @@ az logic workflow create \
   --definition @containment-definition.json
 ```
 
-### Paso 2 — Trigger: Sentinel incident creation
+### Step 2 — Trigger: Sentinel incident creation
 
-El trigger es `When a Microsoft Sentinel incident is created or updated`
-con filtro en `Tactics contains AML.T0051 OR AML.T0046` o en el nombre de la regla.
+The trigger is `When a Microsoft Sentinel incident is created or updated`
+filtered on `Tactics contains AML.T0051 OR AML.T0046` or on the rule name.
 
-### Paso 3 — Acción 1: Enriquecer incident con datos del agente
+### Step 3 — Action 1: Enrich the incident with agent data
 
 ```http
-# Obtener detalles del SP del agente involucrado
+# Get the involved agent's SP details
 GET https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}
   ?$select=displayName,appId,createdDateTime,tags,owners
 
-# Obtener actividad reciente (últimas 8h)
+# Get recent activity (last 8h)
 GET https://graph.microsoft.com/v1.0/auditLogs/signIns
   ?$filter=appId eq '{app-id}' and createdDateTime ge {8h-ago}
   &$top=50
 ```
 
-Agregar resultado como comentario en el incident de Sentinel.
+Add the result as a comment on the Sentinel incident.
 
-### Paso 4 — Acción 2: Suspender agente en Copilot Studio (si aplica)
+### Step 4 — Action 2: Suspend the agent in Copilot Studio (if applicable)
 
 Via Power Platform API:
 ```http
@@ -83,7 +83,7 @@ POST https://api.powerplatform.com/appmanagement/environments/{env-id}/bots/{bot
 Authorization: Bearer {token}
 ```
 
-O via Graph si es una app M365 Copilot:
+Or via Graph if it is an M365 Copilot app:
 ```http
 PATCH https://graph.microsoft.com/v1.0/applications/{app-object-id}
 {
@@ -91,15 +91,15 @@ PATCH https://graph.microsoft.com/v1.0/applications/{app-object-id}
 }
 ```
 
-### Paso 5 — Acción 3: Revocar todos los tokens activos del SP
+### Step 5 — Action 3: Revoke all of the SP's active tokens
 
 ```http
 POST https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/revokeSignInSessions
 ```
 
-Esto invalida todos los tokens de acceso y refresh tokens actuales.
+This invalidates every current access token and refresh token.
 
-### Paso 6 — Acción 4: Bloquear SP en Entra ID (Critical only)
+### Step 6 — Action 4: Block the SP in Entra ID (Critical only)
 
 ```http
 PATCH https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}
@@ -108,12 +108,12 @@ PATCH https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}
 }
 ```
 
-### Paso 7 — Acción 5: Preservar evidencia forense
+### Step 7 — Action 5: Preserve forensic evidence
 
-Exportar a Storage Account antes de que los logs expiren:
+Export to a Storage Account before the logs expire:
 
 ```kql
-// Ejecutar y exportar via Sentinel → Logs → Export
+// Run and export via Sentinel → Logs → Export
 union CopilotStudio_CL, FoundryAgents_CL, AADServicePrincipalSignInLogs, AuditLogs
 | where TimeGenerated > ago(72h)
 | where ServicePrincipalName == "{agent-sp-name}"
@@ -121,41 +121,41 @@ union CopilotStudio_CL, FoundryAgents_CL, AADServicePrincipalSignInLogs, AuditLo
 | extend ForensicCase = "AISOC-{incident-id}"
 ```
 
-### Paso 8 — Acción 6: Notificación
+### Step 8 — Action 6: Notification
 
 ```
-Teams webhook → Canal AISOC-Alertas:
-"🚨 AGENTE COMPROMETIDO CONTENIDO
-Agente: {agent-name}
-Incident: {incident-id} | Severidad: {severity}
-Acciones tomadas: Suspendido, Tokens revocados
+Teams webhook → AISOC-Alerts channel:
+"🚨 COMPROMISED AGENT CONTAINED
+Agent: {agent-name}
+Incident: {incident-id} | Severity: {severity}
+Actions taken: Suspended, tokens revoked
 Requires human review: [link]"
 ```
 
-### Paso 9 — Configurar aprobación humana para Critical
+### Step 9 — Configure human approval for Critical
 
-Para incidents Critical, insertar acción de aprobación antes de `accountEnabled: false`:
+For Critical incidents, insert an approval action before `accountEnabled: false`:
 
 ```
 Logic App → Add action → Approvals → Start and wait for an approval
 → Approvers: security-team@{tenant}
-→ Timeout: 4 horas
-→ On reject: Solo notificar, no bloquear SP
+→ Timeout: 4 hours
+→ On reject: notify only, do not block the SP
 ```
 
-## Verificación
+## Verification
 
-- [ ] Logic App desplegada y en estado Running
-- [ ] Trigger conectado a Sentinel correctamente
-- [ ] Test: crear incident manual y verificar que Logic App ejecuta
-- [ ] Enriquecimiento aparece como comentario en el incident de Sentinel
-- [ ] `revokeSignInSessions` ejecuta sin errores (verificar en Graph API response)
-- [ ] Notificación llega al canal Teams AISOC-Alertas
-- [ ] Log de acciones de contención disponible en Logic App run history
+- [ ] Logic App deployed and in Running state
+- [ ] Trigger correctly connected to Sentinel
+- [ ] Test: create a manual incident and verify the Logic App runs
+- [ ] Enrichment appears as a comment on the Sentinel incident
+- [ ] `revokeSignInSessions` runs with no errors (verify in the Graph API response)
+- [ ] Notification reaches the Teams AISOC-Alerts channel
+- [ ] Containment action log available in the Logic App run history
 
-## Notas de implementación
+## Implementation notes
 
-- La Logic App necesita una managed identity con los siguientes roles asignados: `Application.ReadWrite.All` en Graph API (para deshabilitar el SP del agente) y `Microsoft Sentinel Responder` en el workspace
-- Power Platform Admin API requiere token de servicio separado para deshabilitar agentes de Copilot Studio — no reutilizar el token de Graph API
-- Para el canal de notificaciones: crear un canal Teams dedicado para alertas AISOC antes de desplegar el playbook
-- Preservar evidencia forense en un storage account con retención mínima de 90 días antes de revocar tokens — la revocación elimina la posibilidad de auditar sesiones activas
+- The Logic App needs a managed identity with the following roles assigned: `Application.ReadWrite.All` on Graph API
+- The Power Platform Admin API requires a separate service token to disable Copilot Studio agents — it cannot be reused
+- For the notification channel: create a dedicated Teams channel for AISOC alerts before deploying the playbook
+- Preserve forensic evidence in a storage account with a minimum 90-day retention before revoking tokens — revocation removes the ability to audit active sessions

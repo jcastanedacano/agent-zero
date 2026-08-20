@@ -6,7 +6,7 @@ subdomain: ms-copilot-studio
 description: >-
   Configura y opera el flujo de aprobación de agentes AI en Agent 365 (M365 Admin
   Center), estableciendo políticas para que nuevos agentes pasen por Requests antes
-  de activarse, cerrando el gap de Agent Builder que activa agentes sin aprobación.
+  before activation, closing the Agent Builder gap that activates agents without approval.
 tags: [govern, copilot-studio, agent365, approval-flow, shadow-ai-prevention]
 atlas_techniques: [AML.T0054]
 d3fend_techniques: [D3-UAP, D3-SFA]
@@ -17,22 +17,22 @@ ms_roles: [Microsoft 365 Administrator, Teams Administrator]
 effort_hours: 6
 ---
 
-## Cuándo usar
+## When to use
 
 - Después de identificar shadow AI en Pilar 1 (gap Registry vs Requests)
 - Cuando el tenant no tiene proceso formal de aprobación de agentes
-- Como control preventivo antes de que prolifere el uso de Agent Builder
+- As a preventive control before Agent Builder usage proliferates
 
 ## Gap crítico a cerrar
 
 Agentes creados desde **Agent Builder** (dentro de M365 Copilot) se activan
-inmediatamente sin generar un Request en Agent 365. Este es el vector principal
+immediately without generating a Request in Agent 365. This is the primary vector
 de shadow AI en organizaciones con M365 Copilot.
 
 El flujo de Requests aplica a agentes creados en Copilot Studio directamente,
 no a los de Agent Builder. Ambos canales requieren controles diferentes.
 
-## Prerrequisitos
+## Prerequisites
 
 - M365 Admin Center con rol de administrador
 - Agent 365 habilitado en el tenant
@@ -40,7 +40,7 @@ no a los de Agent Builder. Ambos canales requieren controles diferentes.
 
 ## Workflow
 
-### Paso 1 — Configurar política de agentes en Agent 365
+### Step 1 — Configurar política de agentes en Agent 365
 
 ```
 M365 Admin Center → Settings → Agent 365 → Policies
@@ -54,7 +54,7 @@ Opciones disponibles:
 
 Seleccionar **Require admin approval** para control efectivo.
 
-### Paso 2 — Configurar Requests workflow
+### Step 2 — Configurar Requests workflow
 
 ```
 Agent 365 → Requests → Settings
@@ -65,7 +65,7 @@ Definir:
 - **Auto-approve criteria**: agentes sin conectores externos (bajo riesgo)
 - **Notification settings**: email a approvers al recibir Request
 
-### Paso 3 — Cerrar el gap de Agent Builder
+### Step 3 — Cerrar el gap de Agent Builder
 
 Agent Builder bypass no puede cerrarse desde Agent 365. Controles alternativos:
 
@@ -77,7 +77,7 @@ Power Platform Admin Center → Policies → Data policies
 ```
 
 **Opción B — Conditional Access en M365 Copilot**:
-Bloquear Agent Builder para usuarios no en grupo de "AI Builders" aprobado:
+Block Agent Builder for users not in the approved AI Builders group:
 ```
 CA policy → Cloud apps: Microsoft Copilot → 
   Exclude: AI-Builders-Approved-Group
@@ -87,7 +87,7 @@ CA policy → Cloud apps: Microsoft Copilot →
 **Opción C — Restricción de licencia**:
 Asignar licencia M365 Copilot solo a usuarios en proceso de aprobación formal.
 
-### Paso 4 — Proceso operacional de aprobación
+### Step 4 — Proceso operacional de aprobación
 
 Flujo para cada Request recibido:
 
@@ -98,21 +98,21 @@ Flujo para cada Request recibido:
 5. Aprobar con condiciones o rechazar con justificación documentada
 6. Registrar decisión en log de governance (SharePoint list o tabla custom)
 
-### Paso 5 — Auditoría mensual
+### Step 5 — Auditoría mensual
 
 Revisar tab **Registry** vs **Requests** mensualmente para detectar agentes que
 hayan eludido el proceso. Cualquier discrepancia = incidente de shadow AI.
 
-## Verificación
+## Verification
 
 - [ ] Política "Require admin approval" habilitada en Agent 365
 - [ ] Grupo de approvers definido y notificaciones activas
-- [ ] Al menos un control para gap de Agent Builder implementado (A, B o C)
+- [ ] At least one control for the Agent Builder gap implemented (A, B, or C)
 - [ ] Proceso operacional documentado en runbook
 - [ ] Auditoría mensual calendarizada
 
-## Notas de implementación
+## Implementation notes
 
-- Verificar que Agent 365 esté configurado en el tenant antes de habilitar el flujo de aprobación — el registro central no está activo por defecto en todos los tenants M365
-- Para demostrar el gap del bypass de Agent Builder: crear un agente via Agent Builder y comparar su estado en Agent 365 Registry vs. Copilot Studio Requests — no aparecerá en el flujo de aprobación
-- Power Platform DLP es el control compensatorio más efectivo para mitigar el bypass de Agent Builder en entornos enterprise donde no se puede restringir la licencia
+- Verify Agent 365 is configured in the tenant before enabling the approval flow — the central registry is not active by default
+- To demonstrate the Agent Builder bypass gap: create an agent via Agent Builder and compare its state in Agent 365 Registry vs. Copilot Studio Requests
+- Power Platform DLP is the most effective compensating control for mitigating the Agent Builder bypass in enterprise environments where you cannot restrict it directly

@@ -17,13 +17,13 @@ ms_roles: [Application Administrator, Security Reader]
 effort_hours: 3
 ---
 
-## Cuándo usar
+## When to use
 
-- Post inventario de Copilot Studio y Foundry — para detectar surface no cubierto
-- Cuando hay reportes de aplicaciones OAuth no reconocidas en Sign-in logs
+- After the Copilot Studio and Foundry inventory — to detect surface not covered by it
+- When there are reports of unrecognized OAuth applications in sign-in logs
 - Auditoría periódica de permisos Graph API en el tenant
 
-## Prerrequisitos
+## Prerequisites
 
 - Microsoft Graph API accesible (Lokka-Microsoft MCP o Graph Explorer)
 - Rol Application Administrator o superior
@@ -31,7 +31,7 @@ effort_hours: 3
 
 ## Workflow
 
-### Paso 1 — Service principals creados recientemente
+### Step 1 — Service principals creados recientemente
 
 ```http
 GET https://graph.microsoft.com/v1.0/servicePrincipals
@@ -42,7 +42,7 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals
 
 Filtrar `servicePrincipalType != "ManagedIdentity"` para ver aplicaciones externas.
 
-### Paso 2 — Permisos OAuth2 con acceso sensible
+### Step 2 — Permisos OAuth2 con acceso sensible
 
 ```http
 GET https://graph.microsoft.com/v1.0/servicePrincipals/{id}/oauth2PermissionGrants
@@ -54,21 +54,21 @@ Permisos de riesgo alto a buscar:
 - `Calendars.ReadWrite` — acceso a calendarios
 - `Directory.ReadWrite.All` — acceso al directorio
 
-### Paso 3 — App role assignments (permisos de aplicación, no delegados)
+### Step 3 — App role assignments (permisos de aplicación, no delegados)
 
 ```http
 GET https://graph.microsoft.com/v1.0/servicePrincipals/{id}/appRoleAssignments
 ```
 
-App roles (sin usuario) son más peligrosos que delegated — el agente actúa solo.
+App roles (no user) are more dangerous than delegated — the agent acts on its own.
 
-### Paso 4 — Cruzar con AuditLogs en Sentinel
+### Step 4 — Cruzar con AuditLogs en Sentinel
 
 ```kql
 // Ver queries/sentinel-shadow-principals.kql
 ```
 
-### Paso 5 — Clasificar por nivel de riesgo
+### Step 5 — Clasificar por nivel de riesgo
 
 | Condición | Acción recomendada |
 |---|---|
@@ -76,15 +76,15 @@ App roles (sin usuario) son más peligrosos que delegated — el agente actúa s
 | SP con `Files.ReadWrite.All` sin owner documentado | Revisar y documentar |
 | SP sin actividad en 30 días con permisos activos | Candidato a descomisión |
 
-## Verificación
+## Verification
 
 - [ ] Lista de SPs creados en últimos 30/60/90 días
 - [ ] Permisos sensibles identificados por SP
 - [ ] Owners de aplicaciones documentados
 - [ ] SPs sin actividad reciente marcados para revisión
 
-## Notas de implementación
+## Implementation notes
 
-- Usar Graph Explorer (graph.microsoft.com) o una aplicación con `Application.Read.All` para ejecutar las llamadas de API de este workflow
-- El conector de AuditLogs de Entra ID debe estar activo en Sentinel para la correlación de eventos de creación de SPs
+- Use Graph Explorer (graph.microsoft.com) or an application with `Application.Read.All` to run the API calls in this workflow
+- The Entra ID AuditLogs connector must be active in Sentinel to correlate service principal creation events
 - Sign-in logs de SPs están disponibles en `AADServicePrincipalSignInLogs` en Sentinel — usar para detectar actividad anómala post-inventario

@@ -4,9 +4,9 @@ version: "1.0"
 pillar: protect
 subdomain: ms-purview-ai
 description: >-
-  Configura políticas DLP en Purview específicamente para outputs de agentes AI
-  en SharePoint, OneDrive y Exchange, bloqueando compartición de contenido
-  generado por agentes que contenga datos sensibles hacia destinos no autorizados.
+  Configures DLP policies in Purview specifically for AI agent outputs in
+  SharePoint, OneDrive, and Exchange, blocking sharing of agent-generated
+  content containing sensitive data toward unauthorized destinations.
 tags: [protect, purview, dlp, sharepoint, onedrive, exchange, agent-outputs, exfiltration]
 atlas_techniques: [AML.T0048, AML.T0057]
 d3fend_techniques: [D3-DLP, D3-EAC]
@@ -17,33 +17,33 @@ ms_roles: [Compliance Administrator, DLP Compliance Management]
 effort_hours: 5
 ---
 
-## Cuándo usar
+## When to use
 
-- Agentes que depositan outputs en SharePoint o OneDrive
-- Agentes que envían outputs vía email (Exchange)
-- Cuando sensitivity labels están configurados (ver skill anterior) y se necesita
-  bloquear acciones sobre contenido etiquetado
-- Diferencia clave con `govern-dlp-policy-copilot-prompts`: esa skill protege
-  los prompts de entrada; esta skill protege los outputs/archivos generados
+- Agents that deposit outputs in SharePoint or OneDrive
+- Agents that send outputs via email (Exchange)
+- When sensitivity labels are configured (see the previous skill) and you need
+  to block actions on labeled content
+- Key difference from `govern-dlp-policy-copilot-prompts`: that skill protects
+  input prompts; this skill protects generated outputs/files
 
-## Escenarios de riesgo cubiertos
+## Risk scenarios covered
 
-1. Agente genera reporte con datos de clientes y usuario lo comparte externamente
-2. Agente exporta datos de CRM a CSV en OneDrive y usuario descarga sin restricción
-3. Agente redacta email con información confidencial y lo envía a destinatario externo
+1. An agent generates a report with customer data and a user shares it externally
+2. An agent exports CRM data to a CSV in OneDrive and a user downloads it without restriction
+3. An agent drafts an email with confidential information and sends it to an external recipient
 
 ## Workflow
 
-### Paso 1 — Identificar ubicaciones de output de agentes
+### Step 1 — Identify agent output locations
 
-Del risk register del Pilar 1 y la skill `discover-classify-agent-connectors`:
-- ¿Qué SharePoint sites usan los agentes como destino de output?
-- ¿Qué OneDrive folders?
-- ¿Los agentes tienen acceso a enviar email vía Exchange?
+From the Pillar 1 risk register and the `discover-classify-agent-connectors` skill:
+- Which SharePoint sites do agents use as an output destination?
+- Which OneDrive folders?
+- Do agents have access to send email via Exchange?
 
-Construir lista de ubicaciones objetivo para la policy.
+Build the list of target locations for the policy.
 
-### Paso 2 — Crear DLP policy para outputs en SharePoint/OneDrive
+### Step 2 — Create a DLP policy for outputs in SharePoint/OneDrive
 
 ```
 Purview Compliance Portal → Data loss prevention → Policies → Create policy
@@ -51,13 +51,13 @@ Purview Compliance Portal → Data loss prevention → Policies → Create polic
 ```
 
 **Locations:**
-- SharePoint sites: seleccionar solo los sites donde operan agentes
-- OneDrive accounts: todos o selección por grupo
-- Exchange email: incluir si agentes tienen acceso a Mail.Send
+- SharePoint sites: select only the sites where agents operate
+- OneDrive accounts: all, or a group-based selection
+- Exchange email: include if agents have access to Mail.Send
 
 **Rules:**
 
-**Regla 1 — Bloquear compartición externa de contenido AI con datos sensibles:**
+**Rule 1 — Block external sharing of AI content with sensitive data:**
 ```
 Condition: Content contains sensitivity label [Confidential / AI-Generated]
 AND
@@ -65,7 +65,7 @@ Condition: Content is shared with [people outside the organization]
 Action: Block access + Notify user + Generate alert
 ```
 
-**Regla 2 — Restringir descarga de archivos AI en dispositivos no gestionados:**
+**Rule 2 — Restrict downloading AI files on unmanaged devices:**
 ```
 Condition: Content contains sensitivity label [Confidential / AI-Generated]
 AND
@@ -73,61 +73,61 @@ Condition: Device is not managed (Intune)
 Action: Block download + Allow view only
 ```
 
-**Regla 3 — Alertar en volumen alto de archivos AI accedidos en corto tiempo:**
+**Rule 3 — Alert on high-volume access to AI files in a short window:**
 ```
 Condition: Content contains sensitivity label [AI-Generated]
 AND
-Condition: Activity count > 50 in 30 minutes (mismo usuario)
+Condition: Activity count > 50 in 30 minutes (same user)
 Action: Generate alert + Restrict access
 ```
 
-### Paso 3 — Modo simulación
+### Step 3 — Simulation mode
 
-Activar en **Test mode** durante 7 días.
-Revisar:
+Enable **Test mode** for 7 days.
+Review:
 
 ```
 DLP → Reports → DLP policy matches
-→ Filtrar por política recién creada
+→ Filter by the newly created policy
 ```
 
-Ajustar umbrales si hay falsos positivos en Regla 3.
+Tune thresholds if Rule 3 generates false positives.
 
-### Paso 4 — Configurar endpoint DLP (si aplica)
+### Step 4 — Configure endpoint DLP (if applicable)
 
-Para controlar qué pasa cuando un usuario descarga un archivo AI a su dispositivo:
+To control what happens when a user downloads an AI-generated file to their device:
 
 ```
 DLP → Endpoint DLP settings → Browser and app restrictions
-→ Add unallowed apps: aplicaciones no corporativas
-→ Clipboard restriction: restringir copy-paste de contenido HC AI-Generated
+→ Add unallowed apps: non-corporate applications
+→ Clipboard restriction: restrict copy-paste of AI-Generated content
 ```
 
-Requiere dispositivos con MDE onboarded y Endpoint DLP habilitado.
+Requires devices onboarded to MDE with Endpoint DLP enabled.
 
-### Paso 5 — Activar y monitorear
+### Step 5 — Activate and monitor
 
 ```
 DLP policy → Turn it on right away
 ```
 
-Monitorear durante primera semana con queries en Sentinel.
+Monitor during the first week with Sentinel queries.
 
 ```kql
-// Ver queries/sentinel-dlp-outputs.kql
+// See queries/sentinel-dlp-outputs.kql
 ```
 
-## Verificación
+## Verification
 
-- [ ] Policy cubre todas las ubicaciones de output de agentes identificadas
-- [ ] Test mode retorna matches esperados (no solo archivos sin datos sensibles)
-- [ ] Regla de compartición externa bloquea correctamente en test
-- [ ] Policy en enforcement activo
-- [ ] Alertas de compliance configuradas para el equipo de seguridad
-- [ ] Endpoint DLP activo si los agentes depositan en dispositivos locales
+- [ ] Policy covers every identified agent output location
+- [ ] Test mode returns the expected matches (not only files without sensitive data)
+- [ ] The external-sharing rule blocks correctly in test
+- [ ] Policy in active enforcement
+- [ ] Compliance alerts configured for the security team
+- [ ] Endpoint DLP active if agents deposit content on local devices
 
-## Notas de implementación
+## Implementation notes
 
-- Endpoint DLP requiere dispositivos onboarded en Microsoft Defender for Endpoint (MDE) — verificar estado de onboarding antes de habilitar este vector de protección
-- La regla de volumen alto puede generar falsos positivos en usuarios que realizan búsquedas amplias — ajustar el umbral de `FileCount > 50` según el baseline de actividad normal del tenant
-- Para validar la policy: crear un archivo con datos sintéticos (ej. número de tarjeta de crédito ficticio) en SharePoint y verificar que la policy genera alert en DLP Alerts antes de activar el modo Block
+- Endpoint DLP requires devices onboarded to Microsoft Defender for Endpoint (MDE) — verify onboarding status before enabling this protection vector
+- The high-volume rule can generate false positives for users running broad searches — tune the threshold
+- To validate the policy: create a file with synthetic data (for example a fictitious credit card number) in SharePoint and verify enforcement

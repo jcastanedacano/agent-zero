@@ -3,7 +3,7 @@
 Objetivo: asegurar cómo los agentes AI se autentican y qué superficie de red exponen,
 eliminando credenciales estáticas y restringiendo conectividad al mínimo necesario.
 
-## Secuencia recomendada
+## Recommended sequence
 
 ```
 INPUT: Agentes bajo control formal (output Pilar 2)
@@ -49,12 +49,12 @@ OUTPUT: Agentes con superficie de ataque reducida → input para Pilar 4 (Protec
 | Storage (ARM) | `2023-01-01` |
 | SecurityInsights (Sentinel) | `2022-12-01-preview` |
 
-## Restricciones conocidas
+## Known constraints
 
 | Restricción | Impacto |
 |---|---|
-| `Sites.Selected` requiere grant explícito al site | No basta con asignar el app role — paso adicional necesario |
+| `Sites.Selected` requires an explicit site grant | Assigning the app role is not enough — an extra step is required |
 | Managed Identity creation: no disponible via Lokka-Microsoft MCP | Usar Azure CLI |
-| Copilot Studio sin VNet nativo (licencia estándar) | Usar APIM como proxy o DLP como control alternativo |
-| Private Endpoint DNS: requiere zona DNS privada | Sin zona DNS, el endpoint no resuelve desde dentro de VNet |
-| `allow_only_approved_outbound` propagación: hasta 30 min | No verificar inmediatamente después del cambio |
+| Copilot Studio without native VNet (standard license) | Use APIM as a proxy, or DLP as an alternative control |
+| Private Endpoint DNS: requires a private DNS zone | Without the DNS zone, the endpoint does not resolve from inside the VNet |
+| `allow_only_approved_outbound` propagation: up to 30 min | Do not verify immediately after the change |

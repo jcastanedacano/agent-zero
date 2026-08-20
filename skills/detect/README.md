@@ -43,15 +43,15 @@ OUTPUT: AISOC operacional → retroalimenta Pilar 1 (Discover) con nuevos agente
 | AML.T0046 — Exfiltration via ML Model | `detect-agent-identity-abuse` |
 | AML.T0056 — Discover AI Model Capabilities | `detect-agent-identity-abuse` |
 
-## Restricciones conocidas
+## Known constraints
 
 | Restricción | Impacto |
 |---|---|
-| Sentinel valida tablas _CL en tiempo de creación de regla | Fallar si no hay datos — verificar ANTES |
+| Sentinel validates _CL tables at rule creation time | Fails if there is no data — verify BEFORE |
 | UEBA requiere habilitación explícita | `BehaviorAnalytics` no disponible por default |
-| `InitiatedBy.app` en AuditLogs no siempre poblado | Agent spawning puede tener falsos negativos |
+| `InitiatedBy.app` in AuditLogs is not always populated | Agent spawning may have false negatives |
 | Baseline requiere mínimo 7 días de datos | Reglas de anomalía no efectivas antes |
-| Power Platform API para deshabilitar agente requiere token PP Admin | No disponible via Lokka-Microsoft MCP |
+| Power Platform API to disable an agent requires a PP Admin token | Not available via Lokka-Microsoft MCP |
 
 ## Cierre del ciclo del framework
 

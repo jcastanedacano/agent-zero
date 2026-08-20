@@ -17,13 +17,13 @@ ms_roles: [Azure AI Developer, Reader (subscription scope)]
 effort_hours: 3
 ---
 
-## Cuándo usar
+## When to use
 
-- Complemento de `discover-inventory-agents-copilot-studio` para cubrir el stack Azure
+- Complement to `discover-inventory-agents-copilot-studio` to cover the Azure stack
 - Antes de implementar controles de Entra Workload ID sobre agentes Foundry
 - Auditoría de managed identities en la suscripción
 
-## Prerrequisitos
+## Prerequisites
 
 - Azure CLI autenticado en subscription `{subscription-id}`
 - Rol Reader a nivel de suscripción o RG {resource-group}
@@ -31,7 +31,7 @@ effort_hours: 3
 
 ## Workflow
 
-### Paso 1 — Listar proyectos AI Foundry en la suscripción
+### Step 1 — Listar proyectos AI Foundry en la suscripción
 
 ```bash
 az ml workspace list \
@@ -42,7 +42,7 @@ az ml workspace list \
 
 Filtrar por `kind == "Hub"` o `kind == "Project"`.
 
-### Paso 2 — Listar deployments (agentes activos)
+### Step 2 — Listar deployments (agentes activos)
 
 ```bash
 # Por cada proyecto identificado en Paso 1
@@ -55,7 +55,7 @@ az ml online-endpoint list \
 
 `auth_mode: key` = riesgo alto (sin Entra ID). `auth_mode: aad_token` = correcto.
 
-### Paso 3 — Verificar managed identity por endpoint
+### Step 3 — Verificar managed identity por endpoint
 
 ```bash
 az resource show \
@@ -65,11 +65,11 @@ az resource show \
 
 Sin `identity` o `type: None` = endpoint sin identidad gestionada = riesgo.
 
-### Paso 4 — Correlacionar con Sentinel (conector Foundry_Agents)
+### Step 4 — Correlacionar con Sentinel (conector Foundry_Agents)
 
 Ejecutar `queries/sentinel-foundry.kql` para ver actividad de inferencia reciente.
 
-### Paso 5 — Matriz de riesgo
+### Step 5 — Matriz de riesgo
 
 | Criterio | Alto | Medio | Bajo |
 |---|---|---|---|
@@ -77,15 +77,15 @@ Ejecutar `queries/sentinel-foundry.kql` para ver actividad de inferencia recient
 | Managed Identity | Sin asignar | System-assigned | User-assigned específica |
 | Acceso a datos | Storage/KeyVault | Solo modelo | Sin acceso externo |
 
-## Verificación
+## Verification
 
 - [ ] Lista completa de proyectos Foundry en la suscripción
 - [ ] Todos los endpoints tienen auth_mode documentado
 - [ ] Managed identity status por endpoint
 - [ ] Endpoints con `auth_mode: key` marcados para remediación
 
-## Notas de implementación
+## Implementation notes
 
-- Si no hay proyectos de Azure AI Foundry activos en el tenant: usar datos sintéticos via Custom Log ingestion para validar las queries antes de desplegar en producción
-- El conector de Foundry en Sentinel debe estar activo para que las queries KQL retornen datos — verificar en Data Connectors antes de crear analytics rules
-- Los proyectos de Foundry heredan permisos del resource group — revisar los role assignments a nivel de RG además de los del proyecto
+- If there are no active Azure AI Foundry projects in the tenant: use synthetic data via Custom Log ingestion to validate the queries before deploying to production
+- The Foundry connector in Sentinel must be active for the KQL queries to return data — verify under Data Connectors before creating analytics rules
+- Foundry projects inherit permissions from the resource group — review role assignments at the RG level in addition to those on the project

@@ -17,18 +17,18 @@ ms_roles: [Microsoft Sentinel Contributor, Security Operator]
 effort_hours: 3
 ---
 
-## Cuándo usar
+## When to use
 
-- Para habilitar investigación de incidentes agentic desde Security Copilot sin cambiar de interfaz
-- Cuando el SOC necesita que agentes custom consulten el estado de Sentinel en tiempo real
-- Para crear un flujo de triage agentic que acelere MTTD y MTTR en incidentes de IA
-- Como parte de la arquitectura AISOC donde los agentes son tanto el objetivo como el respondedor
+- To enable agentic incident investigation from Security Copilot without switching interfaces
+- When the SOC needs custom agents to query Sentinel state in real time
+- To build an agentic triage flow that accelerates MTTD and MTTR on AI incidents
+- As part of the AISOC architecture where agents are both the target and the responder
 
-## Prerrequisitos
+## Prerequisites
 
 - Microsoft Sentinel workspace activo con datos de agentes
-- Microsoft Security Copilot (para el caso de uso principal) o agente custom con acceso a Graph API
-- Rol Microsoft Sentinel Contributor para el principal que ejecuta el MCP server
+- Microsoft Security Copilot (for the primary use case) or a custom agent with Graph API access
+- Microsoft Sentinel Contributor role for the principal running the MCP server
 - Conexión entre Security Copilot y el workspace de Sentinel configurada
 
 ## Conceptos clave: Sentinel como plataforma dual
@@ -40,18 +40,18 @@ Microsoft Sentinel en el contexto AISOC tiene dos roles simultáneos:
 | **Target** | SIEM que detecta ataques **contra** agentes (jailbreak, exfiltración, anomalías) |
 | **Platform** | Entorno donde operan agentes de seguridad (Security Copilot, agentes custom) para investigar y responder |
 
-El MCP server nativo habilita el segundo rol: los agentes de seguridad pueden consultar datos de Sentinel directamente desde su contexto de conversación.
+The native MCP server enables the second role: security agents can query Sentinel data directly from their own context
 
 ## Workflow
 
-### Paso 1 — Conectar Security Copilot con Sentinel
+### Step 1 — Conectar Security Copilot con Sentinel
 
 1. En **Microsoft Security Copilot** → **Sources** → **Microsoft Sentinel**
 2. Seleccionar el workspace de Sentinel
-3. Configurar el nivel de acceso: Read (para investigación) o Read/Write (para respuesta)
-4. Verificar conexión con una consulta de prueba: "Show me the last 5 high severity incidents in Sentinel"
+3. Configure the access level: Read (for investigation) or Read/Write (for response)
+4. Verify the connection with a test query: Show me the last 5 high severity incidents in Sentinel
 
-### Paso 2 — Habilitar el MCP server nativo de Sentinel
+### Step 2 — Habilitar el MCP server nativo de Sentinel
 
 El MCP server nativo expone los siguientes endpoints para agentes externos:
 
@@ -71,7 +71,7 @@ El MCP server nativo expone los siguientes endpoints para agentes externos:
 }
 ```
 
-Para agentes custom (no Security Copilot), usar el API REST de Sentinel:
+For custom agents (not Security Copilot), use the Sentinel REST API:
 
 ```http
 GET https://management.azure.com/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{workspace}/providers/Microsoft.SecurityInsights/incidents
@@ -81,7 +81,7 @@ GET https://management.azure.com/subscriptions/{sub}/resourceGroups/{rg}/provide
 &$top=10
 ```
 
-### Paso 3 — Crear prompt de triage agentic para incidentes de IA
+### Step 3 — Crear prompt de triage agentic para incidentes de IA
 
 Prompt de referencia para Security Copilot:
 
@@ -91,13 +91,13 @@ Rol: Eres un analista SOC especializado en incidentes de agentes de IA.
 Para el incidente [INCIDENT_ID] en Microsoft Sentinel:
 1. Describe el incidente y su severidad
 2. Identifica el agente involucrado (AgentId, AgentName, Platform)
-3. Ejecuta esta KQL para obtener contexto: [KQL de P05-Jailbreak-Detection.kql]
-4. Determina si el patrón es un intento de jailbreak real o un falso positivo
-5. Si es real: recomienda los pasos de contención del playbook detect-respond-playbook-agent-containment
+3. Run this KQL to get context: [KQL from P05-Jailbreak-Detection.kql]
+4. Determine whether the pattern is a real jailbreak attempt or a false positive
+5. If real: recommend the containment steps from the detect-respond-playbook-agent-containment playbook
 6. Actualiza el incidente con tus hallazgos y ciérralo o escálalo
 ```
 
-### Paso 4 — KQL: Identificar incidentes de agentes sin respuesta automatizada
+### Step 4 — KQL: Identificar incidentes de agentes sin respuesta automatizada
 
 ```kql
 SecurityIncident
@@ -114,9 +114,9 @@ SecurityIncident
 | sort by Count desc
 ```
 
-Incidentes que disparan frecuentemente sin cerrarse son **falsos negativos estructurales** — detección sin enforcement.
+Incidents that fire frequently without closing are **structural false negatives** — detection without enforcement.
 
-### Paso 5 — Medir MTTD y MTTR para incidentes agentic
+### Step 5 — Medir MTTD y MTTR para incidentes agentic
 
 ```kql
 SecurityIncident
@@ -134,7 +134,7 @@ SecurityIncident
 | sort by TimeGenerated asc
 ```
 
-## Verificación
+## Verification
 
 - [ ] Security Copilot conectado al workspace de Sentinel y retornando datos
 - [ ] Prompt de triage agentic validado contra un incidente de prueba
@@ -142,9 +142,9 @@ SecurityIncident
 - [ ] MTTD y MTTR baseline establecido para incidentes de agentes
 - [ ] Playbook de respuesta (`detect-respond-playbook-agent-containment`) integrado en el flujo de triage
 
-## Notas de implementación
+## Implementation notes
 
-- El MCP server nativo de Sentinel es el mecanismo que convierte a Sentinel en una plataforma AISOC — no solo un SIEM receptivo
-- Security Copilot tiene acceso a incidentes y entidades de Sentinel pero no ejecuta KQL arbitrario por defecto — habilitar la capacidad de KQL en los permisos de la conexión
-- Un agente de seguridad con acceso de escritura a Sentinel puede actualizar incidentes, agregar comentarios y cambiar estado — si ese agente es comprometido, tiene acceso a toda la lógica de detección; considerar least privilege también para agentes de seguridad
-- Combinar con `detect-respond-playbook-agent-containment` para el ciclo completo: detección → triage agentic → enforcement automatizado
+- The native Sentinel MCP server is the mechanism that turns Sentinel into an AISOC platform — not just a receptive SIEM
+- Security Copilot has access to Sentinel incidents and entities but does not run arbitrary KQL by default — enable that capability explicitly
+- A security agent with write access to Sentinel can update incidents, add comments, and change state — if that agent is compromised, so is the record
+- Combine with `detect-respond-playbook-agent-containment` for the full cycle: detection → agentic triage → automated enforcement

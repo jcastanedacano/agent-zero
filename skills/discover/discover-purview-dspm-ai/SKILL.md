@@ -17,40 +17,40 @@ ms_roles: [Compliance Administrator, Security Reader]
 effort_hours: 2
 ---
 
-## Cuándo usar
+## When to use
 
 - Como primer paso antes de habilitar retrieval de SharePoint en cualquier agente
 - Cuando hay sospecha de oversharing en fuentes de conocimiento de agentes existentes
 - En auditorías periódicas de exposición de datos accedidos por agentes
-- Post-deploy de un agente nuevo para validar que no indexa datos sensibles no previstos
+- After deploying a new agent, to validate it does not index unexpected sensitive data
 
-## Prerrequisitos
+## Prerequisites
 
 - Licencia M365 E5 o M365 E5 Compliance activa en el tenant
 - Rol Compliance Administrator
-- Al menos un agente de Copilot Studio o Azure AI Foundry activo en el tenant
+- At least one active Copilot Studio or Azure AI Foundry agent in the tenant
 - Acceso al portal de Microsoft Purview: purview.microsoft.com
 
 ## Workflow
 
-### Paso 1 — Activar DSPM for AI en Purview
+### Step 1 — Activar DSPM for AI en Purview
 
 1. Ir a **Microsoft Purview** → **Data Security Posture Management** → **AI**
-2. Habilitar el escaneo de interacciones de IA (requiere que el tenant tenga datos de M365 Copilot o Copilot Studio)
-3. Esperar la ingesta inicial (puede tardar hasta 24h para tenants con historial extenso)
+2. Enable AI interaction scanning (requires the tenant to have M365 Copilot or Copilot Studio data)
+3. Wait for initial ingestion (can take up to 24h for tenants with extensive history)
 
-### Paso 2 — Revisar el dashboard de exposición
+### Step 2 — Revisar el dashboard de exposición
 
 En el dashboard de DSPM for AI, identificar:
 
 | Métrica | Qué indica |
 |---------|------------|
-| Sensitive data accessed by AI | Volumen de datos sensibles que los agentes han recuperado |
+| Sensitive data accessed by AI | Volume of sensitive data the agents have retrieved |
 | Overshared content | Archivos accesibles a agentes que deberían estar restringidos |
-| Unlabeled files in AI scope | Archivos sin sensitivity label en el corpus del agente |
+| Unlabeled files in AI scope | Files without a sensitivity label in the agent corpus |
 | Users interacting with sensitive data via AI | Personas que acceden a datos sensibles a través de prompts |
 
-### Paso 3 — Exportar inventario de sitios en riesgo
+### Step 3 — Exportar inventario de sitios en riesgo
 
 ```kql
 MicrosoftPurviewInformationProtection
@@ -70,7 +70,7 @@ MicrosoftPurviewInformationProtection
 | project SiteUrl, TotalAccesses, UnlabeledAccesses, RiskScore, LastAccess
 ```
 
-### Paso 4 — Identificar tipos de datos sensibles más frecuentes
+### Step 4 — Identificar tipos de datos sensibles más frecuentes
 
 ```kql
 MicrosoftPurviewInformationProtection
@@ -86,7 +86,7 @@ MicrosoftPurviewInformationProtection
 | sort by Matches desc
 ```
 
-### Paso 5 — Correlacionar con inventario de agentes
+### Step 5 — Correlacionar con inventario de agentes
 
 ```kql
 AIAgentsInfo
@@ -108,7 +108,7 @@ AIAgentsInfo
 | sort by UnlabeledAccessCount desc
 ```
 
-## Verificación
+## Verification
 
 - [ ] DSPM for AI habilitado y mostrando datos en el dashboard
 - [ ] Lista de sitios SharePoint con riesgo > 50% (RiskScore) documentada
@@ -116,9 +116,9 @@ AIAgentsInfo
 - [ ] Agentes con `DataRisk == "Critical"` o "High" escalados para remediación
 - [ ] Resultado incorporado al inventario de agentes del pilar Discover
 
-## Notas de implementación
+## Implementation notes
 
-- DSPM for AI requiere que las interacciones de Copilot o agentes hayan ocurrido — no genera datos retroactivos; los primeros resultados aparecen 24-48h después de la activación
-- El dashboard de DSPM está en preview — funcionalidades pueden variar entre tenants según la fase de rollout
-- Combinar con `discover-inventory-agents-copilot-studio` para correlacionar exposición de datos con el inventario de agentes
-- Priorizar la remediación de sitios con `RiskScore > 70` antes de habilitar retrieval en agentes nuevos
+- DSPM for AI requires that Copilot or agent interactions have already occurred — it does not generate retroactive data; the first results appear 24-48h after activation
+- The DSPM dashboard is in preview — functionality may vary between tenants depending on rollout phase
+- Combine with `discover-inventory-agents-copilot-studio` to correlate data exposure against the agent inventory
+- Prioritize remediating sites with `RiskScore > 70` before enabling retrieval on new agents

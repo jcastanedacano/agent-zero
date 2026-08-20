@@ -1,9 +1,9 @@
 # Pilar 4 — Protect Data
 
-Objetivo: garantizar que los datos que los agentes AI acceden, procesan y generan
+Objective: ensure that the data AI agents access, process, and generate
 estén clasificados, protegidos y no puedan exfiltrarse hacia destinos no autorizados.
 
-## Secuencia recomendada
+## Recommended sequence
 
 ```
 INPUT: Agentes con superficie reducida (output Pilar 3)
@@ -16,7 +16,7 @@ INPUT: Agentes con superficie reducida (output Pilar 3)
         ↓
 [4] protect-information-barriers-agents     ← aislar segmentos organizacionales
         ↓
-OUTPUT: Datos protegidos con visibilidad y controles activos → input para Pilar 5 (Detect)
+OUTPUT: Protected data with active visibility and controls → input for Pillar 5 (Detect)
 ```
 
 ## Skills
@@ -32,18 +32,18 @@ OUTPUT: Datos protegidos con visibilidad y controles activos → input para Pila
 
 | Skill | Qué protege | Ubicación del control |
 |---|---|---|
-| `govern-dlp-policy-copilot-prompts` (P2) | Datos sensibles que el usuario envía al agente | En el prompt de entrada, en tiempo real |
+| `govern-dlp-policy-copilot-prompts` (P2) | Sensitive data the user sends to the agent | In the input prompt, in real time |
 | `protect-data-loss-prevention-agent-outputs` (P4) | Archivos y contenido que el agente genera | En SharePoint / OneDrive / Exchange, post-generación |
 
 Ambas skills son complementarias — cubren vectores distintos.
 
-## Restricciones conocidas
+## Known constraints
 
 | Restricción | Impacto | Workaround |
 |---|---|---|
 | Purview auto-labeling vía API: soporte limitado | Algunas configuraciones no disponibles via Graph | Usar Compliance Portal para configuración inicial |
-| Graph labels endpoint: solo `/beta` | No producción-ready para automatización | Aceptar y documentar, monitorear GA |
+| Graph labels endpoint: `/beta` only | Not production-ready for automation | Accept and document, monitor for GA |
 | IB: requiere Security & Compliance PowerShell | No accesible via Lokka-Microsoft MCP | Ejecutar PowerShell directamente |
 | IB SharePoint: propagación hasta 24h | Control no inmediato | Planificar ventana de implementación |
-| AI Hub: feature en preview | Puede cambiar sin aviso | Validar contra MS Learn antes de documentar |
-| IB para SPs de agentes: requiere atributos Entra | Sin atributos, los SPs no son filtrables | Establecer naming convention para SPs de agentes |
+| AI Hub: preview feature | May change without notice | Validate against MS Learn before documenting |
+| IB for agent SPs: requires Entra attributes | Without attributes, SPs are not filterable | Establish a naming convention for agent SPs |

@@ -77,10 +77,10 @@ All skills **must** include `deny_write` for at minimum:
 ## Secciones Markdown obligatorias
 
 ```markdown
-## Cuándo usar
-## Prerrequisitos
+## When to use
+## Prerequisites
 ## Workflow
-## Verificación
+## Verification
 ## Notas {workspace-name}
 ```
 

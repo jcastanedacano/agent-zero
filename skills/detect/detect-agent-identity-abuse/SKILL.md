@@ -6,7 +6,7 @@ subdomain: ms-sentinel-aisoc
 description: >-
   Detecta abuso de identidades de agentes AI en Entra ID, incluyendo token theft,
   escalada de privilegios no autorizada, uso de service principals de agentes
-  desde ubicaciones o IPs inesperadas, y creación de nuevos agentes por parte
+  from unexpected locations or IPs, and creation of new agents by
   de agentes existentes (agent spawning).
 tags: [detect, sentinel, entra, identity-abuse, token-theft, privilege-escalation, agent-spawning]
 atlas_techniques: [AML.T0046, AML.T0040, AML.T0056]
@@ -18,11 +18,11 @@ ms_roles: [Microsoft Sentinel Contributor, Security Reader]
 effort_hours: 5
 ---
 
-## Cuándo usar
+## When to use
 
 - Después de implementar CA policies (Pilar 2) — para detectar bypasses
 - Cuando los logs `AADServicePrincipalSignInLogs` están activos en Sentinel
-- Para cubrir el vector de agente comprometido que escala privilegios o spawn sub-agentes
+- To cover the compromised-agent vector that escalates privileges or spawns sub-agents
 
 ## Vectores de abuso cubiertos
 
@@ -34,7 +34,7 @@ effort_hours: 5
 
 ## Workflow
 
-### Paso 1 — Crear regla: sign-in de SP desde IP no corporativa
+### Step 1 — Crear regla: sign-in de SP desde IP no corporativa
 
 ```kql
 // Ver queries/sentinel-identity-abuse.kql — Query 1
@@ -46,11 +46,11 @@ Configuración:
 - **Frecuencia**: cada 5 minutos
 - **Severidad**: High
 
-### Paso 2 — Crear regla: agent spawning (agente crea nuevas apps/SPs)
+### Step 2 — Crear regla: agent spawning (agente crea nuevas apps/SPs)
 
 ```kql
 // Ver queries/sentinel-identity-abuse.kql — Query 2
-// Detecta cuando el principal que inicia la creación de un SP es otro SP (no un humano)
+// Detects when the principal initiating an SP creation is another SP (not a human)
 ```
 
 Configuración:
@@ -58,7 +58,7 @@ Configuración:
 - **Frecuencia**: cada 15 minutos
 - **Severidad**: Critical — vector de máximo riesgo
 
-### Paso 3 — Crear regla: escalada de privilegios de agente
+### Step 3 — Crear regla: escalada de privilegios de agente
 
 ```kql
 // Ver queries/sentinel-identity-abuse.kql — Query 3
@@ -69,7 +69,7 @@ Configuración:
 - **Frecuencia**: cada 15 minutos
 - **Severidad**: Critical
 
-### Paso 4 — Crear regla: impossible travel para service principals
+### Step 4 — Crear regla: impossible travel para service principals
 
 ```kql
 // Ver queries/sentinel-identity-abuse.kql — Query 4
@@ -81,7 +81,7 @@ Configuración:
 - **Frecuencia**: cada hora
 - **Severidad**: High
 
-### Paso 5 — Vincular con watchlist de SPs de agentes conocidos
+### Step 5 — Vincular con watchlist de SPs de agentes conocidos
 
 Crear watchlist en Sentinel con los SPs de agentes registrados:
 
@@ -93,7 +93,7 @@ Columnas: AgentName, ServicePrincipalId, AppId, RiskLevel, Owner
 Usar la watchlist en las reglas para contextualizar los incidents con
 información del risk register del Pilar 1.
 
-## Verificación
+## Verification
 
 - [ ] `AADServicePrincipalSignInLogs` tiene datos en el workspace
 - [ ] Las 4 reglas de analítica creadas y en estado Enabled
@@ -101,9 +101,9 @@ información del risk register del Pilar 1.
 - [ ] Incident de prueba: autenticar SP desde IP externa y verificar alerta
 - [ ] Agent spawning: crear SP manualmente desde contexto de SP y verificar detección
 
-## Notas de implementación
+## Implementation notes
 
 - `AADServicePrincipalSignInLogs` requiere Entra ID P2 o el data connector de Entra ID activo en Sentinel
-- Para impossible travel en service principals: los SPs de agentes en Azure rara vez tienen IPs variables — cualquier cambio de IP geolocation es sospechoso por definición
-- Agent spawning es el vector de mayor riesgo en arquitecturas multi-agent: un agente comprometido puede crear sub-agentes persistentes con permisos heredados
-- Correlacionar con `AuditLogs` en Sentinel para detectar creación de nuevos SPs en el mismo intervalo que el agente comprometido
+- For impossible travel on service principals: agent SPs in Azure rarely have variable IPs — any IP geolocation change is suspicious
+- Agent spawning is the highest-risk vector in multi-agent architectures: a compromised agent can create persistent sub-agents with inherited permissions
+- Correlate with `AuditLogs` in Sentinel to detect new SP creation in the same interval as the compromised agent

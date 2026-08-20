@@ -5,7 +5,7 @@ pillar: govern
 subdomain: ms-entra
 description: >-
   Registra agentes de IA como identidades de primer nivel en Entra ID usando
-  Entra Agent ID, separando la identidad del agente de usuarios humanos y
+  Entra Agent ID, separating the agent identity from human users and
   service principals genéricos para habilitar CA policies y trazabilidad forense.
 tags: [govern, entra, agent-id, identity, lifecycle, audit-trail]
 atlas_techniques: [AML.T0040, AML.T0012]
@@ -17,14 +17,14 @@ ms_roles: [Application Administrator, Cloud Application Administrator]
 effort_hours: 2
 ---
 
-## Cuándo usar
+## When to use
 
 - Al desplegar cualquier agente nuevo en el tenant — antes de asignar permisos
 - Cuando se detectan agentes operando bajo identidad delegada de usuario (lavado de identidad)
-- En auditorías de gobernanza para validar que todos los agentes tienen identidad dedicada
-- Como prerequisito para aplicar CA policies específicas para agentes (`govern-ca-policy-workload-identity`)
+- During governance audits, to validate that every agent has a dedicated identity
+- As a prerequisite for applying agent-specific CA policies (`govern-ca-policy-workload-identity`)
 
-## Prerrequisitos
+## Prerequisites
 
 - Entra ID P1 o superior (P2 para PIM)
 - Rol Application Administrator o Cloud Application Administrator
@@ -33,7 +33,7 @@ effort_hours: 2
 
 ## Workflow
 
-### Paso 1 — Crear el App Registration como Entra Agent ID
+### Step 1 — Crear el App Registration como Entra Agent ID
 
 ```http
 POST https://graph.microsoft.com/v1.0/applications
@@ -47,7 +47,7 @@ Content-Type: application/json
 }
 ```
 
-### Paso 2 — Crear el Service Principal asociado
+### Step 2 — Crear el Service Principal asociado
 
 ```http
 POST https://graph.microsoft.com/v1.0/servicePrincipals
@@ -59,7 +59,7 @@ Content-Type: application/json
 }
 ```
 
-### Paso 3 — Asignar owner técnico
+### Step 3 — Asignar owner técnico
 
 ```http
 POST https://graph.microsoft.com/v1.0/applications/{app-object-id}/owners/$ref
@@ -70,13 +70,13 @@ Content-Type: application/json
 }
 ```
 
-### Paso 4 — Verificar registro en Agent 365
+### Step 4 — Verificar registro en Agent 365
 
 1. Ir a **M365 Admin Center** → **Agents** → **Registry**
 2. Buscar el agente por nombre — debe aparecer con `EntraAgentId` populated
-3. Si no aparece: verificar que los tags `agent365` y `EntraAgentID` están en el manifest
+3. If it does not appear: verify that the `agent365` and `EntraAgentID` tags are in the manifest
 
-### Paso 5 — Asignar permisos mínimos (least privilege)
+### Step 5 — Asignar permisos mínimos (least privilege)
 
 ```http
 POST https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/appRoleAssignments
@@ -91,7 +91,7 @@ Content-Type: application/json
 
 Usar `Sites.Selected` en lugar de `Sites.Read.All` siempre que sea posible.
 
-### Paso 6 — KQL: Detectar agentes sin Entra Agent ID
+### Step 6 — KQL: Detectar agentes sin Entra Agent ID
 
 ```kql
 AIAgentsInfo
@@ -102,18 +102,18 @@ AIAgentsInfo
 | sort by AgentType asc
 ```
 
-## Verificación
+## Verification
 
 - [ ] App registration creado con tags `agent365` y `EntraAgentID` en manifest
 - [ ] Service principal asociado visible en Entra ID → Enterprise Applications
 - [ ] Owner técnico asignado en App registration
 - [ ] Agente visible en Agent 365 Registry con `EntraAgentId` populated
 - [ ] Permisos asignados siguen principio de least privilege
-- [ ] Query KQL no retorna este agente en la lista de "sin Entra Agent ID"
+- [ ] The KQL query no longer returns this agent in the without-Entra-Agent-ID list
 
-## Notas de implementación
+## Implementation notes
 
-- La diferencia clave entre Entra Agent ID y un service principal genérico es el campo `agentType` en el token — esto habilita targeting específico en CA policies con `clientApplications.includeAgentIdServicePrincipals`
-- Agentes creados via Agent Builder (M365 Copilot) no pasan por este proceso — aparecen en Agent 365 Registry pero sin Entra Agent ID; documentar como gap conocido
-- El campo `notes` del App Registration es el lugar recomendado para metadatos de ownership ya que no tiene un campo estructurado dedicado en el schema estándar
-- Combinar con `govern-lifecycle-decommission-agent` para el proceso completo de ciclo de vida
+- The key difference between an Entra Agent ID and a generic service principal is the `agentType` field in the token — this enables specific targeting in CA policies
+- Agents created via Agent Builder (M365 Copilot) do not go through this process — they appear in Agent 365 Registry but without an Entra Agent ID; document as a known gap
+- The App Registration `notes` field is the recommended place for ownership metadata, since there is no dedicated structured field in the standard schema
+- Combine with `govern-lifecycle-decommission-agent` for the complete lifecycle process

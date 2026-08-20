@@ -17,11 +17,11 @@ ms_roles: [Network Contributor, Azure AI Developer]
 effort_hours: 8
 ---
 
-## Cuándo usar
+## When to use
 
 - Agentes Foundry que procesan datos confidenciales
-- Cuando el risk register indica agentes con conectores HTTP genéricos (destino desconocido)
-- Requisito de compliance que exige que el tráfico de AI no salga a internet público
+- When the risk register flags agents with generic HTTP connectors (unknown destination)
+- A compliance requirement that AI traffic must not egress to the public internet
 
 ## Alcance de esta skill
 
@@ -34,7 +34,7 @@ con Virtual Network support (licencia premium) — documentado en Paso 4.
 
 ## Workflow
 
-### Paso 1 — Evaluar superficie de red actual
+### Step 1 — Evaluar superficie de red actual
 
 ```bash
 # Ver configuración de red del workspace Foundry
@@ -46,7 +46,7 @@ az ml workspace show \
 
 `publicNetworkAccess: Enabled` = superficie expuesta a internet — objetivo a cambiar.
 
-### Paso 2 — Habilitar managed network isolation en Foundry workspace
+### Step 2 — Habilitar managed network isolation en Foundry workspace
 
 ```bash
 az ml workspace update \
@@ -60,7 +60,7 @@ Modos disponibles:
 - `allow_internet_outbound`: permite salida a internet (modo básico)
 - `allow_only_approved_outbound`: solo destinos explícitamente aprobados (recomendado)
 
-### Paso 3 — Crear Private Endpoint para el workspace
+### Step 3 — Crear Private Endpoint para el workspace
 
 ```bash
 # Deshabilitar acceso público
@@ -83,7 +83,7 @@ az network private-endpoint create \
   --connection-name "foundry-private-conn"
 ```
 
-### Paso 4 — Configurar outbound rules para destinos aprobados
+### Step 4 — Configurar outbound rules para destinos aprobados
 
 Para `allow_only_approved_outbound`, declarar destinos explícitos:
 
@@ -95,7 +95,7 @@ az ml workspace outbound-rule set \
   --rule '{"type":"PrivateEndpoint","destination":{"serviceResourceId":"{openai-resource-id}","subresourceTarget":"account"}}'
 ```
 
-### Paso 5 — NSG para la subnet del agente
+### Step 5 — NSG para la subnet del agente
 
 ```bash
 # Crear NSG
@@ -129,7 +129,7 @@ az network nsg rule create \
   --destination-port-ranges "*"
 ```
 
-### Paso 6 — Copilot Studio (Power Platform VNet)
+### Step 6 — Copilot Studio (Power Platform VNet)
 
 Copilot Studio no soporta VNet nativo en licencias estándar.
 Opciones de mitigación disponibles:
@@ -146,7 +146,7 @@ Disponible para tenants con licencias enterprise.
 puede usar Copilot Studio (ver skill `govern-dlp-policy-copilot-prompts`).
 Menos control de red pero más pragmático sin licencias adicionales.
 
-## Verificación
+## Verification
 
 - [ ] `publicNetworkAccess: Disabled` en workspace Foundry
 - [ ] Private Endpoint creado y conectado (`provisioningState: Succeeded`)
@@ -155,8 +155,8 @@ Menos control de red pero más pragmático sin licencias adicionales.
 - [ ] Test de llamada al endpoint exitoso desde dentro de VNet
 - [ ] Test de llamada desde internet falla (expected)
 
-## Notas de implementación
+## Implementation notes
 
-- `allow_only_approved_outbound` en Azure AI Foundry puede tardar hasta 30 minutos en propagarse — verificar el estado antes de asumir que el control está activo
+- `allow_only_approved_outbound` in Azure AI Foundry can take up to 30 minutes to propagate — verify state before assuming the control is active
 - Private Endpoint requiere zona DNS privada para resolver correctamente: `privatelink.api.azureml.ms` y `privatelink.notebooks.azure.net`
-- En entornos sin VNet configurada: comenzar con `publicNetworkAccess: Disabled` en los recursos de Foundry como primer paso, y planificar la VNet y Private Endpoints como implementación posterior
+- In environments without a configured VNet: start with `publicNetworkAccess: Disabled` on Foundry resources as a first step, and plan the VNet and Private Endpoint afterward

@@ -1,6 +1,6 @@
 # Framework Mappings Reference
 
-Mapeos de las skills de este repositorio contra frameworks de seguridad estándar.
+Mappings of the skills in this repository against standard security frameworks.
 Cada skill incluye los identificadores relevantes en su YAML frontmatter.
 
 ---

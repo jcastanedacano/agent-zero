@@ -18,7 +18,7 @@ ms_roles: [Conditional Access Administrator, Security Administrator]
 effort_hours: 8
 ---
 
-## Cuándo usar
+## When to use
 
 - Post Pilar 1: agentes clasificados como riesgo Alto requieren controles de acceso
 - Cliente tiene Entra ID P1 (prerequisito duro para CA)
@@ -35,7 +35,7 @@ Debe ser `disabled` o `enabled` directamente.
 
 Iniciar siempre en `enabledForReportingButNotEnforced` → monitorear 5-7 días → activar.
 
-## Prerrequisitos
+## Prerequisites
 
 - Service principals de agentes identificados (output de Pilar 1)
 - Named Locations configurados con IPs corporativas del tenant
@@ -43,7 +43,7 @@ Iniciar siempre en `enabledForReportingButNotEnforced` → monitorear 5-7 días 
 
 ## Workflow
 
-### Paso 1 — Obtener object ID del service principal
+### Step 1 — Obtener object ID del service principal
 
 ```http
 GET https://graph.microsoft.com/v1.0/servicePrincipals
@@ -53,7 +53,7 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals
 
 Registrar `id` (object ID) — no el `appId`.
 
-### Paso 2 — Crear Named Location (si no existe)
+### Step 2 — Crear Named Location (si no existe)
 
 ```http
 POST https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations
@@ -74,7 +74,7 @@ Content-Type: application/json
 
 Registrar el `id` del Named Location creado.
 
-### Paso 3 — Crear CA policy en report-only
+### Step 3 — Crear CA policy en report-only
 
 ```http
 POST https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
@@ -99,7 +99,7 @@ Content-Type: application/json
 }
 ```
 
-### Paso 4 — Monitorear en Sign-in logs (5-7 días)
+### Step 4 — Monitorear en Sign-in logs (5-7 días)
 
 ```
 Entra ID → Monitoring → Sign-in logs
@@ -109,7 +109,7 @@ Entra ID → Monitoring → Sign-in logs
 
 Confirmar que no hay falsos positivos (accesos legítimos que serían bloqueados).
 
-### Paso 5 — Activar enforcement
+### Step 5 — Activar enforcement
 
 ```http
 PATCH https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/{policy-id}
@@ -120,7 +120,7 @@ Content-Type: application/json
 }
 ```
 
-## Verificación
+## Verification
 
 - [ ] Named Location creado con IPs correctas
 - [ ] Policy en report-only sin falsos positivos después de 5-7 días
@@ -128,9 +128,9 @@ Content-Type: application/json
 - [ ] Sign-in logs muestran bloqueos desde IPs externas
 - [ ] Sin impacto en accesos legítimos de agentes
 
-## Notas de implementación
+## Implementation notes
 
-- Error conocido `AADSTS500011`: el resource principal no existe en el tenant — verificar que el SP del agente existe con `GET /servicePrincipals/{id}` antes de crear la policy de CA
+- Known error `AADSTS500011`: the resource principal does not exist in the tenant — verify the agent SP exists with `GET /servicePrincipals/`
 - Mantener las CA policies de agentes en modo report-only durante al menos 7 días para identificar falsos positivos antes de pasar a enforce
-- Blueprint-level CA (aplicar a grupos de SPs via `includeAgentIdServicePrincipals`) escala mejor que per-instance — usar este patrón desde el inicio
-- `grantControls: mfa` es inválido para identidades de agente — usar únicamente `block` o `sessionControls`
+- Blueprint-level CA (applied to SP groups via `includeAgentIdServicePrincipals`) scales better than per-instance — use this pattern from the start
+- `grantControls: mfa` is invalid for agent identities — use only `block` or `sessionControls`

@@ -4,10 +4,10 @@ version: "1.0"
 pillar: detect
 subdomain: ms-sentinel-aisoc
 description: >-
-  Detecta desviaciones estadísticas en el comportamiento de agentes AI respecto
-  a su baseline, incluyendo volumen inusual de API calls, acceso a recursos
-  fuera del patrón normal, horarios de operación anómalos y cambios súbitos
-  en tipos de datos procesados.
+  Detects statistical deviations in AI agent behavior against its baseline,
+  including unusual API call volume, access to resources outside the normal
+  pattern, anomalous operating hours, and sudden changes in the type of data
+  processed.
 tags: [detect, sentinel, behavioral-analytics, anomaly, baseline, aisoc, ueba]
 atlas_techniques: [AML.T0040, AML.T0056, AML.T0048]
 d3fend_techniques: [D3-NTA, D3-PA, D3-ANET]
@@ -18,98 +18,98 @@ ms_roles: [Microsoft Sentinel Contributor]
 effort_hours: 6
 ---
 
-## Cuándo usar
+## When to use
 
-- Post-deployment de reglas básicas (prompt injection) — añade detección comportamental
-- Cuando los agentes tienen suficiente historial (mínimo 14 días) para establecer baseline
-- Para detectar agentes comprometidos que no usan técnicas conocidas de injection
+- Post-deployment of basic rules (prompt injection) — adds behavioral detection
+- When agents have enough history (minimum 14 days) to establish a baseline
+- To detect compromised agents that do not use known injection techniques
 
-## Lógica de detección
+## Detection logic
 
-Un agente comprometido o mal configurado se manifiesta como:
-- Volumen de llamadas 3x+ sobre su baseline diario
-- Acceso a recursos que nunca había tocado antes
-- Operación fuera del horario en que normalmente es invocado
-- Cambio en el tipo de datos accedidos (de solo lectura a escritura)
-- Latencia inusualmente baja (automatización) o alta (procesamiento masivo)
+A compromised or misconfigured agent manifests as:
+- Call volume 3x+ over its daily baseline
+- Access to resources it had never touched before
+- Operation outside the hours it is normally invoked
+- Change in the type of data accessed (from read-only to write)
+- Unusually low latency (automation) or high latency (bulk processing)
 
 ## Workflow
 
-### Paso 1 — Establecer baseline por agente (mínimo 14 días)
+### Step 1 — Establish a per-agent baseline (minimum 14 days)
 
 ```kql
-// Ver queries/sentinel-agent-baseline.kql — Query 1
-// Ejecutar primero para verificar que hay suficiente historial
+// See queries/sentinel-agent-baseline.kql — Query 1
+// Run first to verify there is enough history
 ```
 
-Si hay menos de 7 días de datos: documentar y esperar antes de activar
-las reglas de anomalía basadas en baseline.
+If there are fewer than 7 days of data: document it and wait before activating
+the baseline-based anomaly rules.
 
-### Paso 2 — Crear regla: volumen anómalo de llamadas
+### Step 2 — Create rule: anomalous call volume
 
 ```kql
-// Ver queries/sentinel-agent-baseline.kql — Query 2
-// Umbral: > 3x baseline diario
+// See queries/sentinel-agent-baseline.kql — Query 2
+// Threshold: > 3x daily baseline
 ```
 
-Configuración de la regla Sentinel:
-- **Nombre**: `AISEC-Agent-Anomalous-Volume`
-- **Frecuencia**: cada hora
-- **Lookback**: últimas 24 horas
-- **Severidad**: Medium (escalar a High si el agente tiene conectores de riesgo Alto)
+Sentinel rule configuration:
+- **Name**: `AISEC-Agent-Anomalous-Volume`
+- **Frequency**: hourly
+- **Lookback**: last 24 hours
+- **Severity**: Medium (escalate to High if the agent has High-risk connectors)
 
-### Paso 3 — Crear regla: acceso a recursos nuevos
+### Step 3 — Create rule: access to new resources
 
 ```kql
-// Ver queries/sentinel-agent-baseline.kql — Query 3
-// Detectar recursos accedidos por primera vez en los últimos 7 días
+// See queries/sentinel-agent-baseline.kql — Query 3
+// Detect resources accessed for the first time in the last 7 days
 ```
 
-Configuración:
-- **Nombre**: `AISEC-Agent-New-Resource-Access`
-- **Frecuencia**: cada 15 minutos
-- **Lookback**: últimas 24 horas
-- **Severidad**: High (si el recurso es SharePoint o Exchange)
+Configuration:
+- **Name**: `AISEC-Agent-New-Resource-Access`
+- **Frequency**: every 15 minutes
+- **Lookback**: last 24 hours
+- **Severity**: High (if the resource is SharePoint or Exchange)
 
-### Paso 4 — Crear regla: operación fuera de horario
+### Step 4 — Create rule: off-hours operation
 
 ```kql
-// Ver queries/sentinel-agent-baseline.kql — Query 4
+// See queries/sentinel-agent-baseline.kql — Query 4
 ```
 
-Configuración:
-- **Nombre**: `AISEC-Agent-Off-Hours-Operation`
-- **Frecuencia**: cada hora
-- **Lookback**: últimas 8 horas
-- **Severidad**: Medium
+Configuration:
+- **Name**: `AISEC-Agent-Off-Hours-Operation`
+- **Frequency**: hourly
+- **Lookback**: last 8 hours
+- **Severity**: Medium
 
-### Paso 5 — Habilitar UEBA para agentes
+### Step 5 — Enable UEBA for agents
 
 ```
 Sentinel → Settings → UEBA
 → Enable entity behavior analytics
-→ Entities: Accounts (incluye service principals si están en scope)
+→ Entities: Accounts (include service principals if in scope)
 ```
 
-UEBA genera `BehaviorAnalytics` table con scores de anomalía por entidad.
+UEBA generates the `BehaviorAnalytics` table with per-entity anomaly scores.
 
-### Paso 6 — Correlacionar con UEBA scores
+### Step 6 — Correlate with UEBA scores
 
 ```kql
-// Ver queries/sentinel-agent-baseline.kql — Query 5
+// See queries/sentinel-agent-baseline.kql — Query 5
 ```
 
-## Verificación
+## Verification
 
-- [ ] Baseline calculado con mínimo 7 días de datos (14 recomendado)
-- [ ] Las tres reglas de analítica creadas y en estado Enabled
-- [ ] UEBA habilitado y `BehaviorAnalytics` table tiene datos
-- [ ] Test: modificar artificialmente el volumen de llamadas de un agente de prueba
-  y verificar que genera incident
+- [ ] Baseline computed with a minimum of 7 days of data (14 recommended)
+- [ ] The three analytics rules created and in Enabled state
+- [ ] UEBA enabled and the `BehaviorAnalytics` table has data
+- [ ] Test: artificially modify the call volume of a test agent
+  and verify it generates an incident
 
-## Notas de implementación
+## Implementation notes
 
-- `BehaviorAnalytics` (UEBA) requiere habilitación explícita en Sentinel — verificar en Settings → UEBA antes de usar la tabla
-- Para agentes con poco historial (< 7 días de datos): usar lookback de 7 días en lugar de 14 para el baseline
-- Las reglas de anomalía tienen tasa de falsos positivos más alta que las de firma — ajustar umbrales contra el comportamiento real del tenant antes de pasar de Test a Enforced
-- Comenzar con un solo tipo de agente (ej. Copilot Studio) para validar el baseline antes de extender a todos los agentes
+- `BehaviorAnalytics` (UEBA) requires explicit activation in Sentinel — verify under Settings → UEBA before using the table
+- For agents with little history (under 7 days of data): use a 7-day lookback instead of 14 for the baseline
+- Anomaly rules have a higher false positive rate than signature rules — tune thresholds against observed behavior
+- Start with a single agent type (for example Copilot Studio) to validate the baseline before extending to all agents

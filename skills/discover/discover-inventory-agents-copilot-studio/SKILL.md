@@ -17,18 +17,18 @@ ms_roles: [Microsoft 365 Administrator, Power Platform Administrator]
 effort_hours: 4
 ---
 
-## Cuándo usar
+## When to use
 
 - Primer paso de cualquier AI security assessment
 - Se detecta actividad inusual de agentes en Power Platform logs
 - Pre-requisito para skills de govern y secure
 
 Gap crítico a documentar: agentes creados desde Agent Builder (M365 Copilot)
-se activan inmediatamente sin pasar por el flujo de Requests en Agent 365.
-Registry y Map en Agent 365 muestran agentes; Requests solo muestra los aprobados.
+are activated immediately without going through the Requests flow in Agent 365.
+Registry and Map in Agent 365 show agents; Requests only shows the approved ones.
 La diferencia = shadow AI.
 
-## Prerrequisitos
+## Prerequisites
 
 - M365 Admin Center con rol de administrador
 - Power Platform Admin Center accesible
@@ -37,7 +37,7 @@ La diferencia = shadow AI.
 
 ## Workflow
 
-### Paso 1 — Agent 365 en M365 Admin Center
+### Step 1 — Agent 365 en M365 Admin Center
 
 ```
 M365 Admin Center → Settings → Agent 365
@@ -50,7 +50,7 @@ Revisar tres tabs y registrar counts:
 
 `shadow_ai_count = Registry_count - Requests_count`
 
-### Paso 2 — Power Platform Admin Center
+### Step 2 — Power Platform Admin Center
 
 ```
 Power Platform Admin Center → Environments → [Env] → Copilot Studio → Agents
@@ -59,7 +59,7 @@ Power Platform Admin Center → Environments → [Env] → Copilot Studio → Ag
 Exportar lista completa. Comparar displayName contra Registry.
 Agentes en PP Admin ausentes en Requests = shadow AI confirmado.
 
-### Paso 3 — Microsoft Graph API
+### Step 3 — Microsoft Graph API
 
 ```http
 GET https://graph.microsoft.com/v1.0/servicePrincipals
@@ -68,9 +68,9 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals
   &$orderby=createdDateTime desc
 ```
 
-Filtrar creados en los últimos 30 días para detectar agentes nuevos no reportados.
+Filter for those created in the last 30 days to detect new unreported agents.
 
-### Paso 4 — Clasificar por nivel de riesgo
+### Step 4 — Clasificar por nivel de riesgo
 
 | Criterio | Alto | Medio | Bajo |
 |---|---|---|---|
@@ -78,19 +78,19 @@ Filtrar creados en los últimos 30 días para detectar agentes nuevos no reporta
 | Creador | Usuario no IT | Power User | IT |
 | Aprobación | Sin Requests | Requests pendiente | Aprobado |
 
-### Paso 5 — Correlacionar con Sentinel (si connector activo)
+### Step 5 — Correlacionar con Sentinel (si connector activo)
 
 Ejecutar queries en `queries/sentinel-inventory.kql`.
 
-## Verificación
+## Verification
 
 - [ ] Count de agentes por fuente (Agent 365 / PP Admin / Graph)
 - [ ] Shadow AI count calculado (Registry - Requests)
 - [ ] Clasificación de riesgo por agente
 - [ ] Agentes con acceso a datos sensibles identificados
 
-## Notas de implementación
+## Implementation notes
 
-- Activar el conector de Copilot Studio en Sentinel para que las queries de inventario retornen datos en tiempo real
-- Los agentes creados via Agent Builder (M365 Copilot) no aparecen en Copilot Studio Requests — verificar siempre directamente en Power Platform Admin center para tener el inventario completo
-- Combinar esta skill con `discover-enumerate-foundry-agents` para cubrir el landscape completo de agentes cloud
+- Activate the Copilot Studio connector in Sentinel so inventory queries return data in real time
+- Agents created via Agent Builder (M365 Copilot) do not appear in Copilot Studio Requests — always verify directly in the Power Platform admin center
+- Combine this skill with `discover-enumerate-foundry-agents` to cover the full cloud agent landscape

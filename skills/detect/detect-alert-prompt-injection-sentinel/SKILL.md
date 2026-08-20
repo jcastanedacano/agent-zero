@@ -17,7 +17,7 @@ ms_roles: [Microsoft Sentinel Contributor]
 effort_hours: 4
 ---
 
-## Cuándo usar
+## When to use
 
 - Conectores CopilotStudio_CL y/o FoundryAgents_CL activos con datos en {workspace-name}
 - Como primera regla de analítica del AISOC — mayor ROI de detección
@@ -45,7 +45,7 @@ Categoría 4 — Indirect injection: contenido malicioso en documentos que el ag
 
 ## Workflow
 
-### Paso 1 — Verificar existencia de tablas (obligatorio)
+### Step 1 — Verificar existencia de tablas (obligatorio)
 
 ```kql
 union CopilotStudio_CL, FoundryAgents_CL
@@ -53,14 +53,14 @@ union CopilotStudio_CL, FoundryAgents_CL
 | where LastEvent > ago(24h)
 ```
 
-### Paso 2 — Validar query base en Log Analytics antes de crear la regla
+### Step 2 — Validar query base en Log Analytics antes de crear la regla
 
 ```kql
 // Ver queries/sentinel-prompt-injection.kql — Query 1
-// Ejecutar manualmente y verificar que retorna resultados o "No results" sin error
+// Run manually and verify it returns results or No results without error
 ```
 
-### Paso 3 — Crear Scheduled Analytics Rule en Sentinel
+### Step 3 — Crear Scheduled Analytics Rule en Sentinel
 
 Parámetros:
 - **Nombre**: `AISEC-Prompt-Injection-Detection`
@@ -99,7 +99,7 @@ Via ARM (`2022-12-01-preview`):
 }
 ```
 
-### Paso 4 — Crear playbook de enriquecimiento (Logic App)
+### Step 4 — Crear playbook de enriquecimiento (Logic App)
 
 Al crear incident:
 1. Enriquecer `UserId` → perfil Entra ID (GET /users/{id})
@@ -107,24 +107,24 @@ Al crear incident:
 3. Si `AttemptCount >= 10`: suspender sesión activa del agente
 4. Notificar canal Teams AISOC con resumen
 
-### Paso 5 — Validar con datos sintéticos en {workspace-name}
+### Step 5 — Validar con datos sintéticos en {workspace-name}
 
 Si no hay tráfico real, inyectar evento de prueba via DCR:
 ```bash
 # Usar Data Collection Rule para enviar evento sintético a CopilotStudio_CL
 ```
 
-## Verificación
+## Verification
 
-- [ ] Query de validación retorna filas o "No results" sin error de tabla
+- [ ] Validation query returns rows or No results without a table error
 - [ ] Regla en estado Enabled en Sentinel Analytics
 - [ ] Incident de prueba generado con datos sintéticos
 - [ ] Playbook ejecuta sin errores en modo test
 - [ ] Tiempo de detección < 10 minutos desde evento
 
-## Notas de implementación
+## Implementation notes
 
-- Verificar que las tablas `CopilotStudio_CL` y `FoundryAgents_CL` existen y tienen datos antes de crear la regla de analítica — una regla sobre una tabla vacía genera errores de deployment
+- Verify the `CopilotStudio_CL` and `FoundryAgents_CL` tables exist and hold data before creating the analytics rule
 - Sentinel API version recomendada: `2022-12-01-preview` para recursos SecurityInsights
-- Incident grouping por `UserId` + `AgentName` reduce ruido significativamente en entornos con múltiples usuarios probando el mismo agente
-- En producción: ajustar `JailbreakScore` mínimo según la tasa de falsos positivos observada en los primeros 30 días
+- Incident grouping by `UserId` plus `AgentName` reduces noise significantly in environments with multiple users testing
+- In production: tune the minimum `JailbreakScore` against the false positive rate observed in the first 30 days

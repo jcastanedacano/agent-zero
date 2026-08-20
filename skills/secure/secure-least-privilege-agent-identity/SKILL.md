@@ -6,7 +6,7 @@ subdomain: ms-entra
 description: >-
   Audita y reduce permisos de service principals de agentes AI al mínimo
   necesario, eliminando OAuth2 permission grants excesivos y app role assignments
-  no utilizados, aplicando el principio de least privilege a non-human identities.
+  unused ones, applying the least privilege principle to non-human identities.
 tags: [secure, entra, least-privilege, service-principal, oauth, app-roles]
 atlas_techniques: [AML.T0046, AML.T0040]
 d3fend_techniques: [D3-UAP, D3-MAN]
@@ -17,7 +17,7 @@ ms_roles: [Application Administrator, Privileged Role Administrator]
 effort_hours: 6
 ---
 
-## Cuándo usar
+## When to use
 
 - Post clasificación de conectores (Pilar 1): agentes con permisos excesivos identificados
 - Antes de mover agentes a producción
@@ -25,14 +25,14 @@ effort_hours: 6
 
 ## Principio central
 
-Un agente AI solo debe tener los permisos que necesita para ejecutar
-su caso de uso declarado, nada más. Permisos como `Files.ReadWrite.All`
+An AI agent should only hold the permissions it needs to execute
+its declared use case, nothing more. Permissions such as `Files.ReadWrite.All`
 cuando el caso de uso solo requiere leer un SharePoint específico
 es una superficie de ataque innecesaria.
 
 ## Workflow
 
-### Paso 1 — Auditar permisos actuales del service principal
+### Step 1 — Auditar permisos actuales del service principal
 
 ```http
 # OAuth2 delegated permissions (actúan en nombre de un usuario)
@@ -44,7 +44,7 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/appRoleAssignment
   ?$select=appRoleId,resourceDisplayName,principalDisplayName
 ```
 
-### Paso 2 — Mapear permisos al caso de uso real
+### Step 2 — Mapear permisos al caso de uso real
 
 Para cada permiso, responder:
 - ¿El agente usa este permiso activamente? (verificar en logs de uso)
@@ -61,7 +61,7 @@ Para cada permiso, responder:
 | `User.ReadWrite.All` | `User.Read` (si solo lee perfil propio) |
 | `Group.ReadWrite.All` | `GroupMember.Read.All` |
 
-### Paso 3 — Revocar permisos excesivos
+### Step 3 — Revocar permisos excesivos
 
 ```http
 # Revocar OAuth2 grant específico
@@ -71,7 +71,7 @@ DELETE https://graph.microsoft.com/v1.0/oauth2PermissionGrants/{grant-id}
 DELETE https://graph.microsoft.com/v1.0/servicePrincipals/{resource-sp-id}/appRoleAssignedTo/{assignment-id}
 ```
 
-### Paso 4 — Asignar permisos granulares de reemplazo
+### Step 4 — Asignar permisos granulares de reemplazo
 
 Ejemplo — `Sites.Selected` para acceso a SharePoint específico:
 
@@ -97,18 +97,18 @@ POST https://graph.microsoft.com/v1.0/sites/{site-id}/permissions
 }
 ```
 
-### Paso 5 — Verificar funcionalidad post-reducción
+### Step 5 — Verificar funcionalidad post-reducción
 
-Ejecutar el caso de uso del agente y confirmar que funciona con permisos reducidos.
+Run the agent use case and confirm it works with the reduced permissions.
 Monitorear errores de autorización en los primeros 3-5 días.
 
-### Paso 6 — Monitorear uso de permisos restantes
+### Step 6 — Monitorear uso de permisos restantes
 
 ```kql
 // Ver queries/sentinel-permission-usage.kql
 ```
 
-## Verificación
+## Verification
 
 - [ ] Inventario de permisos pre y post reducción documentado
 - [ ] Permisos excesivos revocados (GET retorna array reducido)
@@ -116,9 +116,9 @@ Monitorear errores de autorización en los primeros 3-5 días.
 - [ ] Funcionalidad del agente verificada
 - [ ] Monitoreo de errores de autorización activo (3-5 días post-cambio)
 
-## Notas de implementación
+## Implementation notes
 
-- `Sites.Selected` es la alternativa de least privilege a `Sites.ReadWrite.All` para agentes que solo necesitan acceder a sitios específicos de SharePoint — implementar por defecto en agentes nuevos
-- Para obtener el `appRoleId` de `Sites.Selected`: `GET /servicePrincipals?$filter=displayName eq 'SharePoint'&$select=appRoles`
+- `Sites.Selected` is the least privilege alternative to `Sites.ReadWrite.All` for agents that only need access to specific sites
+- To get the `appRoleId` for `Sites.Selected`, query the SharePoint service principal appRoles via Graph
 - Los cambios en permisos de Graph API pueden tardar hasta 60 minutos en propagarse — no asumir aplicación inmediata en pipelines de CI/CD
 - Usar Graph Explorer (graph.microsoft.com) para validar el scope mínimo necesario antes de asignar permisos en producción

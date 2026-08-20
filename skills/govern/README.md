@@ -1,9 +1,9 @@
 # Pilar 2 — Govern & Control
 
 Objetivo: establecer controles sobre qué agentes pueden existir, cómo acceden a recursos,
-y qué pasa con ellos a lo largo de su ciclo de vida.
+and what happens to them across their lifecycle.
 
-## Secuencia recomendada
+## Recommended sequence
 
 ```
 INPUT: Risk register del Pilar 1
@@ -31,12 +31,12 @@ OUTPUT: Agentes bajo control formal → input para Pilar 3 (Secure) y Pilar 4 (P
 | `govern-dlp-policy-copilot-prompts` | Purview Compliance | sentinel-dlp-agents.kql |
 | `govern-lifecycle-decommission-agent` | Power Platform, Graph API | sentinel-inactive-agents.kql |
 
-## Restricciones conocidas del stack Microsoft
+## Known constraints del stack Microsoft
 
 | Restricción | Impacto | Workaround |
 |---|---|---|
-| `grantControls: mfa` inválido en CA para workload identities | CA policy falla en creación | Usar solo `block` |
+| `grantControls: mfa` invalid in CA for workload identities | CA policy fails on creation | Use `block` only |
 | `continuousAccessEvaluation` + `reportOnly` incompatibles | Error al crear policy | Usar `disabled` o `enabled` |
-| PIM para SP requiere Workload ID Premium | Sin licencia, no disponible para SPs | Usar role assignments con expiración |
+| PIM for SPs requires Workload ID Premium | Without the license, unavailable for SPs | Use role assignments with expiration |
 | Purview auto-labeling via API limitada | Algunas políticas no crean via ARM | Usar Compliance Portal |
 | Agent Builder bypass de Requests | Shadow AI no controlado por Agent 365 | Power Platform DLP o CA en M365 Copilot |

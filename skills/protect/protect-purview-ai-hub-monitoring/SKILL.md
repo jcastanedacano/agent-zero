@@ -5,7 +5,7 @@ pillar: protect
 subdomain: ms-purview-ai
 description: >-
   Habilita y opera Microsoft Purview AI Hub para obtener visibilidad centralizada
-  de todas las interacciones con agentes AI en el tenant, incluyendo prompts,
+  of every interaction with AI agents in the tenant, including prompts,
   respuestas y datos accedidos, como base de auditoría y detección de uso indebido.
 tags: [protect, purview, ai-hub, monitoring, audit, copilot-studio, m365-copilot]
 atlas_techniques: [AML.T0057, AML.T0048]
@@ -17,10 +17,10 @@ ms_roles: [Compliance Administrator, Security Reader]
 effort_hours: 3
 ---
 
-## Cuándo usar
+## When to use
 
 - Primer control de visibilidad antes de implementar DLP o sensitivity labels
-- Cuando no hay auditoría de interacciones con agentes AI en el tenant
+- When there is no auditing of AI agent interactions in the tenant
 - Prerequisito para correlación con Sentinel: AI Hub genera eventos que el
   conector Purview envía al workspace
 
@@ -35,12 +35,12 @@ effort_hours: 3
 ## Limitación conocida
 
 AI Hub no captura interacciones de agentes autónomos (non-human triggered).
-Para agentes que operan sin intervención de usuario, la cobertura es parcial.
+For agents operating without user interaction, coverage is partial.
 Complementar con logs de Foundry y Sentinel analytics.
 
 ## Workflow
 
-### Paso 1 — Habilitar AI Hub en Purview Compliance Portal
+### Step 1 — Habilitar AI Hub en Purview Compliance Portal
 
 ```
 Microsoft Purview Compliance Portal (compliance.microsoft.com)
@@ -48,9 +48,9 @@ Microsoft Purview Compliance Portal (compliance.microsoft.com)
 → Get started → Enable AI Hub
 ```
 
-Si no aparece en el menú: verificar licencia M365 E5 Compliance o Purview E3.
+If it does not appear in the menu: verify the M365 E5 Compliance or Purview E3 license.
 
-### Paso 2 — Configurar qué interacciones capturar
+### Step 2 — Configurar qué interacciones capturar
 
 ```
 AI Hub → Settings → Data capture
@@ -63,7 +63,7 @@ Opciones:
 
 Habilitar todo lo disponible en el tenant.
 
-### Paso 3 — Revisar dashboard de actividad
+### Step 3 — Revisar dashboard de actividad
 
 ```
 AI Hub → Overview
@@ -75,7 +75,7 @@ Métricas disponibles:
 - Top usuarios por volumen de interacciones
 - Agentes más utilizados
 
-### Paso 4 — Configurar políticas de AI Hub
+### Step 4 — Configurar políticas de AI Hub
 
 ```
 AI Hub → Policies → Create policy
@@ -86,10 +86,10 @@ Tipos de política disponibles:
 - **Prompt injection indicators**: patrones de instrucciones maliciosas
 - **Restricted topics**: temas que el agente no debe tratar
 
-### Paso 5 — Conectar con Sentinel
+### Step 5 — Conectar con Sentinel
 
 AI Hub genera eventos en el `MicrosoftDataLossPrevention` y `PurviewAuditLog` tables.
-Verificar que el conector Purview está activo en {workspace-name} y que los eventos fluyen.
+Verify the Purview connector is active in {workspace-name} and that events are flowing.
 
 ```kql
 // Verificar flujo de eventos desde AI Hub
@@ -99,13 +99,13 @@ PurviewAuditLog
 | summarize count() by OperationName
 ```
 
-### Paso 6 — Exportar a Sentinel para correlación avanzada
+### Step 6 — Exportar a Sentinel para correlación avanzada
 
 ```kql
 // Ver queries/sentinel-ai-hub-activity.kql
 ```
 
-## Verificación
+## Verification
 
 - [ ] AI Hub habilitado y visible en Compliance Portal
 - [ ] Data capture activo para M365 Copilot y Copilot Studio
@@ -113,8 +113,8 @@ PurviewAuditLog
 - [ ] Al menos una política de AI Hub creada
 - [ ] Eventos visibles en Sentinel (`PurviewAuditLog` tiene filas recientes)
 
-## Notas de implementación
+## Implementation notes
 
-- Verificar que el conector de Purview Audit esté activo en Sentinel — sin él, `PurviewAuditLog` no tendrá datos para las queries de monitoreo
-- AI Hub está en preview — validar las funcionalidades contra la documentación de Microsoft Learn antes de documentarlas en runbooks de producción, ya que pueden cambiar entre versiones
-- Si AI Hub no está disponible en el tenant: usar `MicrosoftDataLossPrevention` como tabla alternativa para correlacionar interacciones con datos sensibles
+- Verify the Purview Audit connector is active in Sentinel — without it, `PurviewAuditLog` will have no data for the monitoring queries
+- AI Hub is in preview — validate functionality against Microsoft Learn documentation before writing it into production runbooks
+- If AI Hub is unavailable in the tenant: use `MicrosoftDataLossPrevention` as an alternative table to correlate interactions

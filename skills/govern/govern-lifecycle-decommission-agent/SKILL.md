@@ -4,7 +4,7 @@ version: "1.0"
 pillar: govern
 subdomain: ms-copilot-studio
 description: >-
-  Gestiona el ciclo de vida completo de agentes AI desde aprobación hasta
+  Manages the full lifecycle of AI agents from approval through
   descomisión, incluyendo detección de agentes huérfanos con acceso activo,
   revocación de permisos y eliminación de service principals en Entra ID.
 tags: [govern, copilot-studio, entra, lifecycle, decommission, agent-hygiene]
@@ -17,14 +17,14 @@ ms_roles: [Power Platform Administrator, Application Administrator]
 effort_hours: 4
 ---
 
-## Cuándo usar
+## When to use
 
 - Auditoría periódica (mensual/trimestral) de agentes activos
 - Cuando un empleado que creó un agente abandona la organización
 - Post-proyecto: agentes creados para casos de uso temporales
 - Detección de agentes sin actividad en 30+ días con conectores activos
 
-## Prerrequisitos
+## Prerequisites
 
 - Lista de agentes del Pilar 1 (con owner y fecha de creación)
 - Power Platform Admin Center accesible
@@ -33,7 +33,7 @@ effort_hours: 4
 
 ## Workflow
 
-### Paso 1 — Identificar agentes candidatos a descomisión
+### Step 1 — Identificar agentes candidatos a descomisión
 
 Criterios:
 - Sin actividad en los últimos 30 días (cruzar con KQL en `queries/`)
@@ -45,16 +45,16 @@ Criterios:
 // Ver queries/sentinel-inactive-agents.kql
 ```
 
-### Paso 2 — Notificar a owner y confirmar
+### Step 2 — Notificar a owner y confirmar
 
 Antes de descomisionar, confirmar con:
 - Owner directo del agente
-- Manager del owner si el owner ya no está en la organización
+- The owner manager if the owner is no longer with the organization
 - Business owner del caso de uso
 
 Plazo de respuesta: 5 días hábiles. Sin respuesta = proceder con descomisión.
 
-### Paso 3 — Deshabilitar agente en Copilot Studio
+### Step 3 — Deshabilitar agente en Copilot Studio
 
 ```
 Copilot Studio → [Agent] → Settings → General → Status → Disabled
@@ -67,7 +67,7 @@ Environments → [Env] → Copilot Studio → Agents → [Agent] → Disable
 
 Mantener deshabilitado 7 días antes de eliminar (ventana de rollback).
 
-### Paso 4 — Revocar OAuth consent grants en Entra ID
+### Step 4 — Revocar OAuth consent grants en Entra ID
 
 ```http
 # Obtener consent grants del service principal
@@ -77,7 +77,7 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/oauth2PermissionG
 DELETE https://graph.microsoft.com/v1.0/oauth2PermissionGrants/{grant-id}
 ```
 
-### Paso 5 — Revocar app role assignments
+### Step 5 — Revocar app role assignments
 
 ```http
 GET https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/appRoleAssignments
@@ -86,7 +86,7 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/appRoleAssignment
 DELETE https://graph.microsoft.com/v1.0/servicePrincipals/{resource-sp-id}/appRoleAssignedTo/{assignment-id}
 ```
 
-### Paso 6 — Eliminar service principal y app registration
+### Step 6 — Eliminar service principal y app registration
 
 ```http
 # Eliminar service principal
@@ -96,7 +96,7 @@ DELETE https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}
 DELETE https://graph.microsoft.com/v1.0/applications/{app-object-id}
 ```
 
-### Paso 7 — Documentar en registro de governance
+### Step 7 — Documentar en registro de governance
 
 Registrar en log:
 - Fecha de descomisión
@@ -105,7 +105,7 @@ Registrar en log:
 - Recursos revocados
 - Ejecutado por
 
-## Verificación
+## Verification
 
 - [ ] Agente en estado Disabled (no Deleted) por 7 días
 - [ ] OAuth consent grants revocados (GET retorna array vacío)
@@ -113,8 +113,8 @@ Registrar en log:
 - [ ] Service principal eliminado (GET retorna 404)
 - [ ] Entrada en log de governance creada
 
-## Notas de implementación
+## Implementation notes
 
-- No eliminar SPs de producción durante pruebas — usar agentes de prueba dedicados para validar el proceso de descomisión
-- Verificar que el SP no sea compartido con otras aplicaciones antes de eliminarlo: `GET /servicePrincipals/{id}/appRoleAssignedTo` para ver todas las asignaciones
-- Graph API `DELETE /servicePrincipals/{id}` elimina el SP inmediatamente — el proceso es irreversible; documentar el estado antes de proceder
+- Do not delete production SPs during testing — use dedicated test agents to validate the decommission process
+- Verify the SP is not shared with other applications before deleting it: `GET /servicePrincipals/{id}/appRoleAssignedTo` to see all assignments
+- Graph API `DELETE /servicePrincipals/{id}` deletes the SP immediately — the process is irreversible; document state before proceeding

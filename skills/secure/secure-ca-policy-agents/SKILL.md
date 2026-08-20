@@ -17,14 +17,14 @@ ms_roles: [Conditional Access Administrator, Security Administrator]
 effort_hours: 3
 ---
 
-## Cuándo usar
+## When to use
 
-- Al registrar cualquier agente con Entra Agent ID — la CA policy va inmediatamente después
-- Cuando se detectan agentes con acceso no restringido por CA (resultado de `govern-ca-policy-workload-identity`)
+- When registering any agent with Entra Agent ID — the CA policy comes immediately after
+- When agents are found with access unrestricted by CA (output of `govern-ca-policy-workload-identity`)
 - Para migrar de policies heredadas de usuario a policies específicas de agente
 - Como prerequisito antes de habilitar cualquier agente en producción
 
-## Prerrequisitos
+## Prerequisites
 
 - Entra ID P1 mínimo (Workload ID Premium para condiciones de riesgo)
 - Rol Conditional Access Administrator
@@ -51,11 +51,11 @@ effort_hours: 3
 }
 ```
 
-`grantControls: mfa` es **silenciosamente inválido** para identidades de agente — los agentes no pueden completar MFA interactivo. La policy aparece activa pero no genera ningún enforcement. El único control válido para bloqueo es `block`.
+`grantControls: mfa` is **silently invalid** for agent identities — agents cannot complete interactive MFA. The policy appears active but enforces nothing.
 
 ## Workflow
 
-### Paso 1 — Crear la CA policy Blueprint-level
+### Step 1 — Crear la CA policy Blueprint-level
 
 ```json
 POST https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
@@ -79,7 +79,7 @@ Content-Type: application/json
 }
 ```
 
-### Paso 2 — Validar con la herramienta What If
+### Step 2 — Validar con la herramienta What If
 
 1. Entra ID → Security → Conditional Access → **What If**
 2. Configurar:
@@ -87,16 +87,16 @@ Content-Type: application/json
    - Cloud app: seleccionar el SP del agente
    - Sign-in risk: `Medium`
 3. Ejecutar — confirmar que la policy aparece como **Applied** con acción **Block**
-4. Repetir con una cuenta de usuario humano — confirmar que la policy **NO aplica**
+4. Repeat with a human user account — confirm the policy does **NOT** apply
 
-### Paso 3 — Validar que `grantControls: mfa` no aplica
+### Step 3 — Validar que `grantControls: mfa` no aplica
 
 1. Crear una segunda policy de prueba con `"builtInControls": ["mfa"]`
 2. Ejecutar What If con el SP del agente
-3. Confirmar que la policy aparece como **Not applied** o no genera enforcement
+3. Confirm the policy shows as **Not applied** or generates no enforcement
 4. **Eliminar la policy de prueba** — documentar el hallazgo
 
-### Paso 4 — Pasar a Enforced después del período de report-only
+### Step 4 — Pasar a Enforced después del período de report-only
 
 Después de 7 días en `enabledForReportingButNotEnforced`:
 
@@ -109,7 +109,7 @@ Content-Type: application/json
 }
 ```
 
-### Paso 5 — KQL: Monitorear aplicaciones de CA policy en Sentinel
+### Step 5 — KQL: Monitorear aplicaciones de CA policy en Sentinel
 
 ```kql
 AADServicePrincipalSignInLogs
@@ -125,18 +125,18 @@ AADServicePrincipalSignInLogs
 | sort by BlockedAttempts desc
 ```
 
-## Verificación
+## Verification
 
 - [ ] CA policy creada con `includeAgentIdServicePrincipals: "All"`
-- [ ] What If confirma que policy aplica al SP del agente con riesgo Medium
+- [ ] What If confirms the policy applies to the agent SP at Medium risk
 - [ ] What If confirma que policy NO aplica a cuentas de usuario
 - [ ] `grantControls: mfa` validado como inefectivo y documentado
 - [ ] Policy en report-only durante mínimo 7 días antes de enforce
 - [ ] KQL de monitoreo corriendo en Sentinel como Scheduled Rule
 
-## Notas de implementación
+## Implementation notes
 
-- Blueprint-level CA (`includeAgentIdServicePrincipals: "All"`) cubre todos los agentes actuales y futuros — es el patrón de escala correcto vs. per-instance
-- `Entra Workload ID Premium` es necesario para agregar condiciones de riesgo de service principal (sign-in risk) — sin esta licencia solo está disponible el bloqueo incondicional
-- Documentar siempre el resultado del What If como evidencia en el Gap Assessment Template — es el único mecanismo de validación sin necesidad de generar tráfico real
+- Blueprint-level CA (`includeAgentIdServicePrincipals: All`) covers all current and future agents — this is the correct scaling pattern vs. per-instance
+- `Entra Workload ID Premium` is required to add service principal risk conditions (sign-in risk) — without this license only the base condition is available
+- Always document the What If result as evidence in the Gap Assessment Template — it is the only validation mechanism that does not require generating real traffic
 - Referencia oficial: [Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)

@@ -1,8 +1,8 @@
 # Pilar 1 — Discover & Prioritize
 
-Objetivo: conocer qué agentes AI existen, quién los creó, qué datos tocan y cuál es su nivel de riesgo.
+Objective: know which AI agents exist, who created them, what data they touch, and what their risk level is.
 
-## Secuencia recomendada
+## Recommended sequence
 
 ```
 [1] discover-inventory-agents-copilot-studio   ← punto de entrada

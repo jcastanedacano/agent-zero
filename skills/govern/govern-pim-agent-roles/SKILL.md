@@ -16,11 +16,11 @@ ms_license: [Microsoft Entra ID P2, Microsoft Entra Workload ID Premium]
 effort_hours: 8
 ---
 
-## Cuándo usar
+## When to use
 
 - Agentes con roles Azure RBAC de alto privilegio (Contributor, Owner, User Access Administrator)
 - Agentes con Graph API permissions sensibles que no necesitan acceso continuo
-- Cuando el risk register del Pilar 1 identifica agentes con acceso excesivo permanente
+- When the Pillar 1 risk register identifies agents with excessive permanent access
 
 ## Restricción de licencia
 
@@ -30,7 +30,7 @@ Verificar licencias antes de iniciar.
 
 ## Workflow
 
-### Paso 1 — Identificar roles permanentes de agentes
+### Step 1 — Identificar roles permanentes de agentes
 
 ```http
 GET https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments
@@ -48,7 +48,7 @@ az role assignment list \
   --query "[].{Role:roleDefinitionName, Scope:scope}"
 ```
 
-### Paso 2 — Configurar PIM para Azure resources (agentes con roles RBAC)
+### Step 2 — Configurar PIM para Azure resources (agentes con roles RBAC)
 
 ```
 Entra ID → Privileged Identity Management → Azure resources
@@ -62,9 +62,9 @@ Configuración recomendada para agentes AI:
 - **Require justification on activation**: Yes
 - **Require approval**: Yes (para roles Contributor+)
 - **Approvers**: Security team group
-- **On activation require**: MFA (para el humano que aprueba, no el agente)
+- **On activation require**: MFA (for the approving human, not the agent)
 
-### Paso 3 — Convertir assignment permanente a eligible
+### Step 3 — Convertir assignment permanente a eligible
 
 ```
 PIM → Azure resources → Assignments → [Rol] → Add assignments
@@ -75,7 +75,7 @@ PIM → Azure resources → Assignments → [Rol] → Add assignments
 
 Remover el assignment permanente existente después de crear el eligible.
 
-### Paso 4 — Para Entra ID roles (Graph API permissions)
+### Step 4 — Para Entra ID roles (Graph API permissions)
 
 PIM para Entra roles con service principals:
 ```
@@ -84,17 +84,17 @@ PIM → Entra roles → Settings → [Rol]
 → Require justification: Yes
 ```
 
-**Nota**: PIM para app roles de Graph API (OAuth permissions) tiene soporte limitado.
+**Note**: PIM for Graph API app roles (OAuth permissions) has limited support.
 Para permisos Graph críticos, considerar revocación y re-consent bajo demanda
 como alternativa a PIM nativo.
 
-### Paso 5 — Monitorear activaciones en Sentinel
+### Step 5 — Monitorear activaciones en Sentinel
 
 ```kql
 // Ver queries/sentinel-pim-activations.kql
 ```
 
-## Verificación
+## Verification
 
 - [ ] Roles permanentes de agentes convertidos a eligible
 - [ ] Settings de PIM configurados (duración, justificación, aprobación)
@@ -102,8 +102,8 @@ como alternativa a PIM nativo.
 - [ ] Alerta en Sentinel para activaciones fuera de horario configurada
 - [ ] Test de activación realizado exitosamente
 
-## Notas de implementación
+## Implementation notes
 
 - PIM para identidades de workload (Workload ID Premium) requiere licencia separada de Entra ID P2 — verificar disponibilidad en el tenant antes de diseñar el flujo JIT
 - PIM eligible assignments para service principals usan el endpoint `/roleManagement/directory/roleEligibilityScheduleRequests` — diferente al endpoint de assignment permanente
-- Para demo de valor JIT: mostrar la diferencia entre un agente con rol permanente (siempre activo) vs. un agente con rol eligible (activo solo durante la ventana aprobada)
+- To demo JIT value: show the difference between an agent with a permanent role (always active) vs. an agent with an eligible role (active only during the window)
