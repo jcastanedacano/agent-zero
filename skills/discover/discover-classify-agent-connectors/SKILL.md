@@ -4,9 +4,9 @@ version: "1.0"
 pillar: discover
 subdomain: ms-copilot-studio
 description: >-
-  Clasifica los conectores activos en agentes Copilot Studio y Power Platform
-  by risk level according to the type of data accessible, producing a matrix
-  de exposición como input para controles de govern y protect.
+  Classifies the active connectors on Copilot Studio and Power Platform agents
+  by risk level according to the type of data accessible, producing an exposure
+  matrix as input for govern and protect controls.
 tags: [discover, copilot-studio, connectors, data-classification, power-platform]
 atlas_techniques: [AML.T0057, AML.T0048]
 d3fend_techniques: [D3-AM, D3-NTA]
@@ -19,65 +19,65 @@ effort_hours: 2
 
 ## When to use
 
-- Después de `discover-inventory-agents-copilot-studio`
+- After `discover-inventory-agents-copilot-studio`
 - As input for `govern-dlp-policy-copilot-prompts` and `protect-purview-ai-hub`
-- Cuando se requiere matriz de exposición de datos por agente
+- When a per-agent data exposure matrix is required
 
 ## Prerequisites
 
-- Power Platform Admin Center accesible
-- Lista de agentes del Paso 1 (skill anterior)
-- Catálogo de tipos de datos del tenant (Purview si disponible)
+- Power Platform Admin Center access
+- The agent list from Step 1 (previous skill)
+- Tenant data type catalog (Purview, if available)
 
 ## Workflow
 
-### Step 1 — Exportar conectores por agente desde PP Admin
+### Step 1 — Export connectors per agent from PP Admin
 
 ```
 Power Platform Admin Center → Analytics → Power Automate → Connectors
 ```
 
-O via Power Platform Management connector en Power Automate:
+Or via the Power Platform Management connector in Power Automate:
 
 ```
 List connectors → filter by environment → export to CSV
 ```
 
-### Step 2 — Clasificar conectores por categoría de datos
+### Step 2 — Classify connectors by data category
 
-| Conector | Categoría | Riesgo base |
+| Connector | Category | Base risk |
 |---|---|---|
-| SharePoint | Documentos corporativos | Alto |
-| Exchange / Outlook | Email corporativo | Alto |
-| Dataverse | Datos de negocio | Alto |
-| Teams | Comunicaciones | Medio |
-| Azure Blob Storage | Depende del contenido | Medio-Alto |
-| Bing Search | Datos públicos | Bajo |
-| HTTP genérico | Desconocido | Alto (sin validar) |
-| ServiceNow / Jira | Tickets IT | Medio |
-| SAP / Dynamics | ERP / CRM | Alto |
+| SharePoint | Corporate documents | High |
+| Exchange / Outlook | Corporate email | High |
+| Dataverse | Business data | High |
+| Teams | Communications | Medium |
+| Azure Blob Storage | Depends on content | Medium-High |
+| Bing Search | Public data | Low |
+| Generic HTTP | Unknown | High (unvalidated) |
+| ServiceNow / Jira | IT tickets | Medium |
+| SAP / Dynamics | ERP / CRM | High |
 
-### Step 3 — Cruzar conector × agente × propietario
+### Step 3 — Cross-reference connector × agent × owner
 
-Construir tabla:
+Build a table:
 
-| Agente | Conector | Categoría | Propietario | ¿Aprobado? | Riesgo |
+| Agent | Connector | Category | Owner | Approved? | Risk |
 |---|---|---|---|---|---|
-| {nombre} | SharePoint | Documentos | {email} | Sí/No | Alto |
+| {name} | SharePoint | Documents | {email} | Yes/No | High |
 
-### Step 4 — Priorizar para remediación
+### Step 4 — Prioritize for remediation
 
-Orden de prioridad:
-1. Agentes sin aprobación + conectores Alto
-2. Agentes aprobados + conectores no documentados en el scope original
-3. Conectores HTTP genéricos sin validación de destino
+Priority order:
+1. Unapproved agents + High-risk connectors
+2. Approved agents + connectors not documented in the original scope
+3. Generic HTTP connectors with no destination validation
 
 ## Verification
 
-- [ ] Matriz conector × agente completada
-- [ ] Riesgo asignado a cada combinación
+- [ ] Connector × agent matrix completed
+- [ ] Risk assigned to every combination
 - [ ] Generic HTTP connectors with a documented destination URL (undocumented = High risk)
-- [ ] Input listo para skill de govern/protect
+- [ ] Input ready for the govern/protect skill
 
 ## Implementation notes
 

@@ -4,9 +4,9 @@ version: "1.0"
 pillar: discover
 subdomain: ms-purview
 description: >-
-  Activa y configura Purview DSPM for AI para mapear interacciones de agentes
-  con datos sensibles en Microsoft 365, generando visibilidad de qué datos
-  acceden los agentes y qué riesgos de exposición existen antes de escalar.
+  Activates and configures Purview DSPM for AI to map agent interactions
+  with sensitive data in Microsoft 365, generating visibility into what
+  data agents access and what exposure risks exist before scaling.
 tags: [discover, purview, dspm, ai-hub, data-classification, oversharing]
 atlas_techniques: [AML.T0056, AML.T0037]
 d3fend_techniques: [D3-DAM, D3-SFA]
@@ -19,38 +19,38 @@ effort_hours: 2
 
 ## When to use
 
-- Como primer paso antes de habilitar retrieval de SharePoint en cualquier agente
-- Cuando hay sospecha de oversharing en fuentes de conocimiento de agentes existentes
-- En auditorías periódicas de exposición de datos accedidos por agentes
+- As a first step before enabling SharePoint retrieval on any agent
+- When oversharing is suspected in existing agent knowledge sources
+- In periodic audits of data exposure accessed by agents
 - After deploying a new agent, to validate it does not index unexpected sensitive data
 
 ## Prerequisites
 
-- Licencia M365 E5 o M365 E5 Compliance activa en el tenant
-- Rol Compliance Administrator
+- Active M365 E5 or M365 E5 Compliance license in the tenant
+- Compliance Administrator role
 - At least one active Copilot Studio or Azure AI Foundry agent in the tenant
-- Acceso al portal de Microsoft Purview: purview.microsoft.com
+- Access to the Microsoft Purview portal: purview.microsoft.com
 
 ## Workflow
 
-### Step 1 — Activar DSPM for AI en Purview
+### Step 1 — Activate DSPM for AI in Purview
 
-1. Ir a **Microsoft Purview** → **Data Security Posture Management** → **AI**
+1. Go to **Microsoft Purview** → **Data Security Posture Management** → **AI**
 2. Enable AI interaction scanning (requires the tenant to have M365 Copilot or Copilot Studio data)
 3. Wait for initial ingestion (can take up to 24h for tenants with extensive history)
 
-### Step 2 — Revisar el dashboard de exposición
+### Step 2 — Review the exposure dashboard
 
-En el dashboard de DSPM for AI, identificar:
+In the DSPM for AI dashboard, identify:
 
-| Métrica | Qué indica |
+| Metric | What it indicates |
 |---------|------------|
 | Sensitive data accessed by AI | Volume of sensitive data the agents have retrieved |
-| Overshared content | Archivos accesibles a agentes que deberían estar restringidos |
+| Overshared content | Files accessible to agents that should be restricted |
 | Unlabeled files in AI scope | Files without a sensitivity label in the agent corpus |
-| Users interacting with sensitive data via AI | Personas que acceden a datos sensibles a través de prompts |
+| Users interacting with sensitive data via AI | People accessing sensitive data through prompts |
 
-### Step 3 — Exportar inventario de sitios en riesgo
+### Step 3 — Export the at-risk site inventory
 
 ```kql
 MicrosoftPurviewInformationProtection
@@ -70,7 +70,7 @@ MicrosoftPurviewInformationProtection
 | project SiteUrl, TotalAccesses, UnlabeledAccesses, RiskScore, LastAccess
 ```
 
-### Step 4 — Identificar tipos de datos sensibles más frecuentes
+### Step 4 — Identify the most frequent sensitive data types
 
 ```kql
 MicrosoftPurviewInformationProtection
@@ -86,7 +86,7 @@ MicrosoftPurviewInformationProtection
 | sort by Matches desc
 ```
 
-### Step 5 — Correlacionar con inventario de agentes
+### Step 5 — Correlate with the agent inventory
 
 ```kql
 AIAgentsInfo
@@ -110,11 +110,11 @@ AIAgentsInfo
 
 ## Verification
 
-- [ ] DSPM for AI habilitado y mostrando datos en el dashboard
-- [ ] Lista de sitios SharePoint con riesgo > 50% (RiskScore) documentada
-- [ ] Top 5 tipos de datos sensibles accedidos por agentes identificados
-- [ ] Agentes con `DataRisk == "Critical"` o "High" escalados para remediación
-- [ ] Resultado incorporado al inventario de agentes del pilar Discover
+- [ ] DSPM for AI enabled and showing data in the dashboard
+- [ ] List of SharePoint sites with risk > 50% (RiskScore) documented
+- [ ] Top 5 sensitive data types accessed by agents identified
+- [ ] Agents with `DataRisk == "Critical"` or "High" escalated for remediation
+- [ ] Result incorporated into the Discover pillar's agent inventory
 
 ## Implementation notes
 

@@ -1,48 +1,48 @@
-# Pilar 3 — Secure Access
+# Pillar 3 — Secure Access
 
-Objetivo: asegurar cómo los agentes AI se autentican y qué superficie de red exponen,
-eliminando credenciales estáticas y restringiendo conectividad al mínimo necesario.
+Objective: secure how AI agents authenticate and what network surface they expose,
+eliminating static credentials and restricting connectivity to the minimum necessary.
 
 ## Recommended sequence
 
 ```
-INPUT: Agentes bajo control formal (output Pilar 2)
+INPUT: Agents under formal control (Pillar 2 output)
         ↓
-[1] secure-least-privilege-agent-identity   ← reducir permisos al mínimo real
+[1] secure-least-privilege-agent-identity   ← reduce permissions to the real minimum
         ↓
-[2] secure-managed-identity-foundry         ← eliminar API keys (Foundry)
+[2] secure-managed-identity-foundry         ← eliminate API keys (Foundry)
         ↓
-[3] secure-secret-management-keyvault       ← centralizar secretos residuales
+[3] secure-secret-management-keyvault       ← centralize residual secrets
         ↓
-[4] secure-network-isolation-agent          ← aislar tráfico de red
+[4] secure-network-isolation-agent          ← isolate network traffic
         ↓
-OUTPUT: Agentes con superficie de ataque reducida → input para Pilar 4 (Protect)
+OUTPUT: Agents with a reduced attack surface → input for Pillar 4 (Protect)
 ```
 
 ## Skills
 
-| Skill | Producto MS | KQL disponible |
+| Skill | MS product | KQL available |
 |---|---|---|
 | `secure-least-privilege-agent-identity` | Entra ID, Graph API | sentinel-permission-usage.kql |
 | `secure-managed-identity-foundry` | Azure AI Foundry, Azure CLI | sentinel-managed-identity.kql |
 | `secure-secret-management-keyvault` | Azure Key Vault | sentinel-keyvault-audit.kql |
 | `secure-network-isolation-agent` | Azure Networking, Foundry | sentinel-network-isolation.kql |
 
-## Decisión: managed identity vs Key Vault
+## Decision: managed identity vs Key Vault
 
 ```
-¿El recurso es Azure-native y soporta Entra auth?
-    ├── Sí → usar Managed Identity (skill: secure-managed-identity-foundry)
-    └── No → usar Key Vault (skill: secure-secret-management-keyvault)
+Is the resource Azure-native and does it support Entra auth?
+    ├── Yes → use Managed Identity (skill: secure-managed-identity-foundry)
+    └── No → use Key Vault (skill: secure-secret-management-keyvault)
              ↓
-         ¿El recurso externo soporta rotación automática?
-             ├── Sí → configurar Key Vault rotation policy
-             └── No → rotar manualmente cada 90 días con alerta
+         Does the external resource support automatic rotation?
+             ├── Yes → configure a Key Vault rotation policy
+             └── No → rotate manually every 90 days with an alert
 ```
 
-## API versions validadas para {workspace-name}
+## API versions validated for {workspace-name}
 
-| Recurso | API Version |
+| Resource | API Version |
 |---|---|
 | Role Assignments (ARM) | `2022-04-01` |
 | Key Vault (ARM) | `2023-07-01` |
@@ -51,10 +51,10 @@ OUTPUT: Agentes con superficie de ataque reducida → input para Pilar 4 (Protec
 
 ## Known constraints
 
-| Restricción | Impacto |
+| Constraint | Impact |
 |---|---|
 | `Sites.Selected` requires an explicit site grant | Assigning the app role is not enough — an extra step is required |
-| Managed Identity creation: no disponible via Lokka-Microsoft MCP | Usar Azure CLI |
+| Managed Identity creation: not available via Lokka-Microsoft MCP | Use Azure CLI |
 | Copilot Studio without native VNet (standard license) | Use APIM as a proxy, or DLP as an alternative control |
 | Private Endpoint DNS: requires a private DNS zone | Without the DNS zone, the endpoint does not resolve from inside the VNet |
 | `allow_only_approved_outbound` propagation: up to 30 min | Do not verify immediately after the change |

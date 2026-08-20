@@ -4,9 +4,9 @@ version: "1.0"
 pillar: govern
 subdomain: ms-entra
 description: >-
-  Registra agentes de IA como identidades de primer nivel en Entra ID usando
+  Registers AI agents as first-class identities in Entra ID using
   Entra Agent ID, separating the agent identity from human users and
-  service principals genéricos para habilitar CA policies y trazabilidad forense.
+  generic service principals to enable CA policies and forensic traceability.
 tags: [govern, entra, agent-id, identity, lifecycle, audit-trail]
 atlas_techniques: [AML.T0040, AML.T0012]
 d3fend_techniques: [D3-MAN, D3-SFA]
@@ -19,47 +19,47 @@ effort_hours: 2
 
 ## When to use
 
-- Al desplegar cualquier agente nuevo en el tenant — antes de asignar permisos
-- Cuando se detectan agentes operando bajo identidad delegada de usuario (lavado de identidad)
+- When deploying any new agent in the tenant — before assigning permissions
+- When agents are found operating under a delegated user identity (identity laundering)
 - During governance audits, to validate that every agent has a dedicated identity
 - As a prerequisite for applying agent-specific CA policies (`govern-ca-policy-workload-identity`)
 
 ## Prerequisites
 
-- Entra ID P1 o superior (P2 para PIM)
-- Rol Application Administrator o Cloud Application Administrator
-- Acceso a Azure Portal → Entra ID → App registrations
-- Acceso a Agent 365 admin center (M365 Admin Center → Agents → Registry)
+- Entra ID P1 or higher (P2 for PIM)
+- Application Administrator or Cloud Application Administrator role
+- Access to Azure Portal → Entra ID → App registrations
+- Access to the Agent 365 admin center (M365 Admin Center → Agents → Registry)
 
 ## Workflow
 
-### Step 1 — Crear el App Registration como Entra Agent ID
+### Step 1 — Create the App Registration as an Entra Agent ID
 
 ```http
 POST https://graph.microsoft.com/v1.0/applications
 Content-Type: application/json
 
 {
-  "displayName": "{nombre-del-agente}",
+  "displayName": "{agent-name}",
   "signInAudience": "AzureADMyOrg",
   "tags": ["agent365", "EntraAgentID"],
-  "notes": "TechnicalOwner:{email-del-dueno} | AgentType:{copilot-studio|foundry|custom} | CreatedDate:{fecha}"
+  "notes": "TechnicalOwner:{owner-email} | AgentType:{copilot-studio|foundry|custom} | CreatedDate:{date}"
 }
 ```
 
-### Step 2 — Crear el Service Principal asociado
+### Step 2 — Create the associated Service Principal
 
 ```http
 POST https://graph.microsoft.com/v1.0/servicePrincipals
 Content-Type: application/json
 
 {
-  "appId": "{appId-del-paso-1}",
+  "appId": "{appId-from-step-1}",
   "tags": ["agent365", "EntraAgentID", "WindowsAzureActiveDirectoryIntegratedApp"]
 }
 ```
 
-### Step 3 — Asignar owner técnico
+### Step 3 — Assign the technical owner
 
 ```http
 POST https://graph.microsoft.com/v1.0/applications/{app-object-id}/owners/$ref
@@ -70,13 +70,13 @@ Content-Type: application/json
 }
 ```
 
-### Step 4 — Verificar registro en Agent 365
+### Step 4 — Verify registration in Agent 365
 
-1. Ir a **M365 Admin Center** → **Agents** → **Registry**
-2. Buscar el agente por nombre — debe aparecer con `EntraAgentId` populated
+1. Go to **M365 Admin Center** → **Agents** → **Registry**
+2. Search for the agent by name — it should appear with `EntraAgentId` populated
 3. If it does not appear: verify that the `agent365` and `EntraAgentID` tags are in the manifest
 
-### Step 5 — Asignar permisos mínimos (least privilege)
+### Step 5 — Assign minimal permissions (least privilege)
 
 ```http
 POST https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}/appRoleAssignments
@@ -89,26 +89,26 @@ Content-Type: application/json
 }
 ```
 
-Usar `Sites.Selected` en lugar de `Sites.Read.All` siempre que sea posible.
+Use `Sites.Selected` instead of `Sites.Read.All` whenever possible.
 
-### Step 6 — KQL: Detectar agentes sin Entra Agent ID
+### Step 6 — KQL: detect agents without Entra Agent ID
 
 ```kql
 AIAgentsInfo
 | where TimeGenerated > ago(30d)
 | where isempty(EntraAgentId) or EntraAgentId == "Inherited"
 | distinct AgentId, AgentName, AgentType, Platform, TechnicalOwner, ManagementStatus
-| extend RiskNote = "Agente opera bajo identidad heredada — sin trazabilidad forense dedicada"
+| extend RiskNote = "Agent operates under an inherited identity — no dedicated forensic traceability"
 | sort by AgentType asc
 ```
 
 ## Verification
 
-- [ ] App registration creado con tags `agent365` y `EntraAgentID` en manifest
-- [ ] Service principal asociado visible en Entra ID → Enterprise Applications
-- [ ] Owner técnico asignado en App registration
-- [ ] Agente visible en Agent 365 Registry con `EntraAgentId` populated
-- [ ] Permisos asignados siguen principio de least privilege
+- [ ] App registration created with the `agent365` and `EntraAgentID` tags in the manifest
+- [ ] Associated service principal visible in Entra ID → Enterprise Applications
+- [ ] Technical owner assigned on the App registration
+- [ ] Agent visible in the Agent 365 Registry with `EntraAgentId` populated
+- [ ] Assigned permissions follow the least privilege principle
 - [ ] The KQL query no longer returns this agent in the without-Entra-Agent-ID list
 
 ## Implementation notes

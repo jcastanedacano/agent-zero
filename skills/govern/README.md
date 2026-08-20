@@ -1,29 +1,29 @@
-# Pilar 2 — Govern & Control
+# Pillar 2 — Govern & Control
 
-Objetivo: establecer controles sobre qué agentes pueden existir, cómo acceden a recursos,
+Objective: establish controls over which agents may exist, how they access resources,
 and what happens to them across their lifecycle.
 
 ## Recommended sequence
 
 ```
-INPUT: Risk register del Pilar 1
+INPUT: Pillar 1 risk register
         ↓
-[1] govern-agent365-approval-flow          ← cerrar el gap de shadow AI (preventivo)
+[1] govern-agent365-approval-flow          ← close the shadow AI gap (preventive)
         ↓
-[2] govern-ca-policy-workload-identity     ← controles de acceso para agentes de riesgo Alto
+[2] govern-ca-policy-workload-identity     ← access controls for High-risk agents
         ↓
-[3] govern-pim-agent-roles                 ← eliminar privilegio permanente
+[3] govern-pim-agent-roles                 ← eliminate standing privilege
         ↓
-[4] govern-dlp-policy-copilot-prompts      ← protección de datos en prompts
+[4] govern-dlp-policy-copilot-prompts      ← data protection in prompts
         ↓
-[5] govern-lifecycle-decommission-agent    ← operación continua + higiene
+[5] govern-lifecycle-decommission-agent    ← ongoing operation + hygiene
         ↓
-OUTPUT: Agentes bajo control formal → input para Pilar 3 (Secure) y Pilar 4 (Protect)
+OUTPUT: Agents under formal control → input for Pillar 3 (Secure) and Pillar 4 (Protect)
 ```
 
 ## Skills
 
-| Skill | Producto MS | KQL disponible |
+| Skill | MS product | KQL available |
 |---|---|---|
 | `govern-agent365-approval-flow` | Agent 365, Power Platform | No |
 | `govern-ca-policy-workload-identity` | Entra ID, Graph API | sentinel-ca-monitoring.kql |
@@ -31,12 +31,12 @@ OUTPUT: Agentes bajo control formal → input para Pilar 3 (Secure) y Pilar 4 (P
 | `govern-dlp-policy-copilot-prompts` | Purview Compliance | sentinel-dlp-agents.kql |
 | `govern-lifecycle-decommission-agent` | Power Platform, Graph API | sentinel-inactive-agents.kql |
 
-## Known constraints del stack Microsoft
+## Known constraints in the Microsoft stack
 
-| Restricción | Impacto | Workaround |
+| Constraint | Impact | Workaround |
 |---|---|---|
 | `grantControls: mfa` invalid in CA for workload identities | CA policy fails on creation | Use `block` only |
-| `continuousAccessEvaluation` + `reportOnly` incompatibles | Error al crear policy | Usar `disabled` o `enabled` |
+| `continuousAccessEvaluation` + `reportOnly` are incompatible | Error when creating the policy | Use `disabled` or `enabled` |
 | PIM for SPs requires Workload ID Premium | Without the license, unavailable for SPs | Use role assignments with expiration |
-| Purview auto-labeling via API limitada | Algunas políticas no crean via ARM | Usar Compliance Portal |
-| Agent Builder bypass de Requests | Shadow AI no controlado por Agent 365 | Power Platform DLP o CA en M365 Copilot |
+| Purview auto-labeling via API is limited | Some policies cannot be created via ARM | Use the Compliance Portal |
+| Agent Builder bypasses Requests | Shadow AI not controlled by Agent 365 | Power Platform DLP or CA on M365 Copilot |

@@ -4,8 +4,8 @@ version: "1.0"
 pillar: govern
 subdomain: ms-copilot-studio
 description: >-
-  Configura y opera el flujo de aprobación de agentes AI en Agent 365 (M365 Admin
-  Center), estableciendo políticas para que nuevos agentes pasen por Requests antes
+  Configures and operates the AI agent approval flow in Agent 365 (M365 Admin
+  Center), establishing policies so new agents go through Requests
   before activation, closing the Agent Builder gap that activates agents without approval.
 tags: [govern, copilot-studio, agent365, approval-flow, shadow-ai-prevention]
 atlas_techniques: [AML.T0054]
@@ -19,97 +19,97 @@ effort_hours: 6
 
 ## When to use
 
-- Después de identificar shadow AI en Pilar 1 (gap Registry vs Requests)
-- Cuando el tenant no tiene proceso formal de aprobación de agentes
+- After identifying shadow AI in Pillar 1 (the Registry vs Requests gap)
+- When the tenant has no formal agent approval process
 - As a preventive control before Agent Builder usage proliferates
 
-## Gap crítico a cerrar
+## Critical gap to close
 
-Agentes creados desde **Agent Builder** (dentro de M365 Copilot) se activan
+Agents created from **Agent Builder** (inside M365 Copilot) are activated
 immediately without generating a Request in Agent 365. This is the primary vector
-de shadow AI en organizaciones con M365 Copilot.
+for shadow AI in organizations with M365 Copilot.
 
-El flujo de Requests aplica a agentes creados en Copilot Studio directamente,
-no a los de Agent Builder. Ambos canales requieren controles diferentes.
+The Requests flow applies to agents created directly in Copilot Studio,
+not to those from Agent Builder. Both channels require different controls.
 
 ## Prerequisites
 
-- M365 Admin Center con rol de administrador
-- Agent 365 habilitado en el tenant
-- Decisión organizacional: ¿política de aprobación obligatoria o revisión post-hoc?
+- M365 Admin Center with administrator role
+- Agent 365 enabled in the tenant
+- An organizational decision: mandatory approval policy or post-hoc review?
 
 ## Workflow
 
-### Step 1 — Configurar política de agentes en Agent 365
+### Step 1 — Configure the agent policy in Agent 365
 
 ```
 M365 Admin Center → Settings → Agent 365 → Policies
 ```
 
-Opciones disponibles:
-- **Allow all agents**: sin control (default)
-- **Block all agents**: bloqueo total
-- **Allow specific agents**: lista de permitidos
-- **Require admin approval**: habilita flujo Requests
+Available options:
+- **Allow all agents**: no control (default)
+- **Block all agents**: full block
+- **Allow specific agents**: allowlist
+- **Require admin approval**: enables the Requests flow
 
-Seleccionar **Require admin approval** para control efectivo.
+Select **Require admin approval** for effective control.
 
-### Step 2 — Configurar Requests workflow
+### Step 2 — Configure the Requests workflow
 
 ```
 Agent 365 → Requests → Settings
 ```
 
-Definir:
-- **Approvers**: grupo de seguridad del equipo de IT/Security
-- **Auto-approve criteria**: agentes sin conectores externos (bajo riesgo)
-- **Notification settings**: email a approvers al recibir Request
+Define:
+- **Approvers**: the IT/Security team's security group
+- **Auto-approve criteria**: agents with no external connectors (low risk)
+- **Notification settings**: email to approvers when a Request is received
 
-### Step 3 — Cerrar el gap de Agent Builder
+### Step 3 — Close the Agent Builder gap
 
-Agent Builder bypass no puede cerrarse desde Agent 365. Controles alternativos:
+The Agent Builder bypass cannot be closed from within Agent 365. Alternative controls:
 
-**Opción A — Power Platform DLP Policy** (recomendado):
+**Option A — Power Platform DLP Policy** (recommended):
 ```
 Power Platform Admin Center → Policies → Data policies
-→ Crear política que restrinja conectores en entornos de producción
-→ Asignar a entornos donde opera M365 Copilot
+→ Create a policy restricting connectors in production environments
+→ Assign it to environments where M365 Copilot operates
 ```
 
-**Opción B — Conditional Access en M365 Copilot**:
+**Option B — Conditional Access on M365 Copilot**:
 Block Agent Builder for users not in the approved AI Builders group:
 ```
-CA policy → Cloud apps: Microsoft Copilot → 
+CA policy → Cloud apps: Microsoft Copilot →
   Exclude: AI-Builders-Approved-Group
   Grant: block
 ```
 
-**Opción C — Restricción de licencia**:
-Asignar licencia M365 Copilot solo a usuarios en proceso de aprobación formal.
+**Option C — License restriction**:
+Assign the M365 Copilot license only to users going through formal approval.
 
-### Step 4 — Proceso operacional de aprobación
+### Step 4 — Operational approval process
 
-Flujo para cada Request recibido:
+Flow for each Request received:
 
-1. Revisar nombre y descripción del agente
-2. Verificar creador (departamento, rol)
-3. Revisar conectores solicitados (cruzar con skill `discover-classify-agent-connectors`)
-4. Evaluar datos accesibles por categoría de sensibilidad
-5. Aprobar con condiciones o rechazar con justificación documentada
-6. Registrar decisión en log de governance (SharePoint list o tabla custom)
+1. Review the agent's name and description
+2. Verify the creator (department, role)
+3. Review requested connectors (cross-reference with the `discover-classify-agent-connectors` skill)
+4. Assess accessible data by sensitivity category
+5. Approve with conditions or reject with documented justification
+6. Record the decision in the governance log (SharePoint list or custom table)
 
-### Step 5 — Auditoría mensual
+### Step 5 — Monthly audit
 
-Revisar tab **Registry** vs **Requests** mensualmente para detectar agentes que
-hayan eludido el proceso. Cualquier discrepancia = incidente de shadow AI.
+Review the **Registry** vs **Requests** tabs monthly to detect agents that
+bypassed the process. Any discrepancy = a shadow AI incident.
 
 ## Verification
 
-- [ ] Política "Require admin approval" habilitada en Agent 365
-- [ ] Grupo de approvers definido y notificaciones activas
+- [ ] "Require admin approval" policy enabled in Agent 365
+- [ ] Approver group defined and notifications active
 - [ ] At least one control for the Agent Builder gap implemented (A, B, or C)
-- [ ] Proceso operacional documentado en runbook
-- [ ] Auditoría mensual calendarizada
+- [ ] Operational process documented in a runbook
+- [ ] Monthly audit scheduled
 
 ## Implementation notes
 

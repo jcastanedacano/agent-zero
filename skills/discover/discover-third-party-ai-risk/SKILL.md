@@ -34,21 +34,21 @@ role_requirements:
 
 ## Objective
 
-Identificar y evaluar todos los agentes de IA de terceros activos en el tenant — plugins de Copilot de ISVs, servidores MCP externos, extensiones de Agent 365, y agentes de Power Platform de proveedores externos — y asignarles un nivel de riesgo antes de que accedan a datos organizacionales.
+Identify and evaluate every active third-party AI agent in the tenant — ISV Copilot plugins, external MCP servers, Agent 365 extensions, and third-party Power Platform agents — and assign each a risk level before it accesses organizational data.
 
-## Por qué importa
+## Why it matters
 
-First-party agents (built by the internal team) go through Entra Agent ID and Copilot Studio governance. Third-party agents are typically installed from the
+First-party agents (built by the internal team) go through Entra Agent ID and Copilot Studio governance. Third-party agents are typically installed from the marketplace or connected directly, bypassing that same review.
 
-El marco de referencia es OWASP Agentic AI AG05 (Supply Chain Compromise) y MITRE ATLAS AML.T0010 (ML Supply Chain Compromise).
+The reference framework is OWASP Agentic AI AG05 (Supply Chain Compromise) and MITRE ATLAS AML.T0010 (ML Supply Chain Compromise).
 
 ## Workflow
 
-### Step 1 — Inventariar plugins y extensiones de Copilot de terceros
+### Step 1 — Inventory third-party Copilot plugins and extensions
 
 ```powershell
 # PowerShell — Microsoft Graph API
-# Lista todos los plugins de Copilot activos en el tenant
+# Lists every active Copilot plugin in the tenant
 $graphUri = "https://graph.microsoft.com/v1.0/admin/microsoft365Apps/installations"
 $response = Invoke-MgGraphRequest -Uri $graphUri -Method GET
 $response.value | Where-Object { $_.publisher -ne "Microsoft" } |
@@ -56,10 +56,10 @@ $response.value | Where-Object { $_.publisher -ne "Microsoft" } |
     Sort-Object publisher
 ```
 
-### Step 2 — Auditar permisos de aplicaciones de terceros en Entra
+### Step 2 — Audit third-party application permissions in Entra
 
 ```kql
-// Entra App registrations de terceros con permisos de alto privilegio
+// Third-party Entra App registrations with high-privilege permissions
 AuditLogs
 | where TimeGenerated > ago(30d)
 | where OperationName == "Consent to application"
@@ -80,10 +80,10 @@ AuditLogs
 | sort by TimeGenerated desc
 ```
 
-### Step 3 — Detectar servidores MCP externos conectados a agentes
+### Step 3 — Detect external MCP servers connected to agents
 
 ```kql
-// CloudAppEvents — conexiones de agentes a endpoints externos (posibles MCP servers)
+// CloudAppEvents — agent connections to external endpoints (possible MCP servers)
 CloudAppEvents
 | where TimeGenerated > ago(7d)
 | where Application in ("Copilot Studio", "Azure AI Foundry", "Microsoft Power Platform")
@@ -102,45 +102,45 @@ CloudAppEvents
 | sort by InvocationCount desc
 ```
 
-### Step 4 — Evaluar riesgo de cada agente de terceros
+### Step 4 — Assess the risk of each third-party agent
 
-Para cada agente identificado, completar la siguiente tabla:
+For each identified agent, complete the following table:
 
-| Campo | Preguntas clave |
+| Field | Key questions |
 |-------|----------------|
 | **Publisher verification** | Is the publisher in the official Microsoft marketplace? Is it certified? |
-| **Data access scope** | ¿Qué permisos de Graph API tiene? ¿Accede a correo, calendario, SharePoint? |
+| **Data access scope** | What Graph API permissions does it hold? Does it access mail, calendar, SharePoint? |
 | **Data residency** | Are prompts and responses processed outside the Microsoft tenant? |
 | **Audit trail** | Do the third-party agent's actions appear in Purview audit? |
 | **Update mechanism** | Is the agent code updated automatically without re-approval? |
 | **Supply chain** | Does the agent depend on third-party models (not Azure OpenAI)? |
 
-### Step 5 — Aplicar controles por nivel de riesgo
+### Step 5 — Apply controls by risk level
 
-**Riesgo alto** (acceso a datos sensibles + publisher no verificado):
+**High risk** (sensitive data access + unverified publisher):
 - Block via Power Platform DLP or a CA policy on the App ID
-- Requerir revisión de seguridad antes de re-activar
+- Require a security review before re-activation
 
-**Riesgo medio** (acceso a datos de negocio + publisher verificado):
-- Restringir scopes a Read-only donde sea posible
-- Configurar alerta de Sentinel sobre volumen de acceso anómalo
-- Revisar trimestralmente
+**Medium risk** (business data access + verified publisher):
+- Restrict scopes to Read-only where possible
+- Configure a Sentinel alert on anomalous access volume
+- Review quarterly
 
-**Riesgo bajo** (acceso limitado + publisher Microsoft o certificado):
-- Documentar en inventario
-- Incluir en ciclo anual de revisión de app registrations
+**Low risk** (limited access + Microsoft or certified publisher):
+- Document in the inventory
+- Include in the annual app registration review cycle
 
 ## Verification
 
-- [ ] Inventario de plugins y extensiones de terceros completado con publisher, scopes y fecha de instalación
-- [ ] Todos los agentes de terceros con acceso a datos de alta sensibilidad tienen CA policy o DLP activa
-- [ ] Query Q3 de P03 ejecutada y permisos de alto privilegio revisados
-- [ ] MCP servers externos identificados y evaluados contra política de allowlist
-- [ ] Registros de terceros añadidos al Gap Assessment Template (Domain 1 — Discover)
+- [ ] Third-party plugin and extension inventory completed with publisher, scopes, and installation date
+- [ ] Every third-party agent with access to highly sensitive data has an active CA policy or DLP
+- [ ] P03 Query Q3 executed and high-privilege permissions reviewed
+- [ ] External MCP servers identified and evaluated against the allowlist policy
+- [ ] Third-party records added to the Gap Assessment Template (Domain 1 — Discover)
 
 ## Implementation notes
 
-- Plugins installed from the Microsoft 365 App Store go through Microsoft's certification process, but they are not immune to post-certification compromise — the
-- External MCP servers are the highest-risk vector: a compromised MCP server can inject malicious instructions into any agent that invokes it, with
+- Plugins installed from the Microsoft 365 App Store go through Microsoft's certification process, but they are not immune to post-certification compromise — treat certification as a starting point, not a guarantee
+- External MCP servers are the highest-risk vector: a compromised MCP server can inject malicious instructions into any agent that invokes it, with the agent's own permissions
 - Power Platform DLP can block external connectors at the environment level, which is the most effective control for unauthorized MCP servers.
 - The `CloudAppEvents` table with `ActionType == "ExternalToolInvoked"` may not exist in every tenant depending on Defender configuration — validate availability

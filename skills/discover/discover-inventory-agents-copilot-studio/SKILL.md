@@ -4,9 +4,9 @@ version: "1.0"
 pillar: discover
 subdomain: ms-copilot-studio
 description: >-
-  Enumera todos los agentes activos en Copilot Studio y Agent 365, detectando
-  agentes creados sin aprobación IT (Agent Builder bypass del flujo Requests)
-  que representan el gap central de shadow AI en M365.
+  Enumerates all active agents in Copilot Studio and Agent 365, detecting
+  agents created without IT approval (Agent Builder bypassing the Requests
+  flow) which represent the central shadow AI gap in M365.
 tags: [discover, copilot-studio, shadow-ai, agent-inventory, m365-admin]
 atlas_techniques: [AML.T0054, AML.T0051]
 d3fend_techniques: [D3-AM, D3-SFA]
@@ -19,34 +19,34 @@ effort_hours: 4
 
 ## When to use
 
-- Primer paso de cualquier AI security assessment
-- Se detecta actividad inusual de agentes en Power Platform logs
-- Pre-requisito para skills de govern y secure
+- The first step of any AI security assessment
+- Unusual agent activity is detected in Power Platform logs
+- A prerequisite for the govern and secure skills
 
-Gap crítico a documentar: agentes creados desde Agent Builder (M365 Copilot)
+Critical gap to document: agents created from Agent Builder (M365 Copilot)
 are activated immediately without going through the Requests flow in Agent 365.
 Registry and Map in Agent 365 show agents; Requests only shows the approved ones.
-La diferencia = shadow AI.
+That difference is shadow AI.
 
 ## Prerequisites
 
-- M365 Admin Center con rol de administrador
-- Power Platform Admin Center accesible
-- Agent 365 habilitado (tabs Registry / Map / Requests visibles)
-- Entra ID: permisos para consultar service principals
+- M365 Admin Center with administrator role
+- Power Platform Admin Center access
+- Agent 365 enabled (Registry / Map / Requests tabs visible)
+- Entra ID: permissions to query service principals
 
 ## Workflow
 
-### Step 1 — Agent 365 en M365 Admin Center
+### Step 1 — Agent 365 in M365 Admin Center
 
 ```
 M365 Admin Center → Settings → Agent 365
 ```
 
-Revisar tres tabs y registrar counts:
-- **Registry**: total de agentes registrados
-- **Map**: agentes con conexiones activas a datos
-- **Requests**: agentes que pasaron por aprobación
+Review the three tabs and record the counts:
+- **Registry**: total registered agents
+- **Map**: agents with active data connections
+- **Requests**: agents that went through approval
 
 `shadow_ai_count = Registry_count - Requests_count`
 
@@ -56,8 +56,8 @@ Revisar tres tabs y registrar counts:
 Power Platform Admin Center → Environments → [Env] → Copilot Studio → Agents
 ```
 
-Exportar lista completa. Comparar displayName contra Registry.
-Agentes en PP Admin ausentes en Requests = shadow AI confirmado.
+Export the full list. Compare displayName against Registry.
+Agents present in PP Admin but absent from Requests = confirmed shadow AI.
 
 ### Step 3 — Microsoft Graph API
 
@@ -70,24 +70,24 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals
 
 Filter for those created in the last 30 days to detect new unreported agents.
 
-### Step 4 — Clasificar por nivel de riesgo
+### Step 4 — Classify by risk level
 
-| Criterio | Alto | Medio | Bajo |
+| Criterion | High | Medium | Low |
 |---|---|---|---|
-| Conectores | SharePoint / Email / CRM | Datos públicos | Sin conectores |
-| Creador | Usuario no IT | Power User | IT |
-| Aprobación | Sin Requests | Requests pendiente | Aprobado |
+| Connectors | SharePoint / Email / CRM | Public data | No connectors |
+| Creator | Non-IT user | Power User | IT |
+| Approval | No Requests | Requests pending | Approved |
 
-### Step 5 — Correlacionar con Sentinel (si connector activo)
+### Step 5 — Correlate with Sentinel (if the connector is active)
 
-Ejecutar queries en `queries/sentinel-inventory.kql`.
+Run the queries in `queries/sentinel-inventory.kql`.
 
 ## Verification
 
-- [ ] Count de agentes por fuente (Agent 365 / PP Admin / Graph)
-- [ ] Shadow AI count calculado (Registry - Requests)
-- [ ] Clasificación de riesgo por agente
-- [ ] Agentes con acceso a datos sensibles identificados
+- [ ] Agent count per source (Agent 365 / PP Admin / Graph)
+- [ ] Shadow AI count calculated (Registry - Requests)
+- [ ] Risk classification per agent
+- [ ] Agents with access to sensitive data identified
 
 ## Implementation notes
 

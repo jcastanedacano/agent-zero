@@ -1,39 +1,39 @@
-# Pilar 5 — Detect & Respond
+# Pillar 5 — Detect & Respond
 
-Objetivo: detectar amenazas activas sobre agentes AI en tiempo real y contener
-agentes comprometidos antes de que el daño sea irreversible.
+Objective: detect active threats against AI agents in real time and contain
+compromised agents before the damage becomes irreversible.
 
-## Secuencia de implementación (por ROI y dependencias)
+## Implementation sequence (by ROI and dependencies)
 
 ```
-INPUT: Datos protegidos con visibilidad activa (output Pilar 4)
+INPUT: Protected data with active visibility (Pillar 4 output)
         ↓
-[1] detect-alert-prompt-injection-sentinel   ← regla de firma, mayor ROI inmediato
+[1] detect-alert-prompt-injection-sentinel   ← signature rule, highest immediate ROI
         ↓
-[2] detect-agent-identity-abuse              ← agent spawning = vector crítico
+[2] detect-agent-identity-abuse              ← agent spawning = critical vector
         ↓
-[3] detect-data-exfiltration-agent           ← requiere DLP Pilar 4 para correlación
+[3] detect-data-exfiltration-agent           ← requires Pillar 4 DLP for correlation
         ↓
-[4] detect-anomalous-agent-behavior          ← requiere 7-14 días de baseline
+[4] detect-anomalous-agent-behavior          ← requires 7-14 days of baseline
         ↓
-[5] detect-respond-playbook-agent-containment ← orquesta respuesta a todos los anteriores
+[5] detect-respond-playbook-agent-containment ← orchestrates response to all of the above
         ↓
-OUTPUT: AISOC operacional → retroalimenta Pilar 1 (Discover) con nuevos agentes detectados
+OUTPUT: Operational AISOC → feeds back into Pillar 1 (Discover) with newly detected agents
 ```
 
 ## Skills
 
-| Skill | Tipo detección | Reglas Sentinel | KQL |
+| Skill | Detection type | Sentinel rules | KQL |
 |---|---|---|---|
-| `detect-alert-prompt-injection-sentinel` | Firma | 1 regla scheduled | sentinel-prompt-injection.kql |
-| `detect-anomalous-agent-behavior` | Comportamental/baseline | 3 reglas + UEBA | sentinel-agent-baseline.kql |
-| `detect-data-exfiltration-agent` | Correlación volumétrica | 3 reglas | sentinel-exfiltration.kql |
-| `detect-agent-identity-abuse` | Firma + anomalía identidad | 4 reglas | sentinel-identity-abuse.kql |
-| `detect-respond-playbook-agent-containment` | Respuesta (Logic App) | 1 playbook | sentinel-ir-hunting.kql |
+| `detect-alert-prompt-injection-sentinel` | Signature | 1 scheduled rule | sentinel-prompt-injection.kql |
+| `detect-anomalous-agent-behavior` | Behavioral/baseline | 3 rules + UEBA | sentinel-agent-baseline.kql |
+| `detect-data-exfiltration-agent` | Volumetric correlation | 3 rules | sentinel-exfiltration.kql |
+| `detect-agent-identity-abuse` | Signature + identity anomaly | 4 rules | sentinel-identity-abuse.kql |
+| `detect-respond-playbook-agent-containment` | Response (Logic App) | 1 playbook | sentinel-ir-hunting.kql |
 
-## Cobertura MITRE ATLAS
+## MITRE ATLAS coverage
 
-| Técnica ATLAS | Skill que la cubre |
+| ATLAS technique | Skill that covers it |
 |---|---|
 | AML.T0051 — LLM Prompt Injection | `detect-alert-prompt-injection-sentinel` |
 | AML.T0054 — LLM Plugin Compromise | `detect-alert-prompt-injection-sentinel` |
@@ -45,23 +45,23 @@ OUTPUT: AISOC operacional → retroalimenta Pilar 1 (Discover) con nuevos agente
 
 ## Known constraints
 
-| Restricción | Impacto |
+| Constraint | Impact |
 |---|---|
 | Sentinel validates _CL tables at rule creation time | Fails if there is no data — verify BEFORE |
-| UEBA requiere habilitación explícita | `BehaviorAnalytics` no disponible por default |
+| UEBA requires explicit activation | `BehaviorAnalytics` is not available by default |
 | `InitiatedBy.app` in AuditLogs is not always populated | Agent spawning may have false negatives |
-| Baseline requiere mínimo 7 días de datos | Reglas de anomalía no efectivas antes |
+| Baseline requires a minimum of 7 days of data | Anomaly rules are not effective before that |
 | Power Platform API to disable an agent requires a PP Admin token | Not available via Lokka-Microsoft MCP |
 
-## Cierre del ciclo del framework
+## Closing the framework cycle
 
 ```
-Detect & Respond → retroalimenta → Discover & Prioritize
+Detect & Respond → feeds back into → Discover & Prioritize
                                            ↓
-                             Nuevos agentes detectados via IR
-                             se agregan al risk register del Pilar 1
-                             y reciben controles de Pilares 2-4
+                             New agents detected via IR
+                             are added to the Pillar 1 risk register
+                             and receive Pillar 2-4 controls
 ```
 
-El ciclo completo:
-Discover → Govern → Secure → Protect → Detect → [volver a Discover]
+The full cycle:
+Discover → Govern → Secure → Protect → Detect → [back to Discover]

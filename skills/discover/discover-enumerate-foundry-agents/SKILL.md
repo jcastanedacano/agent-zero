@@ -4,9 +4,9 @@ version: "1.0"
 pillar: discover
 subdomain: ms-foundry
 description: >-
-  Enumera agentes desplegados en Azure AI Foundry (proyectos y endpoints activos)
-  correlacionando con Entra ID para detectar identidades sin managed identity
-  asignada o con acceso excesivo a recursos Azure.
+  Enumerates agents deployed in Azure AI Foundry (active projects and
+  endpoints), correlating with Entra ID to detect identities with no
+  assigned managed identity or with excessive access to Azure resources.
 tags: [discover, foundry, azure-ai, agent-inventory, managed-identity]
 atlas_techniques: [AML.T0040, AML.T0056]
 d3fend_techniques: [D3-AM, D3-UAP]
@@ -20,18 +20,18 @@ effort_hours: 3
 ## When to use
 
 - Complement to `discover-inventory-agents-copilot-studio` to cover the Azure stack
-- Antes de implementar controles de Entra Workload ID sobre agentes Foundry
-- Auditoría de managed identities en la suscripción
+- Before implementing Entra Workload ID controls over Foundry agents
+- Managed identity audit across the subscription
 
 ## Prerequisites
 
-- Azure CLI autenticado en subscription `{subscription-id}`
-- Rol Reader a nivel de suscripción o RG {resource-group}
+- Azure CLI authenticated to subscription `{subscription-id}`
+- Reader role at subscription or {resource-group} resource group scope
 - Az CLI: `az extension add --name ml` (Azure AI Foundry CLI extension)
 
 ## Workflow
 
-### Step 1 — Listar proyectos AI Foundry en la suscripción
+### Step 1 — List AI Foundry projects in the subscription
 
 ```bash
 az ml workspace list \
@@ -40,12 +40,12 @@ az ml workspace list \
   --output table
 ```
 
-Filtrar por `kind == "Hub"` o `kind == "Project"`.
+Filter by `kind == "Hub"` or `kind == "Project"`.
 
-### Step 2 — Listar deployments (agentes activos)
+### Step 2 — List deployments (active agents)
 
 ```bash
-# Por cada proyecto identificado en Paso 1
+# For each project identified in Step 1
 az ml online-endpoint list \
   --workspace-name {workspace-name} \
   --resource-group {resource-group} \
@@ -53,9 +53,9 @@ az ml online-endpoint list \
   --output table
 ```
 
-`auth_mode: key` = riesgo alto (sin Entra ID). `auth_mode: aad_token` = correcto.
+`auth_mode: key` = high risk (no Entra ID). `auth_mode: aad_token` = correct.
 
-### Step 3 — Verificar managed identity por endpoint
+### Step 3 — Verify managed identity per endpoint
 
 ```bash
 az resource show \
@@ -63,26 +63,26 @@ az resource show \
   --query "identity"
 ```
 
-Sin `identity` o `type: None` = endpoint sin identidad gestionada = riesgo.
+No `identity` or `type: None` = an endpoint with no managed identity = risk.
 
-### Step 4 — Correlacionar con Sentinel (conector Foundry_Agents)
+### Step 4 — Correlate with Sentinel (Foundry_Agents connector)
 
-Ejecutar `queries/sentinel-foundry.kql` para ver actividad de inferencia reciente.
+Run `queries/sentinel-foundry.kql` to see recent inference activity.
 
-### Step 5 — Matriz de riesgo
+### Step 5 — Risk matrix
 
-| Criterio | Alto | Medio | Bajo |
+| Criterion | High | Medium | Low |
 |---|---|---|---|
-| Auth mode | key | aad_token sin CA | aad_token + CA |
-| Managed Identity | Sin asignar | System-assigned | User-assigned específica |
-| Acceso a datos | Storage/KeyVault | Solo modelo | Sin acceso externo |
+| Auth mode | key | aad_token without CA | aad_token + CA |
+| Managed Identity | Not assigned | System-assigned | User-assigned, specific |
+| Data access | Storage/KeyVault | Model only | No external access |
 
 ## Verification
 
-- [ ] Lista completa de proyectos Foundry en la suscripción
-- [ ] Todos los endpoints tienen auth_mode documentado
-- [ ] Managed identity status por endpoint
-- [ ] Endpoints con `auth_mode: key` marcados para remediación
+- [ ] Complete list of Foundry projects in the subscription
+- [ ] Every endpoint has a documented auth_mode
+- [ ] Managed identity status per endpoint
+- [ ] Endpoints with `auth_mode: key` flagged for remediation
 
 ## Implementation notes
 
