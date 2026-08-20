@@ -48,7 +48,7 @@ At the end of this module, you will be able to execute the five attack technique
 
 6. **Indirect prompt injection via SharePoint corpus (XPIA):** When an attacker plants malicious instructions in a SharePoint document that an agent indexes, every subsequent user who asks that agent a question becomes a potential victim — the attack is persistent across sessions and users until the document is removed. Microsoft refers to this as cross-domain prompt injection (XPIA). Copilot Studio has built-in XPIA detection, but its effectiveness depends on whether the instruction is in the indexed content or the user prompt. P04 queries detect the access pattern (unlabeled document accessed by an agent), not the malicious content itself. The gap is content inspection, not telemetry.
 
-7. **Herramientas de red team autonomas: el problema del doble uso:** Los seis ataques de este modulo se ejecutan de forma manual. La evolucion natural es automatizarlos con un agente que ejecute la cadena completa, y esos sistemas ya existen: en pruebas comparativas publicadas, un sistema autonomo de pentesting igualo el desempeno de un pentester principal con mas de veinte anos de experiencia en un conjunto de aproximadamente cien retos, completando la tarea en 28 minutos frente a las 40 horas del operador humano. La economia es incontestable y la adopcion sera rapida. Dos consideraciones que no son opcionales antes de adoptar una. **Primera, el perfil operativo:** un agente de pentesting autonomo es funcionalmente identico a un atacante autonomo, y tendra acceso extendido a la red que esta evaluando. Si el sistema no es fiable, no esta alineado, o su comportamiento no esta acotado por diseno, el ejercicio de seguridad se convierte en el incidente. **Segunda, la proliferacion:** Cobalt Strike es una herramienta legitima de pentesting cuyas versiones pirateadas son hoy instrumento estandar del crimen organizado; la misma trayectoria aplica a las herramientas de red team con IA, y sus desarrolladores deberian implementar controles KYC por la misma razon. Requisitos minimos antes de desplegar una en su organizacion: autorizacion escrita con alcance explicito (rangos de red, sistemas incluidos y excluidos, ventana temporal), kill switch probado con RTO medido (Track B Modulo 02, punto 10), y registro completo de acciones con retencion equivalente a la de un incidente. Referencia: informe HACCA (2026), "Automated Red Teaming and Pentesting".
+7. **Autonomous red team tooling — the dual-use problem:** The six attacks in this module are executed manually. The natural evolution is to automate them with an agent that runs the full chain, and those systems already exist: in published benchmarks, an autonomous pentesting system matched the performance of a principal pentester with more than twenty years of experience across roughly a hundred challenges, completing the task in 28 minutes against the human operator's 40 hours. The economics are uncontestable and adoption will be fast. Two considerations are not optional before adopting one. **First, the operational profile:** an autonomous pentesting agent is functionally identical to an autonomous attacker, and it will have extended access to the network it is assessing. If the system is not reliable, not aligned, or its behavior is not bounded by design, the security exercise becomes the incident. **Second, proliferation:** Cobalt Strike is a legitimate pentesting tool whose pirated versions are today a standard instrument of organized crime; the same trajectory applies to AI red team tooling, and its developers should implement KYC controls for the same reason. Minimum requirements before deploying one in your organization: written authorization with explicit scope (network ranges, systems included and excluded, time window), a tested kill switch with measured RTO (Track B Module 02, point 10), and complete action logging with retention equivalent to an incident. Reference: HACCA report (2026), "Automated Red Teaming and Pentesting".
 
 ---
 
@@ -87,21 +87,21 @@ At the end of this module, you will be able to execute the five attack technique
 
 > Built-in protection blocks UPIA/XPIA execution but does not generate Sentinel incidents. Your KQL detects the *attempt* regardless of whether built-in protection blocked the *action*. Both are required: protection for containment, KQL for investigation.
 
-### Calibrar el ejercicio contra un nivel de adversario
+### Calibrating the exercise against an adversary level
 
-Los ataques de este laboratorio simulan un adversario oportunista con acceso al tenant. Para dimensionar contra que nivel de atacante esta probando su deteccion, la escala de capacidad operativa de RAND es un marco util y ampliamente citado en analisis de amenazas:
+The attacks in this lab simulate an opportunistic adversary with tenant access. To size which attacker level you are testing your detection against, RAND's operational capacity scale is a useful and widely cited frame in threat analysis:
 
-| Nivel | Perfil | Recursos por operacion |
-|-------|--------|------------------------|
-| OC1 | Aficionado | 1 persona, $1,000, dias |
-| OC2 | Oportunista profesional | 1 persona, $10,000, semanas |
-| OC3 | Sindicato de cibercrimen o amenaza interna (Conti, REvil) | 10 personas, $1M, meses |
-| OC4 | Estado-nacion estandar (aliados, Iran, Corea del Norte) | 100 personas, $10M |
-| OC5 | Estado-nacion de maxima capacidad (EE.UU., China, Rusia) | 1,000 personas, $1B |
+| Level | Profile | Resources per operation |
+|-------|---------|-------------------------|
+| OC1 | Amateur | 1 person, $1,000, days |
+| OC2 | Professional opportunist | 1 person, $10,000, weeks |
+| OC3 | Cybercrime syndicate or insider threat (Conti, REvil) | 10 people, $1M, months |
+| OC4 | Standard nation-state (allies, Iran, North Korea) | 100 people, $10M |
+| OC5 | Top-capability nation-state (US, China, Russia) | 1,000 people, $1B |
 
-Los ataques 1 a 5 de este modulo se situan en OC1-OC2: no requieren zero-days, ni infraestructura dedicada, ni persistencia de semanas. El ataque 6 (cadena JadePuffer) es el primero que se aproxima a OC3, porque exige persistencia, adaptacion ante fallo y ejecucion multi-etapa coordinada. La proyeccion de la literatura de politica publica sobre agentes ciber altamente autonomos usa precisamente OC3 como umbral de definicion: capacidad equivalente a diez operadores experimentados durante varios meses, ejecutada sin supervision humana continua. Ese umbral se elige porque es donde las operaciones dejan de ser oportunistas y pasan a ser campanas estrategicas con dano significativo, y donde la defensa se convierte en prioridad de seguridad nacional.
+Attacks 1 through 5 in this module sit at OC1–OC2: they require no zero-days, no dedicated infrastructure, and no weeks of persistence. Attack 6 (the JadePuffer chain) is the first to approach OC3, because it demands persistence, adaptation on failure, and coordinated multi-stage execution. Public policy projections on highly autonomous cyber-capable agents use OC3 precisely as the definitional threshold: capability equivalent to ten experienced operators over several months, executed without continuous human supervision. That threshold is chosen because it is where operations stop being opportunistic and become strategic campaigns with significant damage, and where defense becomes a national security priority.
 
-**Consecuencia practica para su SOC:** las reglas calibradas contra OC1-OC2 (umbrales de volumen, firmas conocidas, listas de IOC) no trasladan a un adversario agentico de nivel OC3. Ese es exactamente el gap que los puntos 11 y 12 del Modulo 05 de Track B intentan cerrar con firmas de secuencia y honeypots de agente, en lugar de firmas de artefacto.
+**Practical consequence for your SOC:** rules calibrated against OC1–OC2 (volume thresholds, known signatures, IOC lists) do not transfer to an agentic adversary at OC3. That is exactly the gap points 11 and 12 of Track B Module 05 attempt to close, using sequence signatures and agent honeypots rather than artifact signatures.
 
 ---
 
