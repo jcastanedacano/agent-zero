@@ -19,6 +19,8 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fagent-zero%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
+**What this button gives you:** a Log Analytics workspace, Microsoft Sentinel enabled on it, 1 watchlist, and 3 analytics rules aligned with the KQL Library (unowned agent, jailbreak attempt, bulk data retrieval via agent). **What it does not give you:** data connectors or demo data — connect Microsoft 365 / Defender XDR / Purview yourself so the rules have telemetry to evaluate. See [`/ARM-Templates/README.md`](./ARM-Templates/README.md) for the full breakdown.
+
 <details>
 <summary><b>Full scope — every framework, control, and threat vector covered</b></summary>
 
