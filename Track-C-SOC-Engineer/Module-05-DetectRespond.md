@@ -57,6 +57,14 @@ This dual role is why MCP server native integration in Sentinel matters: it allo
 
 If the same alert fires for the same agent 3+ times with no remediation action in the incident record, that is a **structural false negative** — your detection is working but your enforcement is not. Query `SecurityIncident` to find these patterns (Step 5 in this module).
 
+### Defender's native agent detections (compare before building custom rules)
+
+Microsoft Defender detects threats to agents managed through Agent 365 (Preview, July 2026): jailbreak attempts, indirect prompt injection (XPIA), malicious content propagation, secret and credential leakage, evasion techniques, LLM reconnaissance, and suspicious user or IP access, as near-real-time alerts and incidents. Real-time protection for Agent 365 tooling servers is generally available and can allow or block tool invocations to Work IQ MCP and customer MCP tools. The telemetry is in `CloudAppEvents` (Agent 365 observability data), `AlertInfo`, `AlertEvidence`, `AgentsInfo`, and `BehaviorInfo` / `BehaviorEntities`.
+
+Prerequisites: onboard the tenant to Agent 365, connect the Microsoft 365 connector with the components Microsoft Entra ID Management events and Microsoft 365 activities, and make sure the agent emits observability data (Copilot Studio, Foundry and Agent Builder agents do by default; Foundry only once published). Copilot Studio real-time protection also needs a Power Platform administrator. Treat the custom rules in this module as the layer for what the native detections do not cover, and measure the overlap before keeping both.
+
+> **Not verified:** Learn does not list the `ActionType` values that Agent 365 observability uses in `CloudAppEvents`. After onboarding, list them with `CloudAppEvents | summarize count() by ActionType` before building rules on them. On the validated tenant (Oct 2026) there were no such events, because it is not onboarded to Agent 365 observability.
+
 ---
 
 ## Lab

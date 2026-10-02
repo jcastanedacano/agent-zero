@@ -76,6 +76,7 @@ Complete one section per module during the Track C workshop. Each section maps t
 **Current mitigation options:**
 - Conditional Access policy targeting Agent Builder app ID
 - Alert rule on `AuditLogs` for `AgentPublished` where `AgentSource == "AgentBuilder"` (not verified on a live tenant: confirm the event name first; see Module 02, Step 5)
+- Review agent submissions in the Microsoft 365 admin center (Agent Store requests); sharing an agent is not covered by that review
 - Manual review process (document owner and responsible)
 
 ### Analytics Rules Deployed

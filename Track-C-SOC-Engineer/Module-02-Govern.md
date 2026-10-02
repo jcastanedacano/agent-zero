@@ -143,6 +143,8 @@ AgentsInfo
 
 > **Not verified on a live tenant (Oct 2026).** No `AuditLogs` operation containing "agent", "bot", "copilot" or "publish" appeared in 90 days, so `AgentPublished` is not confirmed to be emitted. Microsoft documents Copilot Studio publish activity in the Purview audit log (for example `BotUpdateOperation-BotPublish`, `BotCreate`, `BotUpdateOperation-BotShare`), not in Entra `AuditLogs`. Confirm the event source and name in your tenant before treating this as a detection.
 
+> **Two paths (Microsoft Learn, July 2026).** An Agent Builder agent reaches other users by sharing, which has no admin review and applies updates at once, or by submission to the organization catalog (Agent Store), which an admin reviews and approves in the Microsoft 365 admin center. Sharing limits set by an admin do not restrict who can add the Agent Store version. The gap in this step is the sharing path.
+
 ```kql
 AuditLogs
 | where TimeGenerated > ago(30d)

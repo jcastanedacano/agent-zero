@@ -18,7 +18,7 @@ By the end of this module, participants will be able to evaluate the governance 
 
 **Core content (points the facilitator must cover):**
 
-1. **The absent owner problem:** When an agent has no assigned technical owner, no team is accountable for its permissions, behavior, or decommission. In M365 E5 environments, the most common vector is Agent Builder: any licensed user can publish an agent that enters production without approval.
+1. **The absent owner problem:** When an agent has no assigned technical owner, no team is accountable for its permissions, behavior, or decommission. In M365 E5 environments, the most common vector is Agent Builder: any licensed user can share an agent that enters production without admin review; only agents submitted to the organization catalog are approved by an admin.
 
 2. **Identity graph drift:** Agents accumulate permissions over time without review. An agent that starts with `Sites.Read.All` can end up with `Mail.ReadWrite` after several integrations. Without a permission review process, the agent's identity graph diverges from what was originally approved.
 

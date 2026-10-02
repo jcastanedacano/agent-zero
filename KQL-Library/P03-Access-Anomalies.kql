@@ -434,6 +434,10 @@ AuditLogs
 //      happened even when the alert feed goes quiet.
 // Reference: Microsoft Learn, "Protect AI agents in real time using
 //      Microsoft Defender" and "BehaviorInfo (Preview)" table reference.
+// Caveat (Microsoft Learn, Oct 2026): block events from Microsoft Prompt Shields for Foundry and for Microsoft
+//      Copilot Agent Builder are recorded as behaviors; "this isn't yet supported for agents built with Microsoft
+//      Copilot Studio". The DataSources and Categories filters below are not verified: on the validated tenant
+//      BehaviorInfo had 2 rows in 30 days, from "Microsoft Defender XDR", none from agent real-time protection.
 // -----------------------------------------------------------------------------
 BehaviorInfo
 | where Timestamp > ago(7d)
@@ -469,7 +473,11 @@ BehaviorInfo
 // Coverage limit: the blueprint PRINCIPAL (the blueprint's service principal, where
 //      "Consent to application" and "Add app role assignment" were logged) did NOT
 //      match either AgentsInfo column, so consent and app-role changes there are not
-//      caught by this join. Agents with both IDs empty in AgentsInfo are not covered.
+//      caught by this join. Agents with both IDs empty in AgentsInfo are not covered, which includes Copilot
+//      Studio agents created before May 2026 that use an app registration.
+// Deletions are not in this query. Deleting a blueprint or its principal cascades to the child agent identities
+//      as "Delete service principal" initiated by the application "Delete Agent Identities Task" (no app id), hours
+//      or days later (Microsoft Learn). Exclude that actor from any detection that watches deletions.
 // Actor types seen: "user" (a person), "application" (for example a Graph PowerShell
 //      app adding a credential), and Microsoft-internal provisioning ("Microsoft
 //      Azure AD Internal - Jit Provisioning" created the first-party Copilot Studio

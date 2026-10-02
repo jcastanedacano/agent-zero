@@ -15,6 +15,8 @@
 //      NoEntraIdentity: neither EntraAgentID nor EntraBlueprintID -> identity laundering risk
 //      BlueprintOnly:   a blueprint exists but no agent identity in this tenant -> confirm how it authenticates
 //      (agents with an EntraAgentID are excluded; they have a dedicated identity)
+//      NoEntraIdentity also covers Copilot Studio agents created before May 2026 (an app registration, not an
+//      agent identity) and Agent Builder agents (no identity properties): confirm before calling it laundering.
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
@@ -34,6 +36,9 @@ AgentsInfo
 // Use: Detect agents activated via Agent Builder (M365 Copilot) bypassing
 //      Copilot Studio Requests approval flow
 // Note: Agent Builder agents appear immediately without approval events
+// Two paths (Microsoft Learn, July 2026): sharing an Agent Builder agent has no admin review and applies updates
+//      at once; submitting it to the organization catalog (Agent Store) requires admin approval in the Microsoft 365
+//      admin center. The gap this query is about is the sharing path.
 // NOT VERIFIED (live tenant, Oct 2026): no AuditLogs OperationName containing "agent", "bot",
 //      "copilot" or "publish" exists over 90 days, so "AgentPublished" is not confirmed to be emitted.
 //      Microsoft documents Copilot Studio publish activity in the Purview audit log (for example

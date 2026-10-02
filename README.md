@@ -115,7 +115,7 @@ flowchart TD
 
 ### Track B — M365 E5 demo tenant
 - Microsoft 365 E5 trial or CDX demo tenant
-- **Agent 365 / Microsoft 365 Copilot license** — required for `AgentsInfo` table and agent registry (Modules 01–02). Included in M365 Copilot SKU. Allow 2–4 hours after assignment before lab day.
+- **Microsoft Agent 365 onboarded in the tenant**, plus the **Microsoft 365 connector in Defender** (components *Microsoft Entra ID Management events* and *Microsoft 365 activities*): Defender's AI agent inventory (`AgentsInfo`), posture risk and threat detection depend on them (Modules 01–02). Agent 365 is included with Microsoft 365 E7 and is an add-on for E5, A5 and Business Premium. The registry inventory and basic governance actions come with Microsoft 365 Enterprise plans; policy templates, observability, tool access control (including MCP servers), the registry Graph API and access packages need E7 or Agent 365 ([service description](https://learn.microsoft.com/office365/servicedescriptions/microsoft-agent-365/microsoft-agent-365)). Setup: Defender portal → Settings → Security for AI → Get started. Allow 2–4 hours for data to appear (lab guidance, not re-verified in Oct 2026).
 - Azure subscription with Contributor access
 - Roles: Global Reader + Security Reader + Security Admin (demo tenant)
 - Portals: Purview compliance, Defender XDR, Entra admin center, Copilot Studio admin, Power Platform admin
@@ -291,7 +291,7 @@ KQL Library queries are validated against a live Microsoft 365 tenant using the 
 
 | File | Tables | Last Validated | Notes |
 |------|--------|---------------|-------|
-| [P01-Agent-Discovery.kql](./KQL-Library/P01-Agent-Discovery.kql) | `AgentsInfo`, `CloudAppEvents`, `OfficeActivity` | 2026-10-01 | Migrated from `AIAgentsInfo` (deprecated July 1, 2026). Display-name column is `Name`, not `AgentName` (confirmed live via `getschema` against tenant `AgentsInfo`, Sep 2026 — an earlier pass had this backwards). Q6 added: MCP server + tool count risk. Q1 and Q2 now classify identity in three states (`NoEntraIdentity`, `BlueprintOnly`, `AgentIdentity`) from `EntraAgentID` and `EntraBlueprintID`; a blueprint-only agent no longer counts as "no identity" or reaches High on its own. Q1 counts distinct agents (`dcountif`), not snapshot rows, and sorts High, Medium, Low (validated live, Oct 2026). |
+| [P01-Agent-Discovery.kql](./KQL-Library/P01-Agent-Discovery.kql) | `AgentsInfo`, `CloudAppEvents`, `OfficeActivity` | 2026-10-02 | Migrated from `AIAgentsInfo` (deprecated July 1, 2026). Display-name column is `Name`, not `AgentName` (confirmed live via `getschema` against tenant `AgentsInfo`, Sep 2026 — an earlier pass had this backwards). Q6 added: MCP server + tool count risk. Q1 and Q2 now classify identity in three states (`NoEntraIdentity`, `BlueprintOnly`, `AgentIdentity`) from `EntraAgentID` and `EntraBlueprintID`; a blueprint-only agent no longer counts as "no identity" or reaches High on its own. Q1 counts distinct agents (`dcountif`), not snapshot rows, and sorts High, Medium, Low (validated live, Oct 2026). Q3 now reads local agents from AgentsInfo (Platform LocalAgents) instead of an unverified CloudAppEvents action; validated live, 9 agents in 7 days. |
 | [P02-Governance-Gaps.kql](./KQL-Library/P02-Governance-Gaps.kql) | `AgentsInfo`, `AuditLogs`, `CloudAppEvents` | 2026-10-01 | Migrated from `AIAgentsInfo`. `Owners` (dynamic) cast to string before grouping. Q6 added: compound actions without per-step HITL events (AIRT Taxonomy v2.0 §5.4). Q1 splits identity orphans into `NoEntraIdentity` and `BlueprintOnly`. Q2, Q4 and Q6 rely on `AuditLogs` operation names (`AgentPublished`, `AgentPermissionApproved`, `AgentActionApproved`, ...) that do not exist on the validated tenant (no agent-named operation in 90 days) and are marked NOT VERIFIED; Microsoft documents Copilot Studio publish events in the Purview audit log (`BotUpdateOperation-BotPublish`). |
 | [P03-Access-Anomalies.kql](./KQL-Library/P03-Access-Anomalies.kql) | `CloudAppEvents`, `EntraIdSpnSignInEvents`, `AuditLogs`, `AgentsInfo`, `BehaviorInfo` | 2026-10-01 | Migrated from `AADSpnSignInEventsBeta` (deprecated Dec 2025). Field is `Country` (not `Location`). Q5b: capability/architecture disclosure (AIRT Taxonomy v2.0 §4.9). Q7: membership inference detection (privacy classification per Microsoft threat modeling). Q8: model inversion / training data reconstruction. Q10: `AgentsInfo` display-name column is `Name`, not `AgentName`. Q11 added: real-time protection blocks via `BehaviorInfo` (Microsoft Defender Security for AI). Q12 added: credential, owner, and sponsor changes on Agent ID objects, correlating `AuditLogs` with `AgentsInfo` by object id (validated on a live tenant, Oct 2026). Q12 deduplicates the `AgentsInfo` join (one agent can appear with and without a blueprint id); validated live, 7 rows over 90 days. Q12 is mapped to MITRE ATT&CK v19.2 (T1098.001, T1098), checked against the ATT&CK data. |
 | [P04-Exfiltration-Detection.kql](./KQL-Library/P04-Exfiltration-Detection.kql) | `CloudAppEvents`, `MicrosoftPurviewInformationProtection` | — | Sentinel tables — `TimeGenerated` correct. |
@@ -308,7 +308,7 @@ KQL Library queries are validated against a live Microsoft 365 tenant using the 
 Every domain maps to named, configurable Microsoft controls. Expand a domain to see what it deploys.
 
 <details>
-<summary><b>01 — Discover & Prioritize</b> · 5 controls</summary>
+<summary><b>01 — Discover & Prioritize</b> · 6 controls</summary>
 
 
 - Purview DSPM for AI
@@ -316,6 +316,7 @@ Every domain maps to named, configurable Microsoft controls. Expand a domain to 
 - Agent 365 Registry
 - SharePoint Advanced Management
 - CloudAppEvents (third-party agent discovery)
+- Defender AI agent posture risk (Preview, July 2026): a risk level and risk indicators per agent, reviewed in Assets > AI agents
 
 </details>
 
@@ -372,7 +373,7 @@ Every domain maps to named, configurable Microsoft controls. Expand a domain to 
 </details>
 
 <details>
-<summary><b>05 — Detect & Respond</b> · 14 controls</summary>
+<summary><b>05 — Detect & Respond</b> · 16 controls</summary>
 
 
 - Defender XDR
@@ -389,6 +390,8 @@ Every domain maps to named, configurable Microsoft controls. Expand a domain to 
 - Sequence signatures for autonomous operations (retry-with-variation, inter-action latency distribution, post-access verification)
 - Agent honeypots (decoy environment with LLM-only discrimination instruction, placement, interaction depth, canary mechanism)
 - Security agent configuration integrity (prompt/tool-set hashing + change-record correlation)
+- Defender threat detection for Agent 365 agents (Preview, July 2026): near-real-time alerts for jailbreak, indirect prompt injection, malicious content propagation, secret leakage, evasion, LLM reconnaissance and suspicious user or IP access
+- Defender real-time protection for Agent 365 tooling servers (GA, July 2026): allow or block tool invocations to Work IQ MCP and customer MCP tools
 
 </details>
 

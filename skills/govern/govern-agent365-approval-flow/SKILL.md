@@ -29,6 +29,11 @@ Agents created from **Agent Builder** (inside M365 Copilot) are activated
 immediately without generating a Request in Agent 365. This is the primary vector
 for shadow AI in organizations with M365 Copilot.
 
+Update (Microsoft Learn, July 2026): an Agent Builder agent reaches users by two paths. Sharing
+has no admin review and applies updates at once; submitting to the organization catalog (Agent Store)
+is reviewed and approved by an admin in the Microsoft 365 admin center. Sharing limits set by an admin
+apply only to the shared version. The gap this skill closes is the sharing path.
+
 The Requests flow applies to agents created directly in Copilot Studio,
 not to those from Agent Builder. Both channels require different controls.
 

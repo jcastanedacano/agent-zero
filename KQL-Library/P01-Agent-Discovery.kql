@@ -7,6 +7,10 @@
 //   AgentsInfo.Name | Owners: dynamic, can be null
 //   EntraAgentID (capital D at the end) | LifecycleStatus: Active/Blocked/Uninstalled/Deleted
 //   Both Timestamp and TimeGenerated exist in AgentsInfo
+//   AgentsInfo has 39 columns on a live tenant (Oct 2026). Populated there: ObservabilityID, Instructions, Model,
+//   DeclaredTools (platform "Other"), McpServers (local agents), ConnectedAgents (1 agent). Present but empty for
+//   every agent: Guardrails, Memory, Triggers, Skills, Endpoints, Permissions, ToolsAuthenticationType.
+//   A query on an empty column returns nothing, so none is built on them yet.
 // =============================================================================
 
 
@@ -24,6 +28,12 @@
 //       Counts are DISTINCT agents (dcountif on AgentId), not snapshot rows: AgentsInfo stores a snapshot
 //       per agent per day, and countif reported 9195 "no identity" rows for 336 agents on a validated tenant.
 //       RiskRank orders High, Medium, Low (a plain string sort gives High, Low, Medium).
+//       RiskLevel here is a triage heuristic from ownership and identity. It is not the AI agent posture risk
+//       that Microsoft Defender calculates (Preview, July 2026), which is reviewed in Assets > AI agents.
+//       NoEntraIdentity means AgentsInfo records neither an agent identity nor a blueprint. It does not always mean
+//       "no identity in Entra": Copilot Studio agents created before May 2026 use an app registration, every new
+//       Copilot Studio agent now gets an Entra Agent ID, and Agent Builder agents have no identity properties
+//       (Microsoft Learn, 2026). On the validated tenant, 1 of 3 Copilot Studio agents had an EntraAgentID.
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
@@ -84,19 +94,24 @@ AgentsInfo
 
 // -----------------------------------------------------------------------------
 // Q3: Local AI Agents on Endpoints
-// Use: Detect agents invisible to cloud inventory (Claude Code, MCP servers, etc.)
-// Note: Requires MDE endpoint connector active
+// Use: Detect local AI agents (coding agents, desktop assistants, IDE extensions, local MCP clients) that cloud inventory does not see
+// Source: AgentsInfo with Platform == "LocalAgents". Microsoft Defender discovers supported local agents on
+//      Windows endpoints and lists them in the AI agent inventory and in advanced hunting (Microsoft Learn,
+//      June 2026). Validated live (Oct 2026): 9 local agents in 7 days (Claude Code, Claude Desktop, Codex CLI,
+//      GitHub Copilot CLI, IDE extensions), one of them with 14 MCP servers declared.
+// Prerequisites: Defender for Endpoint in active mode, and local agents onboarded separately from cloud agents
+//      through AI agent runtime protection in Defender for Endpoint.
+// Replaces an earlier CloudAppEvents query (ActionType "AgentProcessDetected") that was never confirmed on a live tenant.
+// Note: the same product can appear more than once (one AgentId per installation or profile). McpServers holds
+//      one JSON string per server (name, type, endpoint): review the endpoints, they are third-party services.
 // -----------------------------------------------------------------------------
-CloudAppEvents
+AgentsInfo
 | where Timestamp > ago(7d)
-| where ActionType == "AgentProcessDetected"
-    or ApplicationId has_any ("mcp-server", "claude-code", "openai-api-local")
-| summarize
-    LastActivity = max(Timestamp),
-    ActivityCount = count()
-    by DeviceName, AccountDisplayName, ApplicationId, IPAddress
-| sort by ActivityCount desc
-| project DeviceName, AccountDisplayName, ApplicationId, ActivityCount, LastActivity, IPAddress
+| where Platform == "LocalAgents"
+| summarize arg_max(Timestamp, *) by AgentId
+| extend McpServerCount = iff(isnull(McpServers), 0, array_length(McpServers))
+| project Name, LifecycleStatus, PublishedStatus, McpServerCount, McpServers, CreatedDateTime, LastSeen = Timestamp
+| sort by McpServerCount desc, Name asc
 
 
 // -----------------------------------------------------------------------------

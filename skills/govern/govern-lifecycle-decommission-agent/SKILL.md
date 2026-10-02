@@ -105,16 +105,29 @@ Record in the log:
 - Resources revoked
 - Executed by
 
+## Agent ID objects (blueprint, agent identities, agent users)
+
+For agents that use Microsoft Entra Agent ID the objects form a chain: blueprint (an application), blueprint principal (a service principal),
+agent identity (a service principal) and the agent's user account, paired 1:1 with an agent identity. From Microsoft Learn, *Agent identity deletion*:
+
+- Disable before deleting. Disabling a blueprint principal or its agent identities stops authentication and leaves every object in place.
+- Deleting a blueprint or its principal soft-deletes the child agent identities and agent users through an asynchronous cascade that can take hours or days.
+  If you restore the blueprint principal before the cascade runs, the children are not affected; afterwards each child has to be restored one by one.
+- Soft-deleted objects can be restored for 30 days, cannot authenticate, and keep counting toward directory quota. With app-only permissions a blueprint
+  is limited to 250 agent identities, and deleting one frees a slot only when it is permanently deleted.
+- In the audit log each cascade deletion appears as *Delete service principal*, initiated by the application "Delete Agent Identities Task" with no app ID.
+  Exclude that actor from detections that watch deletions, and do not read it as an attacker.
+
 ## Verification
 
 - [ ] Agent in Disabled state (not Deleted) for 7 days
 - [ ] OAuth consent grants revoked (GET returns an empty array)
 - [ ] App role assignments revoked
-- [ ] Service principal deleted (GET returns 404)
+- [ ] Service principal deleted (GET returns 404; restorable from the recycle bin for 30 days)
 - [ ] Governance log entry created
 
 ## Implementation notes
 
 - Do not delete production SPs during testing — use dedicated test agents to validate the decommission process
 - Verify the SP is not shared with other applications before deleting it: `GET /servicePrincipals/{id}/appRoleAssignedTo` to see all assignments
-- Graph API `DELETE /servicePrincipals/{id}` deletes the SP immediately — the process is irreversible; document state before proceeding
+- Graph API `DELETE /servicePrincipals/{id}` removes the SP at once, but Entra keeps deleted service principals and app registrations in the recycle bin and they can be restored for 30 days (Microsoft Learn); after that the deletion is permanent. Document the state before proceeding anyway

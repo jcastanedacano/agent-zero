@@ -28,7 +28,7 @@ Technical and access requirements per track. Validate these **before** distribut
 |-------------|--------|
 | Device | Laptop with browser (no local tooling required) |
 | M365 tenant | M365 E5 demo or trial tenant (CDX tenant recommended) |
-| **Agent 365 license** | Required for agent registry (Module-01) and governance controls (Module-02). Included in Microsoft 365 Copilot SKU. In CDX tenants: enable under **M365 admin center → Billing → Licenses**. Without it, `AgentsInfo` returns 0 rows and Agent 365 Registry is unavailable. |
+| **Microsoft Agent 365** | Defender's AI agent inventory (`AgentsInfo`) needs the tenant onboarded to Agent 365, plus the Microsoft 365 connector in Defender with the components *Microsoft Entra ID Management events* and *Microsoft 365 activities* (investigation and hunting). Agent 365 is included with Microsoft 365 E7 and is an add-on for E5, A5 and Business Premium; registry inventory and basic governance actions come with Microsoft 365 Enterprise plans, while policy templates, observability, tool access control and access packages need E7 or Agent 365. In CDX tenants, check **M365 admin center → Billing → Licenses**. Without onboarding, `AgentsInfo` can return 0 rows. |
 | Azure subscription | Contributor access to an Azure subscription for ARM template deployment |
 | Entra roles | Global Reader + Security Reader |
 | Tools | Browser access to: Azure Portal, Microsoft Entra admin center, Microsoft Purview compliance portal, Copilot Studio admin center |
@@ -47,7 +47,7 @@ Technical and access requirements per track. Validate these **before** distribut
 | M365 tenant | M365 E5 demo tenant (CDX tenant strongly recommended) |
 | Azure subscription | Contributor access — Sentinel workspace will be deployed via ARM template |
 | Microsoft Sentinel | Workspace deployed and connected to M365 tenant before lab day |
-| **Agent 365 license** | Required for `AgentsInfo` table and agent registry (Modules 01–02). Included in Microsoft 365 Copilot SKU. Verify in M365 admin center before lab day. |
+| **Microsoft Agent 365** | Needed for the `AgentsInfo` table and the agent registry (Modules 01–02): onboard the tenant to Agent 365 and connect the Microsoft 365 connector in Defender (*Microsoft Entra ID Management events* and *Microsoft 365 activities*). Included with Microsoft 365 E7, add-on for E5, A5 and Business Premium. Verify before lab day. |
 | Roles — Entra | Security Admin (scoped to demo tenant) |
 | Roles — Sentinel | Sentinel Contributor |
 | Roles — Defender | Security Reader minimum; Security Operator to act on findings |
@@ -68,7 +68,7 @@ MicrosoftPurviewInformationProtection | take 5
 EntraIdSpnSignInEvents | take 5              // Replaces AADSpnSignInEventsBeta (deprecated Dec 2025)
 ```
 
-If `AgentsInfo` is empty, check two things: (1) verify Agent 365 / Microsoft 365 Copilot license is assigned in M365 admin center; (2) allow 2–4 hours after license assignment for the table to become queryable. If `CloudAppEvents` is empty, deploy the ARM template — it includes pre-loaded demo data simulating agentic activity.
+If `AgentsInfo` is empty, check two things: (1) verify the tenant is onboarded to Microsoft Agent 365 and that the Microsoft 365 connector in Defender shows Connected (Settings → Security for AI → Get started); (2) allow 2–4 hours after onboarding for the table to become queryable (lab guidance, not re-verified in Oct 2026). If `CloudAppEvents` is empty, deploy the ARM template — it includes pre-loaded demo data simulating agentic activity.
 
 > **Note:** `AIAgentsInfo` was deprecated on **July 1, 2026** and has been replaced by `AgentsInfo`. If you have saved queries referencing the old table name, migrate them before running the lab.
 
