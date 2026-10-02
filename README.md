@@ -65,7 +65,6 @@ A complete framework for securing agentic AI in enterprise Microsoft environment
 **Reference**
 - [How to use these labs](#how-to-use-these-labs)
 - [Contributing](#contributing)
-- [Related projects](#related-projects)
 - [References](#references)
 
 </details>
@@ -442,18 +441,6 @@ Areas where contributions are most valuable:
 ## License
 
 MIT License. See [LICENSE](./LICENSE) for details.
-
----
-
-## Related Projects
-
-| Repository | What it does | How it differs from this project |
-|------------|-------------|----------------------------------|
-| [microsoft/Data-and-Agent-Governance-and-Security-Accelerator](https://github.com/microsoft/Data-and-Agent-Governance-and-Security-Accelerator) | Automates Purview DSPM for AI onboarding, DLP, sensitivity labels, and audit logging via `azd up` | Automation accelerator for deployment — not a learning framework. Use it after you understand what you're deploying. |
-| [microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) | Policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers OWASP Agentic Top 10. | Framework-agnostic governance SDK (Python, any LLM). Complements this project's Microsoft-native focus. |
-| [microsoft/agentic-ai-lab](https://github.com/microsoft/agentic-ai-lab) | Azure AI Foundry & Agents development workshop — RAG, MCP, red teaming, observability | Developer-focused lab for building agents, not securing them in enterprise environments. |
-| [Cloud-Architekt/AzureAD-Attack-Defense](https://github.com/Cloud-Architekt/AzureAD-Attack-Defense) | Entra ID Attack & Defense Playbook: attack scenarios, detections, and mitigations for Microsoft Entra ID. Its Agent Identities chapter (announced September 2026) covers a three-phase agent attack lifecycle, "Living off the Agent's Tools", and the Agent ID object model. | Attacker-side reference for the identity plane. This project uses it in Track C Module 06 (point 8) and keeps its own detections and multi-track structure. |
-| [Azure/Azure-Sentinel Training Lab](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Training/Azure-Sentinel-Training-Lab) | Single-track Sentinel hands-on lab with pre-loaded data via ARM template | Sentinel product training for one audience. This project adds multi-track structure and an agentic security domain layer on top. |
 
 ---
 
