@@ -3,8 +3,8 @@
 **Practical security workshops for AI agents on the Microsoft stack.**
 
 [![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
-[![Modules](https://img.shields.io/badge/Modules-19-0078D4)](#choose-your-track)
-[![KQL Queries](https://img.shields.io/badge/KQL_Queries-45%2B-5E2750)](./KQL-Library/README.md)
+[![Modules](https://img.shields.io/badge/Modules-18-0078D4)](#choose-your-track)
+[![KQL Library](https://img.shields.io/badge/KQL_Library-38_queries-5E2750)](./KQL-Library/README.md)
 [![Agent Skills](https://img.shields.io/badge/Agent_Skills-30-2D7D9A)](./skills/)
 [![Frameworks](https://img.shields.io/badge/Frameworks-10%2B_mapped-107C10)](#framework-coverage)
 [![Tracks](https://img.shields.io/badge/Tracks-3-FF8C00)](#choose-your-track)
@@ -13,7 +13,7 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks. 
 
 |  |  |
 |---|---|
-| **19 modules** across Executive, Architect, and SOC Engineer tracks | **45+ KQL queries** validated against a live M365 tenant (June 2026) |
+| **18 modules** across Executive, Architect, and SOC Engineer tracks | **38 KQL library queries** plus 20 query files bundled with skills, with per-file validation status |
 | **30 agent skills** in agentskills.io format | **ARM template** deploys a preconfigured Sentinel workspace in one click |
 | **10+ frameworks mapped** to concrete Microsoft controls | **Facilitator kit** with prerequisites, checklists, and impact signals |
 
@@ -21,12 +21,18 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks. 
 
 **What this button gives you:** a Log Analytics workspace, Microsoft Sentinel enabled on it, 1 watchlist, and 3 analytics rules aligned with the KQL Library (unowned agent, jailbreak attempt, bulk data retrieval via agent). **What it does not give you:** data connectors or demo data — connect Microsoft 365 / Defender XDR / Purview yourself so the rules have telemetry to evaluate. See [`/ARM-Templates/README.md`](./ARM-Templates/README.md) for the full breakdown.
 
+**Live series:** Agent Zero is also taught as a six-session live series with [Microsoft User Group Perú](https://www.youtube.com/@MUGdelPeru), every Friday from October 9, 2026 at 7:00 pm Lima time (GMT-5), free on YouTube. Each session includes a live lab.
+
+**Companion site:** [Agentic Red-Team Map](https://agentic-redteam-map-78641.azurewebsites.net/) for the workshop.
+
+**Author:** [Jorge Castañeda](https://github.com/jcastanedacano), Microsoft MVP (Security) · [LinkedIn](https://www.linkedin.com/in/jcastanedacano) · [jcastanedacano.com](https://www.jcastanedacano.com)
+
 <details>
 <summary><b>Full scope — every framework, control, and threat vector covered</b></summary>
 
 <br>
 
-A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Top 10 for Agentic Applications (2026, ASI01–ASI10), the OWASP Top 10 for LLM Applications (2026, LLM01–LLM10), the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
+A complete framework for securing agentic AI in enterprise Microsoft environments: 18 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 38 production KQL queries in the KQL Library, plus 20 query files bundled with skills (validation status tracked per file), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Top 10 for Agentic Applications (2026, ASI01–ASI10), the OWASP Top 10 for LLM Applications (2026, LLM01–LLM10), the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
 
 </details>
 
@@ -41,9 +47,9 @@ A complete framework for securing agentic AI in enterprise Microsoft environment
 
 **Start here**
 - [Choose your track](#choose-your-track)
-- [The seven domains](#the-seven-domains)
-- [Quick start](#quick-start)
 - [Prerequisites](#prerequisites)
+- [Quick start](#quick-start)
+- [The seven domains](#the-seven-domains)
 
 **What's inside**
 - [Repository structure](#repository-structure)
@@ -101,6 +107,53 @@ flowchart TD
 
 ---
 
+## Prerequisites
+
+### Track A — No technical environment required
+- Security or technology oversight role
+- Familiarity with your organization's current AI tooling (helpful, not required)
+
+### Track B — M365 E5 demo tenant
+- Microsoft 365 E5 trial or CDX demo tenant
+- **Agent 365 / Microsoft 365 Copilot license** — required for `AgentsInfo` table and agent registry (Modules 01–02). Included in M365 Copilot SKU. Allow 2–4 hours after assignment before lab day.
+- Azure subscription with Contributor access
+- Roles: Global Reader + Security Reader + Security Admin (demo tenant)
+- Portals: Purview compliance, Defender XDR, Entra admin center, Copilot Studio admin, Power Platform admin
+
+### Track C — M365 E5 + Sentinel workspace
+- All Track B requirements (including Agent 365 license)
+- Sentinel workspace deployed (use ARM template above)
+- Roles: Security Admin + Sentinel Contributor + Compliance Administrator
+- Portals: All Track B portals + Microsoft Sentinel + Logic Apps
+
+→ Full details: [`/Facilitator-Kit/Prerequisites.md`](./Facilitator-Kit/Prerequisites.md)
+
+---
+
+## Quick Start
+
+### Deploy the lab environment (Track B and C)
+
+```bash
+# Option 1 — Deploy to Azure button (above)
+# Option 2 — Azure CLI
+az deployment group create \
+  --resource-group <your-rg> \
+  --template-uri https://raw.githubusercontent.com/jcastanedacano/agent-zero/main/ARM-Templates/azuredeploy.json \
+  --parameters workspaceName=agentic-security-lab
+```
+
+The ARM template deploys: Log Analytics workspace + Microsoft Sentinel + 3 pre-configured analytics rules (jailbreak detection, new agent without Entra identity or owner, data exfiltration) + agent watchlist.
+
+### Start the workshop
+
+1. **Facilitators:** Read [`/Facilitator-Kit/Prerequisites.md`](./Facilitator-Kit/Prerequisites.md) and run through [`/Facilitator-Kit/Lab-Environment-Checklist.md`](./Facilitator-Kit/Lab-Environment-Checklist.md) 24 hours before the session.
+2. **Track A:** Start at [`Track-A-Executive/Module-01-Discover.md`](./Track-A-Executive/Module-01-Discover.md)
+3. **Track B:** Deploy ARM template → start at [`Track-B-Architect/Module-01-Discover.md`](./Track-B-Architect/Module-01-Discover.md)
+4. **Track C:** Deploy ARM template → start at [`Track-C-SOC-Engineer/Module-01-Discover.md`](./Track-C-SOC-Engineer/Module-01-Discover.md)
+
+---
+
 ## The seven domains
 
 Every track walks the same seven domains. Each one answers a question the previous one exposes.
@@ -154,7 +207,7 @@ flowchart LR
 
 ```
 agent-zero/
-├── Track-A-Executive/               ← 4h executive track (decision exercises, no lab access)
+├── Track-A-Executive/               ← executive track (decision exercises, no lab access)
 │   ├── README.md
 │   ├── Module-01-Discover.md
 │   ├── Module-02-Govern.md
@@ -162,29 +215,29 @@ agent-zero/
 │   ├── Module-04-ProtectData.md
 │   ├── Module-05-DetectRespond.md
 │   └── Templates/
-│       └── Board-AI-Security-Brief-Template.md  ← NEW: board brief template for CISO/executive
-├── Track-B-Architect/               ← 10.5h architect track (hands-on demo tenant labs)
+│       └── Board-AI-Security-Brief-Template.md  ← board brief template for CISO/executive
+├── Track-B-Architect/               ← architect track (hands-on demo tenant labs)
 │   ├── README.md
 │   ├── Module-01-Discover.md
 │   ├── Module-02-Govern.md
 │   ├── Module-03-SecureAccess.md
 │   ├── Module-04-ProtectData.md
 │   ├── Module-05-DetectRespond.md
-│   ├── Module-06-RegulatoryFrameworks.md        ← NEW: EU AI Act + NIST AI RMF + ISO 42001
-│   ├── Module-07-VendorRisk.md                  ← NEW: third-party AI and MCP server risk
+│   ├── Module-06-RegulatoryFrameworks.md        ← EU AI Act + NIST AI RMF + ISO 42001
+│   ├── Module-07-VendorRisk.md                  ← third-party AI and MCP server risk
 │   └── Templates/
 │       └── Gap-Assessment-Template.md
-├── Track-C-SOC-Engineer/            ← 9.5h SOC engineer track (KQL, Sentinel, Purview, Entra CA)
+├── Track-C-SOC-Engineer/            ← SOC engineer track (KQL, Sentinel, Purview, Entra CA)
 │   ├── README.md
 │   ├── Module-01-Discover.md
 │   ├── Module-02-Govern.md
 │   ├── Module-03-SecureAccess.md
 │   ├── Module-04-ProtectData.md
 │   ├── Module-05-DetectRespond.md
-│   ├── Module-06-RedTeamPerspective.md          ← NEW: attacker perspective, 6 attacks
+│   ├── Module-06-RedTeamPerspective.md          ← attacker perspective, 6 attacks
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
-├── KQL-Library/                     ← 40+ production-ready queries for Sentinel + Defender XDR
+├── KQL-Library/                     ← 38 production-ready queries for Sentinel + Defender XDR
 │   ├── README.md
 │   ├── P01-Agent-Discovery.kql
 │   ├── P02-Governance-Gaps.kql
@@ -214,30 +267,6 @@ agent-zero/
 
 ---
 
-## Quick Start
-
-### Deploy the lab environment (Track B and C)
-
-```bash
-# Option 1 — Deploy to Azure button (above)
-# Option 2 — Azure CLI
-az deployment group create \
-  --resource-group <your-rg> \
-  --template-uri https://raw.githubusercontent.com/jcastanedacano/agent-zero/main/ARM-Templates/azuredeploy.json \
-  --parameters workspaceName=agentic-security-lab
-```
-
-The ARM template deploys: Log Analytics workspace + Microsoft Sentinel + 3 pre-configured analytics rules (jailbreak detection, new agent without Entra identity or owner, data exfiltration) + agent watchlist.
-
-### Start the workshop
-
-1. **Facilitators:** Read [`/Facilitator-Kit/Prerequisites.md`](./Facilitator-Kit/Prerequisites.md) and run through [`/Facilitator-Kit/Lab-Environment-Checklist.md`](./Facilitator-Kit/Lab-Environment-Checklist.md) 24 hours before the session.
-2. **Track A:** Start at [`Track-A-Executive/Module-01-Discover.md`](./Track-A-Executive/Module-01-Discover.md)
-3. **Track B:** Deploy ARM template → start at [`Track-B-Architect/Module-01-Discover.md`](./Track-B-Architect/Module-01-Discover.md)
-4. **Track C:** Deploy ARM template → start at [`Track-C-SOC-Engineer/Module-01-Discover.md`](./Track-C-SOC-Engineer/Module-01-Discover.md)
-
----
-
 ## Skills Library
 
 30 agent skills in [agentskills.io](https://agentskills.io) format, mapped to MITRE ATLAS (2026.09), D3FEND v1.3, NIST AI RMF, and NIST CSF 2.0.
@@ -258,7 +287,7 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 
 ## KQL Library — Schema Validation Status
 
-All queries in the KQL Library have been validated against a live Microsoft 365 tenant (June 2026) using the Microsoft Graph Security `runHuntingQuery` API.
+KQL Library queries are validated against a live Microsoft 365 tenant using the Microsoft Graph Security `runHuntingQuery` API, with the date of the last validation listed per file. P04 queries Sentinel tables and has no validation date.
 
 | File | Tables | Last Validated | Notes |
 |------|--------|---------------|-------|
@@ -271,29 +300,6 @@ All queries in the KQL Library have been validated against a live Microsoft 365 
 **Live tenant findings (June 2026):** P01-Q2 returned shadow AI agents (Mural, Matter, 1Page, Teamflect, Priority Matrix) that had been operating for 951 days without an Entra Agent ID or assigned owner — validating the shadow AI detection logic.
 
 > **Migration note:** `AIAgentsInfo` is deprecated on **July 1, 2026**. All queries in this repository already use `AgentsInfo`. If you have saved queries outside Defender XDR that reference `AIAgentsInfo`, migrate them before that date.
-
----
-
-## Prerequisites
-
-### Track A — No technical environment required
-- Security or technology oversight role
-- Familiarity with your organization's current AI tooling (helpful, not required)
-
-### Track B — M365 E5 demo tenant
-- Microsoft 365 E5 trial or CDX demo tenant
-- **Agent 365 / Microsoft 365 Copilot license** — required for `AgentsInfo` table and agent registry (Modules 01–02). Included in M365 Copilot SKU. Allow 2–4 hours after assignment before lab day.
-- Azure subscription with Contributor access
-- Roles: Global Reader + Security Reader + Security Admin (demo tenant)
-- Portals: Purview compliance, Defender XDR, Entra admin center, Copilot Studio admin, Power Platform admin
-
-### Track C — M365 E5 + Sentinel workspace
-- All Track B requirements (including Agent 365 license)
-- Sentinel workspace deployed (use ARM template above)
-- Roles: Security Admin + Sentinel Contributor + Compliance Administrator
-- Portals: All Track B portals + Microsoft Sentinel + Logic Apps
-
-→ Full details: [`/Facilitator-Kit/Prerequisites.md`](./Facilitator-Kit/Prerequisites.md)
 
 ---
 
@@ -771,11 +777,11 @@ What each domain is defending against. These are the vectors the labs actually e
 
 ## How to Use These Labs
 
-**Self-paced learner:** Pick your track, start at Module 01, work through sequentially. Each module is standalone but the narrative builds. Track B and C now extend to Module 07 and 06 respectively.
+**Self-paced learner:** Pick your track, start at Module 01, work through sequentially. Each module is standalone but the narrative builds. Track B extends to Module 07 and Track C to Module 06.
 
 **Facilitator:** Read [`/Facilitator-Kit`](./Facilitator-Kit/README.md) before running any session — environment prep checklist, per-track prerequisites, and signals that the workshop is working.
 
-**Team event:** Run all three tracks in parallel. Tracks A and B/C can share a 30-minute opening keynote on the five domains, then split into track-specific rooms.
+**Team event:** Run all three tracks in parallel. Tracks A and B/C can share a 30-minute opening keynote on the seven domains, then split into track-specific rooms.
 
 **Security operations:** Use the [skills library](./skills/) and [KQL Library](./KQL-Library/README.md) independently — each skill and query works standalone without the workshop context.
 
