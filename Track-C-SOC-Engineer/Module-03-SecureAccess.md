@@ -30,7 +30,7 @@ At the end of this module, you will be able to configure a Conditional Access po
 
 2. **Blueprint-level CA as a scaling pattern:** A CA policy per agent instance does not scale. The correct pattern targets the **agent identity blueprint** under `Assignments → Agents → All agent identities` — this automatically covers all current and future agent identities derived from the same blueprint without per-instance configuration.
 
-3. **OAuth consent drift as a silent accumulation vector:** Without consent flow restrictions, an agent can accumulate additional permissions without explicit approval. The signal: `AuditLogs` → `Add delegated permission grant` without correlation to an `AgentPermissionApproved` event.
+3. **OAuth consent drift as a silent accumulation vector:** Without consent flow restrictions, an agent can accumulate additional permissions without explicit approval. The signal: `AuditLogs` → `Add delegated permission grant` without correlation to an `AgentPermissionApproved` event. Caveat: that approval event name is not confirmed to exist on a live tenant (see Module 02, Step 6).
 
 4. **Model extraction via API — model theft through the endpoint:** An attacker with access to an Azure AI Foundry endpoint can reconstruct a proprietary model through systematic queries (input/output pairs), without direct model access. The indicator is a massive inference volume from a single identity with high prompt variety. KQL P03-Q6 detects this pattern. Control: per-identity rate limiting in Foundry + CA policy blocking unauthorized identities. Maps to OWASP LLM Top 10 2026, LLM06 — Unbounded Consumption (model extraction/theft was folded into this category in 2026).
 

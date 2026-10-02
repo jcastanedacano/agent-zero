@@ -476,6 +476,10 @@ BehaviorInfo
 //      blueprint service principal). Review "application" actors first.
 // Note: the en dash in "Update application – Certificates and secrets management"
 //      is why this uses `contains` for that operation instead of an exact match.
+// Dedup: AgentsInfo can hold the same EntraAgentID with and without an EntraBlueprintID (one agent
+//      moving from agent identity only to agent identity + blueprint), so AgentObjects is reduced to
+//      one row per Key. Without it each matching audit event was returned twice (9 rows instead of 7
+//      on the validated tenant, 90-day window).
 // Recommended: Hunting query or Analytics Rule | Frequency: 1h | Lookback: 7d
 // -----------------------------------------------------------------------------
 let AgentObjects = AgentsInfo
@@ -484,7 +488,7 @@ let AgentObjects = AgentsInfo
     | mv-expand Key = pack_array(EntraAgentID, EntraBlueprintID)
     | extend Key = tolower(tostring(Key))
     | where isnotempty(Key)
-    | project Key, AgentRecord, Platform;
+    | summarize AgentRecord = take_any(AgentRecord), Platform = take_any(Platform) by Key;
 AuditLogs
 | where TimeGenerated > ago(7d)
 | where OperationName in (

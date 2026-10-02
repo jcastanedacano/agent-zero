@@ -202,6 +202,9 @@ OfficeActivity
 5. Verify the agent is immediately available in M365 Copilot
 
 **Detection verification:**
+
+> Not verified on a live tenant: `AgentPublished` is not confirmed to exist in `AuditLogs` (see Module 02, Step 5). An empty result does not prove the agent was not published; check the event source first.
+
 ```kql
 AuditLogs
 | where TimeGenerated > ago(1h)

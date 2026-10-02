@@ -28,7 +28,7 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 1. **Agent Builder bypass as a systemic gap:** Agent Builder activates agents immediately without going through the Copilot Studio approval flow. This is a product-level design gap — not a configuration error. The compensating control is a CA policy on the Agent Builder App ID, or a Sentinel analytics rule filtering `AgentSource == "AgentBuilder"` on `AuditLogs`.
 
-2. **Identity graph drift:** Agents accumulate OAuth permissions over time without review. The signal is in `AuditLogs` under `Add delegated permission grant` without a corresponding `AgentPermissionApproved` event — that absent join is the drift indicator.
+2. **Identity graph drift:** Agents accumulate OAuth permissions over time without review. The signal is in `AuditLogs` under `Add delegated permission grant` without a corresponding `AgentPermissionApproved` event — that absent join is the drift indicator. Caveat: `AgentPermissionApproved` is not confirmed to exist (see the note in Step 6), so as written every grant appears unapproved.
 
 3. **Applicable Microsoft controls:** Entra Agent ID establishes a manageable identity per agent, separate from generic service principals. Copilot Studio governance enables the pre-publication approval flow. Foundry RBAC restricts operations in Azure AI. Power Platform DLP classifies and blocks connectors by category (Business / Non-business / Blocked).
 
@@ -141,6 +141,8 @@ AgentsInfo
 
 ### Step 5 — KQL: Detect agents published without approval
 
+> **Not verified on a live tenant (Oct 2026).** No `AuditLogs` operation containing "agent", "bot", "copilot" or "publish" appeared in 90 days, so `AgentPublished` is not confirmed to be emitted. Microsoft documents Copilot Studio publish activity in the Purview audit log (for example `BotUpdateOperation-BotPublish`, `BotCreate`, `BotUpdateOperation-BotShare`), not in Entra `AuditLogs`. Confirm the event source and name in your tenant before treating this as a detection.
+
 ```kql
 AuditLogs
 | where TimeGenerated > ago(30d)
@@ -165,6 +167,8 @@ AuditLogs
 ---
 
 ### Step 6 — KQL: Graph drift — permission grants without approval correlation
+
+> **Not verified (Oct 2026).** The grant side (`Add delegated permission grant`, `Add app role assignment to service principal`) uses real Entra operations. The approval side (`AgentPermissionApproved`) is not confirmed to exist, so as written every grant is reported as "without approval". Use this as an inventory of grants, not as proof of a missing approval.
 
 ```kql
 AuditLogs

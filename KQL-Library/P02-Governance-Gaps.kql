@@ -34,6 +34,11 @@ AgentsInfo
 // Use: Detect agents activated via Agent Builder (M365 Copilot) bypassing
 //      Copilot Studio Requests approval flow
 // Note: Agent Builder agents appear immediately without approval events
+// NOT VERIFIED (live tenant, Oct 2026): no AuditLogs OperationName containing "agent", "bot",
+//      "copilot" or "publish" exists over 90 days, so "AgentPublished" is not confirmed to be emitted.
+//      Microsoft documents Copilot Studio publish activity in the Purview audit log (for example
+//      BotUpdateOperation-BotPublish, BotCreate, BotUpdateOperation-BotShare), not in Entra AuditLogs.
+//      Treat this as a template: confirm the event source and name before relying on it.
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(30d)
@@ -78,6 +83,9 @@ AgentsInfo
 // Q4: Graph Drift Detection — Agents With Accumulating Permissions
 // Use: Identify agents whose permission scope has expanded over time
 //      without corresponding approval events
+// NOT VERIFIED (live tenant, Oct 2026): the grant side uses real Entra operations. The approval side
+//      ("AgentPermissionApproved") is not confirmed to exist, so as written EVERY grant is reported as
+//      "without approval". Use it as an inventory of grants, not as proof of a missing approval.
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(30d)
@@ -128,6 +136,10 @@ CloudAppEvents
 //      Signals missing HITL gates for compound actions — consent architecture gap
 // Reference: Microsoft AIRT Taxonomy v2.0 §5.4 | Tiered Autonomy principle
 // Recommended: Weekly scheduled query or Analytics Rule | Severity: Medium
+// NOT VERIFIED (live tenant, Oct 2026): none of the approval events (AgentActionApproved,
+//      AgentConsentGranted, AgentStepApproved, UserApprovedAgentAction) is confirmed to exist in
+//      AuditLogs, and the SessionId / AgentId fields read from CloudAppEvents RawEventData are unverified.
+//      As written, every multi-action session would be reported. Treat it as a design sketch.
 // -----------------------------------------------------------------------------
 let CompoundActionTypes = dynamic([
     "FileDownloaded", "FileCopied", "FileUploaded",

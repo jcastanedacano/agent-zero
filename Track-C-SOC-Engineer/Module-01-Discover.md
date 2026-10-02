@@ -85,9 +85,9 @@ AgentsInfo
 | summarize
     LastSeen = max(Timestamp),
     AgentCount = dcount(AgentId),
-    WithoutOwner = countif(isnull(Owners) or array_length(Owners) == 0),
-    NoEntraIdentity = countif(isempty(EntraAgentID) and isempty(EntraBlueprintID)),
-    BlueprintOnly = countif(isempty(EntraAgentID) and isnotempty(EntraBlueprintID))
+    WithoutOwner = dcountif(AgentId, isnull(Owners) or array_length(Owners) == 0),
+    NoEntraIdentity = dcountif(AgentId, isempty(EntraAgentID) and isempty(EntraBlueprintID)),
+    BlueprintOnly = dcountif(AgentId, isempty(EntraAgentID) and isnotempty(EntraBlueprintID))
     by Platform, LifecycleStatus, PublishedStatus, Name
 | extend RiskLevel = case(
     WithoutOwner > 0 and NoEntraIdentity > 0, "High",
@@ -95,14 +95,15 @@ AgentsInfo
     LifecycleStatus in ("Blocked", "Deleted"), "Medium",
     "Low"
 )
-| sort by RiskLevel asc, LastSeen desc
+| extend RiskRank = case(RiskLevel == "High", 0, RiskLevel == "Medium", 1, 2)
+| sort by RiskRank asc, LastSeen desc
 | project Name, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
           WithoutOwner, NoEntraIdentity, BlueprintOnly, AgentCount, LastSeen
 ```
 
 **Expected output:** Agent inventory grouped by platform and lifecycle status, classified by risk level based on ownership and Entra identity coverage.
 
-**Reading the identity columns:** `NoEntraIdentity` counts agents with neither `EntraAgentID` nor `EntraBlueprintID`; `BlueprintOnly` counts agents that have a blueprint but no agent identity in this tenant. They are different findings. The second is common for third-party agents (in a validated tenant they appeared under platform `Other`) and means *confirm how the agent authenticates*, not *identity laundering*. An agent with an `EntraAgentID` has a dedicated identity whether or not a blueprint is recorded. `High` requires no owner **and** no Entra identity at all.
+**Reading the identity columns:** `NoEntraIdentity` counts agents with neither `EntraAgentID` nor `EntraBlueprintID`; `BlueprintOnly` counts agents that have a blueprint but no agent identity in this tenant. They are different findings. The second is common for third-party agents (in a validated tenant they appeared under platform `Other`) and means *confirm how the agent authenticates*, not *identity laundering*. An agent with an `EntraAgentID` has a dedicated identity whether or not a blueprint is recorded. `High` requires no owner **and** no Entra identity at all. Counts are distinct agents (`dcountif` on `AgentId`), not snapshot rows: `AgentsInfo` keeps a snapshot per agent per day.
 
 **Document in your playbook:** How many agents appear as High risk? Which platforms have the highest count of agents without an owner? How many are `BlueprintOnly`, and who is accountable for each vendor?
 
