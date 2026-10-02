@@ -26,7 +26,7 @@ effort_hours: 3
 ## Prerequisites
 
 - Azure CLI authenticated to subscription `{subscription-id}`
-- Reader role at subscription or {resource-group} resource group scope
+- Reader role at subscription or resource group scope
 - Az CLI: `az extension add --name ml` (Azure AI Foundry CLI extension)
 
 ## Workflow
