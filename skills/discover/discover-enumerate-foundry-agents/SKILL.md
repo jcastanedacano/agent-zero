@@ -8,7 +8,7 @@ description: >-
   endpoints), correlating with Entra ID to detect identities with no
   assigned managed identity or with excessive access to Azure resources.
 tags: [discover, foundry, azure-ai, agent-inventory, managed-identity]
-atlas_techniques: [AML.T0040, AML.T0056]
+atlas_techniques: [AML.T0040, AML.T0084]
 d3fend_techniques: [D3-AM, D3-UAP]
 nist_ai_rmf: [MAP-1.1, MAP-2.2]
 nist_csf: [ID.AM-01, ID.AM-02]

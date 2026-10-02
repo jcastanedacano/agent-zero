@@ -9,7 +9,7 @@ description: >-
   forensic evidence, and notification to the security team, orchestrated
   via a Logic App linked to Sentinel analytics rules.
 tags: [detect, respond, sentinel, playbook, logic-app, containment, incident-response, aisoc]
-atlas_techniques: [AML.T0051, AML.T0048, AML.T0046]
+atlas_techniques: [AML.T0051, AML.T0086, AML.T0091.000]
 d3fend_techniques: [D3-OTA, D3-RTA, D3-ANET]
 nist_ai_rmf: [MANAGE-3.2, MANAGE-4.1]
 nist_csf: [RS.RP-01, RS.CO-02, RS.MI-01]
@@ -58,7 +58,7 @@ az logic workflow create \
 ### Step 2 — Trigger: Sentinel incident creation
 
 The trigger is `When a Microsoft Sentinel incident is created or updated`
-filtered on `Tactics contains AML.T0051 OR AML.T0046` or on the rule name.
+filtered on `Tactics contains AML.T0051 OR AML.T0091.000` or on the rule name.
 
 ### Step 3 — Action 1: Enrich the incident with agent data
 

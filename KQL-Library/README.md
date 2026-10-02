@@ -10,11 +10,11 @@ Each file maps to one of the five security domains. Queries are designed to run 
 
 | File | Domain | Tables | Description |
 |------|--------|--------|-------------|
-| [P01-Agent-Discovery.kql](./P01-Agent-Discovery.kql) | Discover & Prioritize | `AIAgentsInfo`, `CloudAppEvents`, `OfficeActivity` | Inventory agents by type and management status |
-| [P02-Governance-Gaps.kql](./P02-Governance-Gaps.kql) | Govern & Control | `AIAgentsInfo`, `AuditLogs` | Detect agents without Entra Agent ID or technical owner |
-| [P03-Access-Anomalies.kql](./P03-Access-Anomalies.kql) | Secure Access | `CloudAppEvents`, `AADServicePrincipalSignInLogs` | Identify over-permissioned agents and OAuth consent drift |
+| [P01-Agent-Discovery.kql](./P01-Agent-Discovery.kql) | Discover & Prioritize | `AgentsInfo`, `CloudAppEvents`, `OfficeActivity` | Inventory agents by type and management status |
+| [P02-Governance-Gaps.kql](./P02-Governance-Gaps.kql) | Govern & Control | `AgentsInfo`, `AuditLogs` | Detect agents without Entra Agent ID or technical owner |
+| [P03-Access-Anomalies.kql](./P03-Access-Anomalies.kql) | Secure Access | `CloudAppEvents`, `EntraIdSpnSignInEvents`, `AuditLogs`, `AgentsInfo`, `BehaviorInfo` | Identify over-permissioned agents, OAuth consent drift, real-time protection blocks, and Agent ID object changes |
 | [P04-Exfiltration-Detection.kql](./P04-Exfiltration-Detection.kql) | Protect Data | `CloudAppEvents`, `MicrosoftPurviewInformationProtection` | Detect data exfiltration via agent prompts and connectors |
-| [P05-Jailbreak-Detection.kql](./P05-Jailbreak-Detection.kql) | Detect & Respond | `CloudAppEvents`, `MicrosoftPurviewInformationProtection` | Flag jailbreak attempts and behavioral anomalies |
+| [P05-Jailbreak-Detection.kql](./P05-Jailbreak-Detection.kql) | Detect & Respond | `LLMActivity`, `CloudAppEvents`, `MicrosoftPurviewInformationProtection`, `AuditLogs` | Flag jailbreak attempts and behavioral anomalies |
 
 ---
 

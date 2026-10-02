@@ -7,37 +7,31 @@
 
 
 // -----------------------------------------------------------------------------
-// Q1: Jailbreak Attempts — System Instruction Override Patterns
-// Use: Near-real-time detection of attempts to override agent system instructions
+// Q1: Jailbreak Attempts — Platform-Detected Signal
+// Use: Near-real-time detection of jailbreak attempts against Copilot/agent
+//      interactions, using the platform's own JailbreakDetected signal.
+// Note: CloudAppEvents has no "AgentInteraction" ActionType for this scenario
+//       (verified live against a production tenant, Sep 2026). Jailbreak
+//       detection lives in LLMActivity (Azure Monitor / Log Analytics), inside
+//       LLMEventData.Messages — an array, requires mv-expand. Query structure
+//       matches the official Microsoft example, confirmed current Sep 2026:
+//       learn.microsoft.com/azure/azure-monitor/reference/queries/copilotactivity
 // Recommended: Analytics Rule | Frequency: 5m | Lookback: 1h | Severity: High
 // -----------------------------------------------------------------------------
-CloudAppEvents
+LLMActivity
 | where TimeGenerated > ago(1h)
-| where Application in ("Microsoft Copilot", "Copilot Studio", "Azure AI Foundry")
-    and ActionType == "AgentInteraction"
-| extend PromptText = tostring(RawEventData["UserPrompt"])
-| extend AgentId = tostring(RawEventData["AgentId"])
-| extend JailbreakScore = toint(
-    (PromptText has "ignore previous instructions") * 3 +
-    (PromptText has "disregard your system prompt") * 3 +
-    (PromptText has "you are now a") * 2 +
-    (PromptText has "act as if you have no") * 2 +
-    (PromptText has "forget all previous") * 2 +
-    (PromptText has "new persona:") * 2 +
-    (PromptText has "DAN") * 1 +
-    (PromptText has "jailbreak") * 1 +
-    (PromptText has "override") * 1
-)
-| where JailbreakScore >= 2
+| where RecordType == "CopilotInteraction"
+| extend Messages = LLMEventData.Messages
+| mv-expand Messages
+| where tobool(Messages.JailbreakDetected) == true
 | project
     TimeGenerated,
-    AccountDisplayName,
-    AgentId,
-    JailbreakScore,
-    PromptPreview = substring(PromptText, 0, 300),
-    IPAddress,
-    Application
-| sort by JailbreakScore desc, TimeGenerated desc
+    ActorName,
+    ActorUserId,
+    AgentName,
+    MessageId = tostring(Messages.Id),
+    JailbreakDetected = tobool(Messages.JailbreakDetected)
+| sort by TimeGenerated desc
 
 
 // -----------------------------------------------------------------------------
@@ -382,7 +376,7 @@ AgentsWithDiscovery
 //      malicious instruction appear. Detection strategy: score each prompt in
 //      a session, then sum session-level scores across a short window.
 // Reference: CrowdStrike PT0200 (Algorithmic Payload Decomposition, 2025)
-//            MITRE ATLAS AML.T0051 | OWASP AG02
+//            MITRE ATLAS AML.T0051 | OWASP ASI01 (Agent Goal Hijack, 2026)
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 2h | Severity: High
 // -----------------------------------------------------------------------------
 let SessionWindow = 2h;

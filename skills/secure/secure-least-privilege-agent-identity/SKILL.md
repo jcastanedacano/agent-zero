@@ -8,7 +8,7 @@ description: >-
   necessary, removing excessive OAuth2 permission grants and unused app role
   assignments, applying the least privilege principle to non-human identities.
 tags: [secure, entra, least-privilege, service-principal, oauth, app-roles]
-atlas_techniques: [AML.T0046, AML.T0040]
+atlas_techniques: [AML.T0012, AML.T0040]
 d3fend_techniques: [D3-UAP, D3-MAN]
 nist_ai_rmf: [MANAGE-1.3, GOVERN-2.2]
 nist_csf: [PR.AA-05, PR.AC-04]

@@ -40,7 +40,7 @@ At the end of this module, you will be able to configure a Purview DLP policy fo
 
 7. **Multi-agent trust boundaries:** When a compromised agent invokes another agent, it pivots into a second blast radius with that agent's own permissions. The correct architectural design treats every agent-to-agent call as untrusted: verify explicit user authorization and limit permission inheritance between agents. Reference: Anthropic, Zero Trust for AI Agents.
 
-8. **Membership inference — privacy without visible exfiltration:** An attacker can infer whether a specific PII record was in a model's fine-tuning set by systematically querying it and analyzing response patterns, without ever extracting the data directly. The result is a privacy violation that DLP and standard Purview audit cannot see. Controls: do not fine-tune with PII without differential anonymization, restrict who can query models fine-tuned on sensitive data via Foundry RBAC, and monitor inference volume per identity (P03-Q7). OWASP Agentic AG07.
+8. **Membership inference — privacy without visible exfiltration:** An attacker can infer whether a specific PII record was in a model's fine-tuning set by systematically querying it and analyzing response patterns, without ever extracting the data directly. The result is a privacy violation that DLP and standard Purview audit cannot see. Controls: do not fine-tune with PII without differential anonymization, restrict who can query models fine-tuned on sensitive data via Foundry RBAC, and monitor inference volume per identity (P03-Q7). Maps to OWASP LLM Top 10 2026, LLM02 — Sensitive Information Disclosure (closest-fit official category; membership inference has no standalone item in the LLM or Agentic Applications Top 10).
 
 ---
 

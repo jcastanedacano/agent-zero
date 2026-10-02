@@ -3,24 +3,30 @@
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
 // Tables: AgentsInfo, AuditLogs, CloudAppEvents
-// SCHEMA NOTES (per official AgentsInfo schema, July 2026):
-//   AgentsInfo.AgentName | Owners: dynamic, can be null
-//   EntraAgentId (lowercase d) | Both Timestamp and TimeGenerated exist
+// SCHEMA NOTES (verified live against tenant AgentsInfo via pack_all(), Sep 2026):
+//   AgentsInfo.Name | Owners: dynamic, can be null
+//   EntraAgentID (capital D at the end) | Both Timestamp and TimeGenerated exist
 // =============================================================================
 
 
 // -----------------------------------------------------------------------------
 // Q1: Agents Without Entra Agent ID — Identity Orphans
-// Use: Find agents running without a dedicated Entra identity (identity laundering risk)
+// Use: Find agents with no dedicated Entra agent identity, split by whether a blueprint exists
+//      NoEntraIdentity: neither EntraAgentID nor EntraBlueprintID -> identity laundering risk
+//      BlueprintOnly:   a blueprint exists but no agent identity in this tenant -> confirm how it authenticates
+//      (agents with an EntraAgentID are excluded; they have a dedicated identity)
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
-| where isempty(EntraAgentId)
+| where isempty(EntraAgentID)
 | extend OwnersStr = tostring(Owners)
 | extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
-| distinct AgentId, AgentName, Platform, OwnerDisplay, LifecycleStatus, PublishedStatus
-| extend RiskNote = "Agent operates without dedicated Entra Agent ID — identity laundering risk"
-| sort by Platform asc
+| extend IdentityState = iff(isnotempty(EntraBlueprintID), "BlueprintOnly", "NoEntraIdentity")
+| distinct AgentId, Name, Platform, OwnerDisplay, IdentityState, LifecycleStatus, PublishedStatus
+| extend RiskNote = iff(IdentityState == "NoEntraIdentity",
+    "No Entra identity: no agent identity and no blueprint — identity laundering risk",
+    "Blueprint only: no agent identity in this tenant — confirm how the agent authenticates")
+| sort by IdentityState desc, Platform asc
 
 
 // -----------------------------------------------------------------------------
@@ -55,7 +61,7 @@ AuditLogs
 AgentsInfo
 | where Timestamp > ago(90d)
 | extend OwnersStr = tostring(Owners)
-| summarize LastActivity = max(Timestamp) by AgentId, AgentName, Platform, OwnersStr
+| summarize LastActivity = max(Timestamp) by AgentId, Name, Platform, OwnersStr
 | extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
 | extend DaysSinceActivity = datetime_diff('day', now(), LastActivity)
 | where DaysSinceActivity > 60
@@ -65,7 +71,7 @@ AgentsInfo
     "Medium — approaching review threshold"
 )
 | sort by DaysSinceActivity desc
-| project AgentId, AgentName, Platform, OwnerDisplay, DaysSinceActivity, LifecycleRisk
+| project AgentId, Name, Platform, OwnerDisplay, DaysSinceActivity, LifecycleRisk
 
 
 // -----------------------------------------------------------------------------

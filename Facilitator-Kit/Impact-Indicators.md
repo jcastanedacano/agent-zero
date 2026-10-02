@@ -59,7 +59,7 @@ These aren't attendance metrics. They're leading indicators of behavior change a
 
 ### During the session — Module level
 
-**Module 01:** Participants find at least one agent in `AIAgentsInfo` they didn't know existed. Surprise is a good signal.
+**Module 01:** Participants find at least one agent in `AgentsInfo` they didn't know existed. Surprise is a good signal.
 
 **Module 02:** The Agent Builder bypass pattern triggers a "wait, that's already happening" reaction.
 

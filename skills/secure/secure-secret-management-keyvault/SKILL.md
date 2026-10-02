@@ -8,7 +8,7 @@ description: >-
   keys in Azure Key Vault, applying granular per-agent RBAC, enabling
   automatic rotation, and auditing every access via Sentinel.
 tags: [secure, keyvault, secrets, rotation, agent-credentials, azure-rbac]
-atlas_techniques: [AML.T0046]
+atlas_techniques: [AML.T0055, AML.T0083]
 d3fend_techniques: [D3-CH, D3-SCL]
 nist_ai_rmf: [MANAGE-1.3, GOVERN-6.2]
 nist_csf: [PR.DS-01, PR.AC-01]

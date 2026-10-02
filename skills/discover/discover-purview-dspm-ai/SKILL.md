@@ -8,7 +8,7 @@ description: >-
   with sensitive data in Microsoft 365, generating visibility into what
   data agents access and what exposure risks exist before scaling.
 tags: [discover, purview, dspm, ai-hub, data-classification, oversharing]
-atlas_techniques: [AML.T0056, AML.T0037]
+atlas_techniques: [AML.T0084, AML.T0036]
 d3fend_techniques: [D3-DAM, D3-SFA]
 nist_ai_rmf: [MAP-1.1, MAP-2.1, GOVERN-1.1]
 nist_csf: [ID.AM-05, ID.RA-01]
@@ -89,7 +89,7 @@ MicrosoftPurviewInformationProtection
 ### Step 5 — Correlate with the agent inventory
 
 ```kql
-AIAgentsInfo
+AgentsInfo
 | where TimeGenerated > ago(30d)
 | join kind=leftouter (
     MicrosoftPurviewInformationProtection
@@ -98,7 +98,7 @@ AIAgentsInfo
     | where isempty(LabelId)
     | summarize UnlabeledAccessCount = count() by AgentId = tostring(ApplicationId)
 ) on AgentId
-| project AgentName, AgentType, Platform, ManagementStatus, UnlabeledAccessCount
+| project Name, Platform, LifecycleStatus, UnlabeledAccessCount
 | extend DataRisk = case(
     UnlabeledAccessCount > 1000, "Critical",
     UnlabeledAccessCount > 100, "High",

@@ -54,12 +54,13 @@ Defender AI Agent Inventory covers Copilot Studio, Azure AI Foundry, AWS Bedrock
 |-------|------|-------|
 | `Timestamp` | datetime | Use for time filters (XDR table) |
 | `AgentId` | string | Unique agent identifier |
-| `AgentName` | string | Agent display name |
+| `Name` | string | Agent display name (not `AgentName`, confirmed live via `getschema` against tenant `AgentsInfo`, Sep 2026) |
 | `Platform` | string | Copilot Studio, Azure AI Foundry, etc. |
 | `LifecycleStatus` | string | Active / Blocked / Uninstalled / Deleted |
 | `PublishedStatus` | string | Draft / Published |
 | `Owners` | dynamic | Can be null — use `isnull()` check |
-| `EntraAgentId` | string | Empty if no Entra identity assigned |
+| `EntraAgentID` | string | Object id of the agent identity (a service principal). Empty if the agent has no agent identity in this tenant |
+| `EntraBlueprintID` | string | Id of the agent identity blueprint the agent derives from. Can be present while `EntraAgentID` is empty (blueprint only) |
 | `CreatedDateTime` | datetime | Agent creation timestamp |
 | `McpServers` | dynamic | External MCP endpoints declared |
 | `DeclaredTools` | dynamic | Tool definitions declared by agent |
@@ -85,22 +86,25 @@ AgentsInfo
     LastSeen = max(Timestamp),
     AgentCount = dcount(AgentId),
     WithoutOwner = countif(isnull(Owners) or array_length(Owners) == 0),
-    WithoutEntraId = countif(isempty(EntraAgentId))
-    by Platform, LifecycleStatus, PublishedStatus, AgentName
+    NoEntraIdentity = countif(isempty(EntraAgentID) and isempty(EntraBlueprintID)),
+    BlueprintOnly = countif(isempty(EntraAgentID) and isnotempty(EntraBlueprintID))
+    by Platform, LifecycleStatus, PublishedStatus, Name
 | extend RiskLevel = case(
-    WithoutOwner > 0 and WithoutEntraId > 0, "High",
-    WithoutOwner > 0 or WithoutEntraId > 0, "Medium",
+    WithoutOwner > 0 and NoEntraIdentity > 0, "High",
+    WithoutOwner > 0 or NoEntraIdentity > 0 or BlueprintOnly > 0, "Medium",
     LifecycleStatus in ("Blocked", "Deleted"), "Medium",
     "Low"
 )
 | sort by RiskLevel asc, LastSeen desc
-| project AgentName, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
-          WithoutOwner, WithoutEntraId, AgentCount, LastSeen
+| project Name, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
+          WithoutOwner, NoEntraIdentity, BlueprintOnly, AgentCount, LastSeen
 ```
 
 **Expected output:** Agent inventory grouped by platform and lifecycle status, classified by risk level based on ownership and Entra identity coverage.
 
-**Document in your playbook:** How many agents appear as High risk? Which platforms have the highest count of agents without an owner?
+**Reading the identity columns:** `NoEntraIdentity` counts agents with neither `EntraAgentID` nor `EntraBlueprintID`; `BlueprintOnly` counts agents that have a blueprint but no agent identity in this tenant. They are different findings. The second is common for third-party agents (in a validated tenant they appeared under platform `Other`) and means *confirm how the agent authenticates*, not *identity laundering*. An agent with an `EntraAgentID` has a dedicated identity whether or not a blueprint is recorded. `High` requires no owner **and** no Entra identity at all.
+
+**Document in your playbook:** How many agents appear as High risk? Which platforms have the highest count of agents without an owner? How many are `BlueprintOnly`, and who is accountable for each vendor?
 
 ---
 
@@ -110,24 +114,33 @@ AgentsInfo
 AgentsInfo
 | where Timestamp > ago(30d)
 | where isnull(Owners) or array_length(Owners) == 0
-    or isempty(EntraAgentId)
+    or isempty(EntraAgentID)
 | extend OwnersStr = tostring(Owners)
-| distinct AgentId, AgentName, Platform, CreatedDateTime, OwnersStr, EntraAgentId
+| distinct AgentId, Name, Platform, CreatedDateTime, OwnersStr, EntraAgentID, EntraBlueprintID
 | extend OwnerDisplay = iff(OwnersStr == '' or OwnersStr == '[]', 'UNASSIGNED', OwnersStr)
-| extend HasEntraId = isnotempty(EntraAgentId)
+| extend NoOwner = (OwnersStr == "" or OwnersStr == "[]")
+| extend IdentityState = case(
+    isnotempty(EntraAgentID), "AgentIdentity",
+    isnotempty(EntraBlueprintID), "BlueprintOnly",
+    "NoEntraIdentity"
+)
 | extend RiskSignal = case(
-    not(HasEntraId) and (OwnersStr == "" or OwnersStr == "[]"),
-        "No owner + no Entra Agent ID — shadow AI",
-    not(HasEntraId),
-        "No Entra Agent ID — identity laundering risk",
+    IdentityState == "NoEntraIdentity" and NoOwner,
+        "No owner + no Entra identity — shadow AI",
+    IdentityState == "NoEntraIdentity",
+        "No Entra identity (no agent identity, no blueprint) — identity laundering risk",
+    IdentityState == "BlueprintOnly" and NoOwner,
+        "No owner; blueprint only, no agent identity in this tenant — confirm how it authenticates",
+    IdentityState == "BlueprintOnly",
+        "Blueprint only, no agent identity in this tenant — confirm how it authenticates",
     "No owner assigned"
 )
 | extend DaysSinceCreation = datetime_diff('day', now(), CreatedDateTime)
 | sort by DaysSinceCreation desc
-| project AgentId, AgentName, Platform, OwnerDisplay, HasEntraId, RiskSignal, DaysSinceCreation
+| project AgentId, Name, Platform, OwnerDisplay, IdentityState, RiskSignal, DaysSinceCreation
 ```
 
-**Expected output:** List of shadow AI agents — operating without formal registration or ownership.
+**Expected output:** List of agents lacking an owner or an agent identity, each with an `IdentityState` (`NoEntraIdentity`, `BlueprintOnly`, or `AgentIdentity`) and a `RiskSignal`. Shadow AI is the `NoEntraIdentity` rows without an owner: operating without formal registration or ownership.
 
 **Note:** `Owners` is a dynamic field that can be null (third-party or external agents) or an empty array. The null check `isnull(Owners) or array_length(Owners) == 0` is required to capture both cases.
 
@@ -170,7 +183,7 @@ AgentsInfo
 | extend OwnerDisplay = iff(isnull(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | project
     AgentId,
-    AgentName,
+    Name,
     Platform,
     OwnerDisplay,
     LifecycleStatus,
@@ -179,7 +192,7 @@ AgentsInfo
     DeclaredTools,
     McpServers
 | extend AlertDetail = strcat(
-    "New agent registered: ", AgentName,
+    "New agent registered: ", Name,
     " | Platform: ", Platform,
     " | Owner: ", OwnerDisplay,
     " | MCP servers: ", tostring(array_length(McpServers))
@@ -195,7 +208,7 @@ AgentsInfo
 
 1. In Microsoft Sentinel → **Analytics** → **Create** → **Scheduled query rule**
 2. Name: `New Agent Without Owner or Entra Identity`
-3. Paste the query from Step 4; add filter: `| where isempty(EntraAgentId) or isnull(Owners) or array_length(Owners) == 0`
+3. Paste the query from Step 4; add filter: `| where isnull(Owners) or array_length(Owners) == 0 or (isempty(EntraAgentID) and isempty(EntraBlueprintID))` (blueprint-only agents are left to the Step 2 hunting query; alerting on each one would be noise)
 4. Frequency: Every 1 hour | Lookback: 1 day
 5. Severity: **Medium**
 6. Map entity: `AgentId` → Custom entity
@@ -218,8 +231,9 @@ Add to your [Incident Response Playbook Template](./Templates/Incident-Response-
 |--------|-------|
 | Total agents detected | |
 | Agents without owner | |
-| Agents without Entra Agent ID | |
-| Shadow AI (no owner + no Entra ID) | |
+| Agents with no Entra identity (no agent identity, no blueprint) | |
+| Blueprint-only agents (no agent identity in this tenant) | |
+| Shadow AI (no owner + no Entra identity) | |
 | SharePoint sites accessed without labels | |
 | New agents in last 24h | |
 
@@ -236,7 +250,7 @@ Add to your [Incident Response Playbook Template](./Templates/Incident-Response-
 
 ## Closing Questions
 
-- What platform in your tenant had the largest count of agents without an Entra Agent ID? What process would have prevented that condition?
+- What platform in your tenant had the largest count of agents with no Entra identity at all, and how many more were blueprint-only? What process would have prevented that condition?
 - If you had to convert the Step 3 query into a weekly scheduled report for the security team, what additional fields would you add?
 
 ---

@@ -32,7 +32,13 @@ At the end of this module, you will be able to configure a Conditional Access po
 
 3. **OAuth consent drift as a silent accumulation vector:** Without consent flow restrictions, an agent can accumulate additional permissions without explicit approval. The signal: `AuditLogs` → `Add delegated permission grant` without correlation to an `AgentPermissionApproved` event.
 
-4. **Model extraction via API — model theft through the endpoint:** An attacker with access to an Azure AI Foundry endpoint can reconstruct a proprietary model through systematic queries (input/output pairs), without direct model access. The indicator is a massive inference volume from a single identity with high prompt variety. KQL P03-Q6 detects this pattern. Control: per-identity rate limiting in Foundry + CA policy blocking unauthorized identities. OWASP Agentic AG06.
+4. **Model extraction via API — model theft through the endpoint:** An attacker with access to an Azure AI Foundry endpoint can reconstruct a proprietary model through systematic queries (input/output pairs), without direct model access. The indicator is a massive inference volume from a single identity with high prompt variety. KQL P03-Q6 detects this pattern. Control: per-identity rate limiting in Foundry + CA policy blocking unauthorized identities. Maps to OWASP LLM Top 10 2026, LLM06 — Unbounded Consumption (model extraction/theft was folded into this category in 2026).
+
+5. **Agent ID objects leave an audit trail, but under generic names: correlate by ID, not by name.** Validated on a live tenant (October 2026): the blueprint is logged in Entra `AuditLogs` as an *Application* and the agent identity as a *ServicePrincipal*, and every operation observed on them was a generic one: `Add application`, `Add service principal`, `Create application – Certificates and secrets management`, `Update application – Certificates and secrets management`, `Add service principal credentials`, `Add owner to application`, `Add owner to service principal`, `Add user sponsor`, `Consent to application`, `Add app role assignment to service principal`, and `Update application` / `Update service principal`. No operation name identifies an object as an agent, and `ResType` only says `Application` or `ServicePrincipal`. The display name does not work as a filter either: the creator chooses it, a Foundry agent identity appeared with a GUID as its name, and an agent identity named "Hermes Identity" contains no "blueprint". The reliable key is `AgentsInfo`: in the validated tenant, joining `EntraAgentID` and `EntraBlueprintID` against the object id in `AuditLogs` matched the blueprint's Application object and the agent identity's ServicePrincipal object (KQL P03-Q12).
+
+   **What to look for, in order of signal.** A credential added to a blueprint or an agent identity (`Add service principal credentials`, `… – Certificates and secrets management`) is rare and high-signal; the platform's own ID Protection detection flags new blueprint credentials only after they are *used* (`suspiciousCredentialUsage`), so the hunt for the addition itself is the earlier signal. Owner and sponsor changes (`Add owner to …`, `Add user sponsor`) show who can modify, re-enable, or delete the agent. Read the actor before the operation: in the validated tenant a person created a blueprint and its identity, a Graph PowerShell application added the credential to the agent identity, and Microsoft's own provisioning (`Microsoft Azure AD Internal - Jit Provisioning`) created the first-party Copilot Studio blueprint service principal with no human involved. An `application` actor on a credential change deserves review before a `user` one; Microsoft-internal provisioning is a baseline, not an alert.
+
+   **Two coverage limits to state in the lab.** The blueprint *principal* (the blueprint's service principal, where `Consent to application` and `Add app role assignment` were logged) matched neither `AgentsInfo` column, so consent and app-role changes on it are outside this join. And an agent with both IDs empty in `AgentsInfo` is invisible to it. In the framing of the Entra Attack & Defense Playbook's upcoming Agent Identities chapter (see Module 06, point 8), changes to ownership and credentials sit in the pre-breach phase, targeting the agent entity.
 
 ---
 
@@ -199,6 +205,20 @@ EntraIdSpnSignInEvents
 
 **Adjust the threshold** (`ResourceCount > 3`) based on your expected agent scope. An agent declared as a SharePoint reader with access to 12 distinct resources is a scope expansion signal.
 
+**Limit of this query:** `ServicePrincipalName has "agent"` filters by display name, which the creator chooses (see point 5). An agent identity whose name lacks the word is skipped. Treat the result as a lower bound, or join `AgentsInfo` on `EntraAgentID` as Step 7 does.
+
+---
+
+### Step 7 — KQL: credential, owner, and sponsor changes on Agent ID objects
+
+Run `KQL-Library/P03-Access-Anomalies.kql`, Q12. It correlates `AuditLogs` with `AgentsInfo` by object id, so it finds blueprints and agent identities whatever they are named.
+
+**Expected output:** one row per credential, owner, or sponsor change in the last 7 days on an object listed in `AgentsInfo`, with `ObjectType` (`Application` for a blueprint, `ServicePrincipal` for an agent identity), `Actor` and `ActorType`.
+
+**Document in your playbook:** Which rows have `ActorType = application`? For each credential change, is there a change record? Who are the owners and sponsors added, and are they the people your governance registry says are accountable (Track B Module 02)?
+
+**If it returns no rows:** either nothing changed in 7 days, or the agent has both `EntraAgentID` and `EntraBlueprintID` empty in `AgentsInfo`, or the change was on the blueprint principal, which this join does not cover. Widen the window to 90 days before concluding anything.
+
 ---
 
 ## Playbook Section 3 — Document Your Findings
@@ -225,6 +245,7 @@ Use block or sessionControls only. Confirmed in What If test on [DATE].
 - [ ] OAuth high-privilege consent without review (weekly)
 - [ ] Agent sign-ins outside business hours (daily)
 - [ ] Agents accessing more than [N] resources (weekly)
+- [ ] Credential, owner, and sponsor changes on Agent ID objects (hourly, review `application` actors first)
 
 ### Findings
 | Agent | Resources Accessed | Expected Scope | Gap |

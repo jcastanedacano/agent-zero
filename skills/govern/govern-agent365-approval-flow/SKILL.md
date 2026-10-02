@@ -8,7 +8,7 @@ description: >-
   Center), establishing policies so new agents go through Requests
   before activation, closing the Agent Builder gap that activates agents without approval.
 tags: [govern, copilot-studio, agent365, approval-flow, shadow-ai-prevention]
-atlas_techniques: [AML.T0054]
+atlas_techniques: [AML.T0103]
 d3fend_techniques: [D3-UAP, D3-SFA]
 nist_ai_rmf: [GOVERN-1.2, GOVERN-2.1]
 nist_csf: [GV-PO-01, PR.AA-05]

@@ -9,7 +9,7 @@ description: >-
   agent outputs containing sensitive data are automatically classified and
   protected with encryption and access restrictions.
 tags: [protect, purview, sensitivity-labels, auto-labeling, classification, ai-outputs]
-atlas_techniques: [AML.T0048, AML.T0057]
+atlas_techniques: [AML.T0086, AML.T0057]
 d3fend_techniques: [D3-DLP, D3-EAC]
 nist_ai_rmf: [MANAGE-2.2, GOVERN-6.1]
 nist_csf: [PR.DS-01, PR.DS-02]

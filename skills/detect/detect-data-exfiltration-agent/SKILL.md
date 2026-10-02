@@ -9,7 +9,7 @@ description: >-
   and use of agents as a proxy to extract corporate information toward
   unauthorized destinations.
 tags: [detect, sentinel, exfiltration, data-loss, sharepoint, exchange, aisoc]
-atlas_techniques: [AML.T0048, AML.T0057]
+atlas_techniques: [AML.T0086, AML.T0057]
 d3fend_techniques: [D3-NTA, D3-DLP, D3-EAC]
 nist_ai_rmf: [MEASURE-2.6, MANAGE-3.2]
 nist_csf: [DE.CM-01, DE.AE-03, RS.AN-03]

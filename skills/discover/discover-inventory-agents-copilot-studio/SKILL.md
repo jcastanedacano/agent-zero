@@ -8,7 +8,7 @@ description: >-
   agents created without IT approval (Agent Builder bypassing the Requests
   flow) which represent the central shadow AI gap in M365.
 tags: [discover, copilot-studio, shadow-ai, agent-inventory, m365-admin]
-atlas_techniques: [AML.T0054, AML.T0051]
+atlas_techniques: [AML.T0103]
 d3fend_techniques: [D3-AM, D3-SFA]
 nist_ai_rmf: [MAP-1.1, GOVERN-1.2]
 nist_csf: [ID.AM-01, GV-OC-01]

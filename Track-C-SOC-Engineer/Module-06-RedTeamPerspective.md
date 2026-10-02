@@ -38,7 +38,7 @@ At the end of this module, you will be able to execute the five attack technique
    - `AML.T0051` — LLM Prompt Injection (indirect / XPIA via SharePoint corpus) → P04 queries
    - `AML.T0040` — AI Model Inference API Access (model extraction) → P03-Q6
    - `AML.T0054` — LLM Jailbreak + Goal Hijacking → P05-Q6
-   - `AML.T0043` — Craft Adversarial Data (capability disclosure elicitation) → P03-Q5b
+   - `AML.T0084` — Discover AI Agent Configuration (capability disclosure elicitation; sub-technique `AML.T0084.001` Tool Definitions) → P03-Q5b
 
    > Note: Microsoft MCSB v2 also maps `AML.T0053` (AI Agent Tool Invocation) to scenarios where prompt injection tricks an agent into invoking unauthorized tools — this is what Attacks 1 and 5 target at execution phase.
 
@@ -50,6 +50,10 @@ At the end of this module, you will be able to execute the five attack technique
 
 7. **Autonomous red team tooling — the dual-use problem:** The six attacks in this module are executed manually. The natural evolution is to automate them with an agent that runs the full chain, and those systems already exist: in published benchmarks, an autonomous pentesting system matched the performance of a principal pentester with more than twenty years of experience across roughly a hundred challenges, completing the task in 28 minutes against the human operator's 40 hours. The economics are uncontestable and adoption will be fast. Two considerations are not optional before adopting one. **First, the operational profile:** an autonomous pentesting agent is functionally identical to an autonomous attacker, and it will have extended access to the network it is assessing. If the system is not reliable, not aligned, or its behavior is not bounded by design, the security exercise becomes the incident. **Second, proliferation:** Cobalt Strike is a legitimate pentesting tool whose pirated versions are today a standard instrument of organized crime; the same trajectory applies to AI red team tooling, and its developers should implement KYC controls for the same reason. Minimum requirements before deploying one in your organization: written authorization with explicit scope (network ranges, systems included and excluded, time window), a tested kill switch with measured RTO (Track B Module 02, point 10), and complete action logging with retention equivalent to an incident. Reference: HACCA report (2026), "Automated Red Teaming and Pentesting".
 
+8. **The agent attack lifecycle in three phases, and "Living off the Agent's Tools" (the playbook's framing, read here in this repository's terms):** The Entra ID Attack & Defense Playbook is adding a chapter on Agent Identities (Thomas Naunheim, Sami Lamppu, Robbe Van den Daele; reviewed by Derk van der Woude; announced September 2026, not yet published when this point was written). The authors' public announcement names three phases: pre-breach targeting of the agent entity, initial access through a dual attack surface, and post-breach activity, and the chapter outline names the last one Living off the Agent's Tools (LOAT). **Their definitions of each phase are unpublished. What follows is this repository's reading of those names, not a summary of the chapter, and it should be checked against it once it is out.** **Pre-breach, targeting the agent entity:** the attacker goes after the identity objects before touching the agent's behavior, through ownership, blueprint permissions, or consent grants. This repository treats the blueprint, which holds the credentials (Track B Module 02, point 7), and the equal-rights multi-owner model (point 8) as attack surface, not only governance hygiene. **Initial access through a dual attack surface:** the announcement does not say which two surfaces. This repository distinguishes the identity plane (tokens, consent, ownership) from the agent's input plane (direct and indirect prompt injection, Attacks 1 and 2 here), because a control on one does nothing for the other. The chapter may draw the line elsewhere, for example between agent identity and agent user. **Post-breach, LOAT:** by its name, the attacker uses the agent's own tools, permissions, and connectors instead of bringing tooling. Read that way it is the agentic counterpart of living off the land, and it explains why a compromised agent leaves no malware signature: detection has to look at sequences of legitimate actions (P05-Q8, the JadePuffer chain), not at artifacts.
+
+   **Their ATLAS mapping, verified against the official ATLAS data release 2026.09:** `AML.T0012` Valid Accounts, `AML.T0091.000` Use Alternate Authentication Material: Application Access Token, `AML.T0021` Establish Accounts, `AML.T0081` Modify AI Agent Configuration, `AML.T0010.005` AI Supply Chain Compromise: AI Agent Tool, `AML.T0109` AI Supply Chain Rug Pull, and `AML.T0084` Discover AI Agent Configuration. Every ID resolves to that name in ATLAS 2026.09. The chapter's attack scenarios and its analysis of which built-in detections exist and where custom detections are needed were not yet published when this point was written: read the published chapter before quoting its scenarios, and compare its telemetry findings with the open caveats in P03-Q5b to Q8 and P05-Q2 (`ActionType == "AgentInteraction"` not verified). Reference: [Entra ID Attack & Defense Playbook](https://github.com/Cloud-Architekt/AzureAD-Attack-Defense).
+
 ---
 
 ## Background
@@ -59,7 +63,7 @@ At the end of this module, you will be able to execute the five attack technique
 ```
 [Reconnaissance]
   → Identify agent endpoints via Copilot Studio public registry or tenant enumeration
-  → Elicit tool schema via capability disclosure prompts (AML.T0043)
+  → Elicit tool schema via capability disclosure prompts (AML.T0084.001 — Discover AI Agent Configuration: Tool Definitions)
 
 [Initial Access]
   → Craft prompt injection payload targeting system instruction override (AML.T0051)
@@ -215,7 +219,7 @@ AuditLogs
 
 ### Attack 3 — Model extraction via systematic inference
 
-**ATLAS technique:** `AML.T0040` — ML Model Inference API Access  
+**ATLAS technique:** `AML.T0040` — AI Model Inference API Access  
 **Expected detection:** P03-Q6 (>500 queries/hour from single identity)
 
 **Steps:**
@@ -255,7 +259,7 @@ CloudAppEvents
 
 ### Attack 4 — Capability and architecture disclosure elicitation
 
-**ATLAS technique:** `AML.T0043` — Craft Adversarial Data  
+**ATLAS technique:** `AML.T0084` — Discover AI Agent Configuration (`AML.T0084.001` Tool Definitions)  
 **Expected detection:** P03-Q5b (capability/architecture disclosure)
 
 **Steps:**
@@ -371,10 +375,10 @@ Add to your [Incident Response Playbook Template](./Templates/Incident-Response-
 
 | Attack | Technique | KQL Rule | Fired? | Time-to-Detect | Gap |
 |--------|-----------|----------|--------|----------------|-----|
-| Corpus poisoning | AML.T0057 | P04 queries | | | |
-| Agent Builder bypass | AML.T0051 | P02-Q2 | | | |
+| Corpus poisoning | AML.T0070 | P04 queries | | | |
+| Agent Builder bypass | AML.T0103 | P02-Q2 | | | |
 | Model extraction | AML.T0040 | P03-Q6 | | | |
-| Capability disclosure | AML.T0043 | P03-Q5b | | | |
+| Capability disclosure | AML.T0084 | P03-Q5b | | | |
 | Goal hijacking | AML.T0054 | P05-Q6 | | | |
 
 ### Critical Gaps Found

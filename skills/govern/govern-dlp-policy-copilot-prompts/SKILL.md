@@ -8,7 +8,7 @@ description: >-
   data transmission in Copilot Studio agent prompts and responses, covering
   PII, financial data, and corporate secrets.
 tags: [govern, purview, dlp, copilot-studio, data-protection, prompt-security]
-atlas_techniques: [AML.T0057, AML.T0048]
+atlas_techniques: [AML.T0057, AML.T0086]
 d3fend_techniques: [D3-DLP, D3-PA]
 nist_ai_rmf: [MANAGE-2.2, GOVERN-6.1]
 nist_csf: [PR.DS-01, PR.DS-05]

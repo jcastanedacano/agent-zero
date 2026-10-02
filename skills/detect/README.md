@@ -35,13 +35,14 @@ OUTPUT: Operational AISOC → feeds back into Pillar 1 (Discover) with newly det
 
 | ATLAS technique | Skill that covers it |
 |---|---|
-| AML.T0051 — LLM Prompt Injection | `detect-alert-prompt-injection-sentinel` |
-| AML.T0054 — LLM Plugin Compromise | `detect-alert-prompt-injection-sentinel` |
-| AML.T0048 — Exfiltration via Inference API | `detect-data-exfiltration-agent` |
+| AML.T0040 — AI Model Inference API Access | `detect-agent-identity-abuse`, `detect-anomalous-agent-behavior` |
+| AML.T0051 — LLM Prompt Injection | `detect-alert-prompt-injection-sentinel`, `detect-respond-playbook-agent-containment`, `detect-security-copilot-triage` |
+| AML.T0054 — LLM Jailbreak | `detect-alert-prompt-injection-sentinel`, `detect-security-copilot-triage`, `detect-sentinel-mcp-server` |
 | AML.T0057 — LLM Data Leakage | `detect-data-exfiltration-agent` |
-| AML.T0040 — ML Model Inference API Access | `detect-anomalous-agent-behavior` |
-| AML.T0046 — Exfiltration via ML Model | `detect-agent-identity-abuse` |
-| AML.T0056 — Discover AI Model Capabilities | `detect-agent-identity-abuse` |
+| AML.T0084 — Discover AI Agent Configuration | `detect-agent-identity-abuse`, `detect-anomalous-agent-behavior` |
+| AML.T0086 — Exfiltration via AI Agent Tool Invocation | `detect-anomalous-agent-behavior`, `detect-data-exfiltration-agent`, `detect-respond-playbook-agent-containment` |
+| AML.T0091.000 — Use Alternate Authentication Material: Application Access Token | `detect-agent-identity-abuse`, `detect-respond-playbook-agent-containment` |
+| AML.T0103 — Deploy AI Agent | `detect-agent-identity-abuse` |
 
 ## Known constraints
 

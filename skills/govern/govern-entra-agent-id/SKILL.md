@@ -73,7 +73,7 @@ Content-Type: application/json
 ### Step 4 — Verify registration in Agent 365
 
 1. Go to **M365 Admin Center** → **Agents** → **Registry**
-2. Search for the agent by name — it should appear with `EntraAgentId` populated
+2. Search for the agent by name — it should appear with `EntraAgentID` populated
 3. If it does not appear: verify that the `agent365` and `EntraAgentID` tags are in the manifest
 
 ### Step 5 — Assign minimal permissions (least privilege)
@@ -94,12 +94,12 @@ Use `Sites.Selected` instead of `Sites.Read.All` whenever possible.
 ### Step 6 — KQL: detect agents without Entra Agent ID
 
 ```kql
-AIAgentsInfo
+AgentsInfo
 | where TimeGenerated > ago(30d)
-| where isempty(EntraAgentId) or EntraAgentId == "Inherited"
-| distinct AgentId, AgentName, AgentType, Platform, TechnicalOwner, ManagementStatus
+| where isempty(EntraAgentID) or EntraAgentID == "Inherited"
+| distinct AgentId, Name, Platform, LifecycleStatus, Owners
 | extend RiskNote = "Agent operates under an inherited identity — no dedicated forensic traceability"
-| sort by AgentType asc
+| sort by LifecycleStatus asc
 ```
 
 ## Verification
@@ -107,7 +107,7 @@ AIAgentsInfo
 - [ ] App registration created with the `agent365` and `EntraAgentID` tags in the manifest
 - [ ] Associated service principal visible in Entra ID → Enterprise Applications
 - [ ] Technical owner assigned on the App registration
-- [ ] Agent visible in the Agent 365 Registry with `EntraAgentId` populated
+- [ ] Agent visible in the Agent 365 Registry with `EntraAgentID` populated
 - [ ] Assigned permissions follow the least privilege principle
 - [ ] The KQL query no longer returns this agent in the without-Entra-Agent-ID list
 

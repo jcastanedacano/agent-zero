@@ -29,7 +29,7 @@ subdomain: {ms-copilot-studio|ms-entra|ms-sentinel|ms-purview|ms-foundry}
 description: >-
   {what it does} {on which MS product} {what risk it mitigates} — ~30 tokens
 tags: [{pillar}, {ms-product}, {scenario}]
-atlas_techniques: []   # MITRE ATLAS v5.4 — AML.Txxxx
+atlas_techniques: []   # MITRE ATLAS (2026.09) — AML.Txxxx[.xxx], verify IDs at atlas.mitre.org
 d3fend_techniques: []  # MITRE D3FEND v1.3 — D3-xxxx
 nist_ai_rmf: []        # GOVERN|MAP|MEASURE|MANAGE-x.x
 nist_csf: []           # GV|ID|PR|DE|RS|RC + category

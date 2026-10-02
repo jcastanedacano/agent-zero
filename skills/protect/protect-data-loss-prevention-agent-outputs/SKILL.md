@@ -8,7 +8,7 @@ description: >-
   SharePoint, OneDrive, and Exchange, blocking sharing of agent-generated
   content containing sensitive data toward unauthorized destinations.
 tags: [protect, purview, dlp, sharepoint, onedrive, exchange, agent-outputs, exfiltration]
-atlas_techniques: [AML.T0048, AML.T0057]
+atlas_techniques: [AML.T0086, AML.T0057]
 d3fend_techniques: [D3-DLP, D3-EAC]
 nist_ai_rmf: [MANAGE-2.2, GOVERN-6.1]
 nist_csf: [PR.DS-05, DE.CM-01]

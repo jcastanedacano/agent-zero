@@ -9,7 +9,7 @@ description: >-
   pattern, anomalous operating hours, and sudden changes in the type of data
   processed.
 tags: [detect, sentinel, behavioral-analytics, anomaly, baseline, aisoc, ueba]
-atlas_techniques: [AML.T0040, AML.T0056, AML.T0048]
+atlas_techniques: [AML.T0040, AML.T0084, AML.T0086]
 d3fend_techniques: [D3-NTA, D3-PA, D3-ANET]
 nist_ai_rmf: [MEASURE-2.6, MEASURE-2.5]
 nist_csf: [DE.AE-01, DE.CM-06]

@@ -43,7 +43,7 @@
   },
   "variables": {
     "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
-    "sentinelSolutionName": "[concat('SecurityInsights(', parameters('workspaceName'), ')')]"
+    "sentinelOnboardingId": "[resourceId('Microsoft.SecurityInsights/onboardingStates', parameters('workspaceName'), 'default')]"
   },
   "resources": [
     {
@@ -65,23 +65,14 @@
       }
     },
     {
-      "type": "Microsoft.OperationsManagement/solutions",
-      "apiVersion": "2015-11-01-preview",
-      "name": "[variables('sentinelSolutionName')]",
-      "location": "[parameters('location')]",
+      "type": "Microsoft.SecurityInsights/onboardingStates",
+      "apiVersion": "2025-09-01",
+      "scope": "[variables('workspaceId')]",
+      "name": "default",
       "dependsOn": [
         "[variables('workspaceId')]"
       ],
-      "kind": "Solution",
-      "plan": {
-        "name": "[variables('sentinelSolutionName')]",
-        "promotionCode": "",
-        "product": "OMSGallery/SecurityInsights",
-        "publisher": "Microsoft"
-      },
-      "properties": {
-        "workspaceResourceId": "[variables('workspaceId')]"
-      }
+      "properties": {}
     },
     {
       "type": "Microsoft.SecurityInsights/watchlists",
@@ -89,7 +80,7 @@
       "name": "AgentIdentifiers",
       "scope": "[variables('workspaceId')]",
       "dependsOn": [
-        "[resourceId('Microsoft.OperationsManagement/solutions', variables('sentinelSolutionName'))]"
+        "[variables('sentinelOnboardingId')]"
       ],
       "properties": {
         "displayName": "Known Agent Identifiers",
@@ -108,14 +99,14 @@
       "scope": "[variables('workspaceId')]",
       "kind": "Scheduled",
       "dependsOn": [
-        "[resourceId('Microsoft.OperationsManagement/solutions', variables('sentinelSolutionName'))]"
+        "[variables('sentinelOnboardingId')]"
       ],
       "properties": {
         "displayName": "Agentic AI — New Agent Registered Without Owner",
-        "description": "Fires when a new AI agent is registered in the tenant without an assigned owner or without an Entra Agent ID. Corresponds to lab Module 01 (Discover & Prioritize). Uses the AgentsInfo table (AIAgentsInfo was retired 1 July 2026 — see Advanced Hunting Schema Naming Changes).",
+        "description": "Fires when a new AI agent is registered in the tenant without an assigned owner or with no Entra identity at all (neither an agent identity nor a blueprint; blueprint-only agents are reviewed with the hunting queries, not alerted). Corresponds to lab Module 01 (Discover & Prioritize). Uses the AgentsInfo table (AIAgentsInfo was retired 1 July 2026 — see Advanced Hunting Schema Naming Changes).",
         "severity": "Medium",
         "enabled": true,
-        "query": "AgentsInfo\n| where Timestamp > ago(1d)\n| where CreatedDateTime > ago(1d)\n| where (isnull(Owners) or array_length(Owners) == 0) or isempty(EntraAgentId)\n| project AgentId, AgentName, Platform, Owners, EntraAgentId, LifecycleStatus, CreatedDateTime\n| extend AlertDetail = strcat(\"New agent without owner: \", AgentName, \" | Platform: \", Platform, \" | Owners: \", iff(isnull(Owners) or array_length(Owners) == 0, \"UNASSIGNED\", tostring(Owners)))",
+        "query": "AgentsInfo\n| where Timestamp > ago(1d)\n| where CreatedDateTime > ago(1d)\n| where (isnull(Owners) or array_length(Owners) == 0) or (isempty(EntraAgentID) and isempty(EntraBlueprintID))\n| project AgentId, Name, Platform, Owners, EntraAgentID, EntraBlueprintID, LifecycleStatus, CreatedDateTime\n| extend AlertDetail = strcat(\"New agent without owner: \", Name, \" | Platform: \", Platform, \" | Owners: \", iff(isnull(Owners) or array_length(Owners) == 0, \"UNASSIGNED\", tostring(Owners)))",
         "queryFrequency": "PT1H",
         "queryPeriod": "P1D",
         "triggerOperator": "GreaterThan",
@@ -137,14 +128,14 @@
       "scope": "[variables('workspaceId')]",
       "kind": "Scheduled",
       "dependsOn": [
-        "[resourceId('Microsoft.OperationsManagement/solutions', variables('sentinelSolutionName'))]"
+        "[variables('sentinelOnboardingId')]"
       ],
       "properties": {
         "displayName": "Agentic AI — Jailbreak Attempt Detected",
-        "description": "Detects potential jailbreak attempts targeting AI agents via system-instruction-override patterns in prompts. Corresponds to lab Module 05 (Detect & Respond) and KQL Library P05-Q1. Note (taught explicitly in Session 05): this is a single-turn, signature-based detector and does not catch composite/decomposed injection or paraphrased attacks — treat it as a floor, not a ceiling, and pair it with session-level aggregation (P05-Q9) and Prompt Shield.",
+        "description": "Detects jailbreak attempts against Copilot/agent interactions using the platform's own JailbreakDetected signal in LLMActivity (Azure Monitor / Log Analytics), rather than a hand-rolled phrase match against CloudAppEvents. Corresponds to lab Module 05 (Detect & Respond) and KQL Library P05-Q1. Query structure matches the official Microsoft documentation example (learn.microsoft.com/azure/azure-monitor/reference/queries/copilotactivity, confirmed current Sep 2026): table is LLMActivity, RecordType filters to CopilotInteraction, and JailbreakDetected lives inside LLMEventData.Messages (an array — requires mv-expand), not as a flat top-level field.",
         "severity": "High",
         "enabled": true,
-        "query": "CloudAppEvents\n| where TimeGenerated > ago(1h)\n| where Application in (\"Microsoft Copilot\", \"Copilot Studio\", \"Azure AI Foundry\")\n    and ActionType == \"AgentInteraction\"\n| extend PromptText = tostring(RawEventData[\"UserPrompt\"])\n| extend AgentId = tostring(RawEventData[\"AgentId\"])\n| extend JailbreakScore = toint(\n    (PromptText has \"ignore previous instructions\") * 3 +\n    (PromptText has \"disregard your system prompt\") * 3 +\n    (PromptText has \"you are now a\") * 2 +\n    (PromptText has \"act as if you have no\") * 2 +\n    (PromptText has \"forget all previous\") * 2 +\n    (PromptText has \"new persona:\") * 2 +\n    (PromptText has \"DAN\") * 1 +\n    (PromptText has \"jailbreak\") * 1 +\n    (PromptText has \"override\") * 1\n)\n| where JailbreakScore >= 2\n| project TimeGenerated, AccountDisplayName, AgentId, JailbreakScore, PromptPreview = substring(PromptText, 0, 300), IPAddress, Application",
+        "query": "LLMActivity\n| where TimeGenerated > ago(1h)\n| where RecordType == \"CopilotInteraction\"\n| extend Messages = LLMEventData.Messages\n| mv-expand Messages\n| where tobool(Messages.JailbreakDetected) == true\n| project TimeGenerated, ActorName, ActorUserId, AgentName, MessageId = tostring(Messages.Id), JailbreakDetected = tobool(Messages.JailbreakDetected)",
         "queryFrequency": "PT5M",
         "queryPeriod": "PT1H",
         "triggerOperator": "GreaterThan",
@@ -167,7 +158,7 @@
       "scope": "[variables('workspaceId')]",
       "kind": "Scheduled",
       "dependsOn": [
-        "[resourceId('Microsoft.OperationsManagement/solutions', variables('sentinelSolutionName'))]"
+        "[variables('sentinelOnboardingId')]"
       ],
       "properties": {
         "displayName": "Agentic AI — Potential Bulk Data Retrieval via Agent",

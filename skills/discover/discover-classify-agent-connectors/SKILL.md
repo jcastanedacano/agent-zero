@@ -8,7 +8,7 @@ description: >-
   by risk level according to the type of data accessible, producing an exposure
   matrix as input for govern and protect controls.
 tags: [discover, copilot-studio, connectors, data-classification, power-platform]
-atlas_techniques: [AML.T0057, AML.T0048]
+atlas_techniques: [AML.T0057, AML.T0086]
 d3fend_techniques: [D3-AM, D3-NTA]
 nist_ai_rmf: [MAP-2.2, MAP-5.1]
 nist_csf: [ID.AM-05, ID.RA-01]

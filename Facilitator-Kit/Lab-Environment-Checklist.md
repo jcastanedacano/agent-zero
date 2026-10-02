@@ -48,7 +48,7 @@ Run this checklist **24 hours before the session**. If any item is red, you have
 
 ```kql
 // Run each — all must return > 0 rows
-AIAgentsInfo | take 5
+AgentsInfo | take 5
 CloudAppEvents | where TimeGenerated > ago(7d) | take 5
 OfficeActivity | where TimeGenerated > ago(7d) | take 5
 MicrosoftPurviewInformationProtection | where TimeGenerated > ago(7d) | take 5
@@ -61,7 +61,7 @@ AuditLogs | where TimeGenerated > ago(7d) | take 5
 ### Lab-Specific Checks
 
 **Module 01 (Discover):**
-- [ ] At least 3 agents visible in `AIAgentsInfo` with different `ManagementStatus` values
+- [ ] At least 3 agents visible in `AgentsInfo` with different `LifecycleStatus` values
 
 **Module 02 (Govern):**
 - [ ] Copilot Studio accessible: [copilotstudio.microsoft.com](https://copilotstudio.microsoft.com)
@@ -97,7 +97,7 @@ AuditLogs | where TimeGenerated > ago(7d) | take 5
 
 | Issue | Recovery |
 |-------|----------|
-| `AIAgentsInfo` empty | Re-run ARM template; confirm Defender XDR data connector is connected and has ingested data |
+| `AgentsInfo` empty | Re-run ARM template; confirm Defender XDR data connector is connected and has ingested data |
 | Sentinel workspace missing | Deploy via ARM template → takes ~10 minutes |
 | Participant missing role | Entra admin center → Users → [user] → Assigned roles → Add assignment |
 | CDX tenant expired | Request new CDX tenant (48h lead time) or use M365 Developer Program sandbox |

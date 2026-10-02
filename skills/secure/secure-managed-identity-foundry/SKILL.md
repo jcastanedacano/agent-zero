@@ -8,7 +8,7 @@ description: >-
   managed identities, eliminating secrets in code and configuration, and
   applying granular RBAC over the Azure resources the agent needs to access.
 tags: [secure, foundry, managed-identity, azure-rbac, no-secrets, workload-identity]
-atlas_techniques: [AML.T0046, AML.T0040]
+atlas_techniques: [AML.T0055, AML.T0040]
 d3fend_techniques: [D3-CH, D3-UAP]
 nist_ai_rmf: [MANAGE-1.3, GOVERN-2.2]
 nist_csf: [PR.AA-02, PR.AC-01]

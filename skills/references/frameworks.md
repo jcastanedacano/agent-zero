@@ -5,20 +5,29 @@ Each skill includes the relevant identifiers in its YAML frontmatter.
 
 ---
 
-## MITRE ATLAS v5.4
+## MITRE ATLAS (2026.09)
 
-An adversarial tactics and techniques framework specific to AI/ML systems.
+An adversarial tactics and techniques framework specific to AI/ML systems. Names verified against the official ATLAS data release 2026.09; this table is generated from each skill's `atlas_techniques` frontmatter, so every skill in the library appears here.
 
 | Technique | Name | Skills that cover it |
 |---------|--------|---------------------|
-| AML.T0012 | Valid Accounts | govern-entra-agent-id, secure-ca-policy-agents, govern-foundry-rbac |
-| AML.T0025 | Exfiltration via ML Inference API | protect-insider-risk-management-agents, detect-data-exfiltration-agent |
-| AML.T0037 | Data from Information Repositories | discover-purview-dspm-ai, protect-sensitivity-labels-ai-outputs |
-| AML.T0040 | ML Supply Chain Compromise | discover-shadow-ai-entra-principals, govern-entra-agent-id, govern-foundry-rbac |
-| AML.T0051 | LLM Prompt Injection | detect-alert-prompt-injection-sentinel, detect-security-copilot-triage |
-| AML.T0054 | LLM Jailbreak | detect-alert-prompt-injection-sentinel, detect-sentinel-mcp-server, detect-security-copilot-triage |
-| AML.T0056 | Discover AI Model Ontology | discover-shadow-ai-entra-principals, discover-purview-dspm-ai, govern-foundry-rbac |
-| AML.T0057 | Exfiltration via Cyber Means | protect-insider-risk-management-agents, detect-data-exfiltration-agent |
+| AML.T0010 | AI Supply Chain Compromise | discover-third-party-ai-risk |
+| AML.T0010.005 | AI Supply Chain Compromise: AI Agent Tool | discover-third-party-ai-risk |
+| AML.T0012 | Valid Accounts | govern-ca-policy-workload-identity, govern-entra-agent-id, govern-foundry-rbac, govern-pim-agent-roles, secure-ca-policy-agents, secure-least-privilege-agent-identity |
+| AML.T0016 | Obtain Capabilities | discover-third-party-ai-risk |
+| AML.T0025 | Exfiltration via Cyber Means | protect-insider-risk-management-agents, secure-network-isolation-agent |
+| AML.T0036 | Data from Information Repositories | discover-purview-dspm-ai, protect-information-barriers-agents |
+| AML.T0040 | AI Model Inference API Access | detect-agent-identity-abuse, detect-anomalous-agent-behavior, discover-enumerate-foundry-agents, discover-shadow-ai-entra-principals, govern-entra-agent-id, govern-foundry-rbac, govern-lifecycle-decommission-agent, govern-pim-agent-roles, secure-ca-policy-agents, secure-least-privilege-agent-identity, secure-managed-identity-foundry, secure-network-isolation-agent |
+| AML.T0051 | LLM Prompt Injection | detect-alert-prompt-injection-sentinel, detect-respond-playbook-agent-containment, detect-security-copilot-triage, discover-inventory-agents-copilot-studio |
+| AML.T0054 | LLM Jailbreak | detect-alert-prompt-injection-sentinel, detect-security-copilot-triage, detect-sentinel-mcp-server, discover-inventory-agents-copilot-studio, govern-agent365-approval-flow |
+| AML.T0055 | Unsecured Credentials | secure-managed-identity-foundry, secure-secret-management-keyvault |
+| AML.T0057 | LLM Data Leakage | detect-data-exfiltration-agent, discover-classify-agent-connectors, govern-dlp-policy-copilot-prompts, protect-data-loss-prevention-agent-outputs, protect-information-barriers-agents, protect-insider-risk-management-agents, protect-purview-ai-hub-monitoring, protect-sensitivity-labels-ai-outputs |
+| AML.T0083 | Credentials from AI Agent Configuration | secure-secret-management-keyvault |
+| AML.T0084 | Discover AI Agent Configuration | detect-agent-identity-abuse, detect-anomalous-agent-behavior, discover-enumerate-foundry-agents, discover-purview-dspm-ai, discover-shadow-ai-entra-principals, govern-foundry-rbac |
+| AML.T0086 | Exfiltration via AI Agent Tool Invocation | detect-anomalous-agent-behavior, detect-data-exfiltration-agent, detect-respond-playbook-agent-containment, discover-classify-agent-connectors, govern-dlp-policy-copilot-prompts, protect-data-loss-prevention-agent-outputs, protect-purview-ai-hub-monitoring, protect-sensitivity-labels-ai-outputs |
+| AML.T0091.000 | Use Alternate Authentication Material: Application Access Token | detect-agent-identity-abuse, detect-respond-playbook-agent-containment, govern-ca-policy-workload-identity |
+| AML.T0103 | Deploy AI Agent | detect-agent-identity-abuse, discover-inventory-agents-copilot-studio, discover-shadow-ai-entra-principals, govern-agent365-approval-flow |
+| AML.T0109 | AI Supply Chain Rug Pull | discover-third-party-ai-risk |
 
 Reference: [atlas.mitre.org](https://atlas.mitre.org)
 
@@ -94,8 +103,8 @@ Reference: [nist.gov/cyberframework](https://www.nist.gov/cyberframework)
 
 | Pillar | Skills | ATLAS | D3FEND | NIST AI RMF | NIST CSF |
 |-------|--------|-------|--------|-------------|----------|
-| 01 Discover | 5 | 3 techniques | 3 techniques | MAP-1.x, GOVERN-1.1 | ID.AM, ID.RA |
-| 02 Govern | 7 | 3 techniques | 2 techniques | GOVERN-2.x, GOVERN-4.x | PR.AA, PR.AC |
-| 03 Secure | 5 | 2 techniques | 2 techniques | GOVERN-2.1, MANAGE-2.4 | PR.AA, PR.AC |
-| 04 Protect | 5 | 2 techniques | 2 techniques | MEASURE-2.6, MANAGE-3.2 | PR.DS, DE.CM |
-| 05 Detect | 7 | 3 techniques | 3 techniques | MANAGE-3.2, MANAGE-4.1 | DE.AE, DE.CM, RS.AN |
+| 01 Discover | 6 | 10 techniques | 3 techniques | MAP-1.x, GOVERN-1.1 | ID.AM, ID.RA |
+| 02 Govern | 7 | 7 techniques | 2 techniques | GOVERN-2.x, GOVERN-4.x | PR.AA, PR.AC |
+| 03 Secure | 5 | 5 techniques | 2 techniques | GOVERN-2.1, MANAGE-2.4 | PR.AA, PR.AC |
+| 04 Protect | 5 | 4 techniques | 2 techniques | MEASURE-2.6, MANAGE-3.2 | PR.DS, DE.CM |
+| 05 Detect | 7 | 8 techniques | 3 techniques | MANAGE-3.2, MANAGE-4.1 | DE.AE, DE.CM, RS.AN |

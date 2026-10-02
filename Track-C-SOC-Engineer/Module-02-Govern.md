@@ -58,7 +58,7 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 | Lifecycle management | Manual | Managed via Agent 365 |
 | Appears in Agent 365 Registry | No | Yes |
 | CA policy targeting | `includeServicePrincipals` | `includeAgentIdServicePrincipals` |
-| Detectable in KQL via | `AppId` | `EntraAgentId` field in `AgentsInfo` |
+| Detectable in KQL via | `AppId` | `EntraAgentID` field in `AgentsInfo` |
 
 ---
 
@@ -78,7 +78,7 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 5. Under **Manifest**, add the following to mark this as an agent identity:
 
 ```json
-"tags": ["agent365", "EntraAgentId"]
+"tags": ["agent365", "EntraAgentID"]
 ```
 
 6. Save the manifest
@@ -124,15 +124,18 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 ```kql
 AgentsInfo
 | where Timestamp > ago(30d)
-| where isempty(EntraAgentId)
+| where isempty(EntraAgentID)
 | extend OwnersStr = tostring(Owners)
 | extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
-| distinct AgentId, AgentName, Platform, OwnerDisplay, LifecycleStatus, PublishedStatus
-| extend RiskNote = "Agent operates without dedicated Entra Agent ID — identity laundering risk"
-| sort by Platform asc
+| extend IdentityState = iff(isnotempty(EntraBlueprintID), "BlueprintOnly", "NoEntraIdentity")
+| distinct AgentId, Name, Platform, OwnerDisplay, IdentityState, LifecycleStatus, PublishedStatus
+| extend RiskNote = iff(IdentityState == "NoEntraIdentity",
+    "No Entra identity: no agent identity and no blueprint — identity laundering risk",
+    "Blueprint only: no agent identity in this tenant — confirm how the agent authenticates")
+| sort by IdentityState desc, Platform asc
 ```
 
-**Expected output:** List of agents running without dedicated identity — your identity orphan inventory.
+**Expected output:** List of agents with no agent identity — your identity orphan inventory — each marked `NoEntraIdentity` (neither an agent identity nor a blueprint: identity laundering risk) or `BlueprintOnly` (a blueprint exists but no agent identity in this tenant: confirm how it authenticates). Agents that have an `EntraAgentID` are excluded.
 
 ---
 
@@ -208,7 +211,7 @@ AuditLogs
   - Mitigation: [conditional access policy targeting Agent Builder app ID]
 
 ### Governance KQL Queries (add to Sentinel)
-- [ ] Agents without Entra Agent ID (daily)
+- [ ] Agents with no Entra identity, and blueprint-only agents reviewed separately (daily)
 - [ ] Agents published without approval (daily)
 - [ ] Permission grants without approval correlation (weekly)
 
@@ -222,7 +225,7 @@ AuditLogs
 
 ## Closing Questions
 
-- What technical difference did you observe between an agent with `EntraAgentId` field populated vs. one where it is empty? What does that mean for a forensic investigation when you try to attribute an action to a specific agent?
+- What technical difference did you observe between an agent with `EntraAgentID` field populated vs. one where it is empty? What does that mean for a forensic investigation when you try to attribute an action to a specific agent?
 - If you needed to create a Sentinel analytics rule that fires when an agent is published via Agent Builder (bypassing approval), which table would you use and what field would you filter on?
 
 ---

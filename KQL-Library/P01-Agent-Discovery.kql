@@ -3,9 +3,9 @@
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
 // Tables: AgentsInfo, CloudAppEvents, OfficeActivity
-// SCHEMA NOTES (per official AgentsInfo schema, July 2026):
-//   AgentsInfo.AgentName | Owners: dynamic, can be null
-//   EntraAgentId (lowercase d) | LifecycleStatus: Active/Blocked/Uninstalled/Deleted
+// SCHEMA NOTES (verified live against tenant AgentsInfo via pack_all(), Sep 2026):
+//   AgentsInfo.Name | Owners: dynamic, can be null
+//   EntraAgentID (capital D at the end) | LifecycleStatus: Active/Blocked/Uninstalled/Deleted
 //   Both Timestamp and TimeGenerated exist in AgentsInfo
 // =============================================================================
 
@@ -14,7 +14,13 @@
 // Q1: Full Agent Inventory by Platform and Lifecycle Status
 // Use: Baseline visibility — what agents exist, which lack owner or Entra identity
 // Note: LifecycleStatus valid values: Active, Blocked, Uninstalled, Deleted
-//       Shadow AI = no Owners + no EntraAgentId
+//       Identity has three states, from EntraAgentID and EntraBlueprintID (capital D, not Id):
+//         NoEntraIdentity  both empty              -> no Entra identity at all
+//         BlueprintOnly    only EntraBlueprintID   -> a blueprint exists, no agent identity in this tenant
+//         AgentIdentity    EntraAgentID present    -> dedicated identity (blueprint may or may not exist)
+//       Validated on a live tenant (Oct 2026): third-party agents (platform "Other") appeared with a
+//       blueprint and no agent identity, so "no EntraAgentID" alone overstated the identity risk.
+//       High = no owner AND no Entra identity at all. A blueprint-only agent never reaches High on its own.
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
@@ -22,42 +28,54 @@ AgentsInfo
     LastSeen = max(Timestamp),
     AgentCount = dcount(AgentId),
     WithoutOwner = countif(isnull(Owners) or array_length(Owners) == 0),
-    WithoutEntraId = countif(isempty(EntraAgentId))
-    by Platform, LifecycleStatus, PublishedStatus, AgentName
+    NoEntraIdentity = countif(isempty(EntraAgentID) and isempty(EntraBlueprintID)),
+    BlueprintOnly = countif(isempty(EntraAgentID) and isnotempty(EntraBlueprintID))
+    by Platform, LifecycleStatus, PublishedStatus, Name
 | extend RiskLevel = case(
-    WithoutOwner > 0 and WithoutEntraId > 0, "High",
-    WithoutOwner > 0 or WithoutEntraId > 0, "Medium",
+    WithoutOwner > 0 and NoEntraIdentity > 0, "High",
+    WithoutOwner > 0 or NoEntraIdentity > 0 or BlueprintOnly > 0, "Medium",
     LifecycleStatus in ("Blocked", "Deleted"), "Medium",
     "Low"
 )
 | sort by RiskLevel asc, LastSeen desc
-| project AgentName, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
-          WithoutOwner, WithoutEntraId, AgentCount, LastSeen
+| project Name, Platform, LifecycleStatus, PublishedStatus, RiskLevel,
+          WithoutOwner, NoEntraIdentity, BlueprintOnly, AgentCount, LastSeen
 
 
 // -----------------------------------------------------------------------------
 // Q2: Shadow AI — Agents Without Owner or Entra Identity
 // Use: Identify agents operating without formal registration or assigned ownership
 // Note: Owners can be null (third-party/external agents) or empty array
+//       IdentityState uses the same three states as Q1. Blueprint-only agents are listed on
+//       purpose (they still have no agent identity here) but are not called "identity laundering".
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
 | where isnull(Owners) or array_length(Owners) == 0
-    or isempty(EntraAgentId)
+    or isempty(EntraAgentID)
 | extend OwnersStr = tostring(Owners)
-| distinct AgentId, AgentName, Platform, CreatedDateTime, OwnersStr, EntraAgentId
+| distinct AgentId, Name, Platform, CreatedDateTime, OwnersStr, EntraAgentID, EntraBlueprintID
 | extend OwnerDisplay = iff(OwnersStr == '' or OwnersStr == '[]', 'UNASSIGNED', OwnersStr)
-| extend HasEntraId = isnotempty(EntraAgentId)
+| extend NoOwner = (OwnersStr == "" or OwnersStr == "[]")
+| extend IdentityState = case(
+    isnotempty(EntraAgentID), "AgentIdentity",
+    isnotempty(EntraBlueprintID), "BlueprintOnly",
+    "NoEntraIdentity"
+)
 | extend RiskSignal = case(
-    not(HasEntraId) and (OwnersStr == "" or OwnersStr == "[]"),
-        "No owner + no Entra Agent ID — shadow AI",
-    not(HasEntraId),
-        "No Entra Agent ID — identity laundering risk",
+    IdentityState == "NoEntraIdentity" and NoOwner,
+        "No owner + no Entra identity — shadow AI",
+    IdentityState == "NoEntraIdentity",
+        "No Entra identity (no agent identity, no blueprint) — identity laundering risk",
+    IdentityState == "BlueprintOnly" and NoOwner,
+        "No owner; blueprint only, no agent identity in this tenant — confirm how it authenticates",
+    IdentityState == "BlueprintOnly",
+        "Blueprint only, no agent identity in this tenant — confirm how it authenticates",
     "No owner assigned"
 )
 | extend DaysSinceCreation = datetime_diff('day', now(), CreatedDateTime)
 | sort by DaysSinceCreation desc
-| project AgentId, AgentName, Platform, OwnerDisplay, HasEntraId, RiskSignal, DaysSinceCreation
+| project AgentId, Name, Platform, OwnerDisplay, IdentityState, RiskSignal, DaysSinceCreation
 
 
 // -----------------------------------------------------------------------------
@@ -111,7 +129,7 @@ AgentsInfo
 | extend OwnerDisplay = iff(isnull(Owners) or array_length(Owners) == 0, "UNASSIGNED", tostring(Owners))
 | project
     AgentId,
-    AgentName,
+    Name,
     Platform,
     OwnerDisplay,
     LifecycleStatus,
@@ -120,7 +138,7 @@ AgentsInfo
     DeclaredTools,
     McpServers
 | extend AlertDetail = strcat(
-    "New agent registered: ", AgentName,
+    "New agent registered: ", Name,
     " | Platform: ", Platform,
     " | Owner: ", OwnerDisplay,
     " | MCP servers: ", tostring(array_length(McpServers))
@@ -146,7 +164,7 @@ AgentsInfo
     "Medium — large declared tool count"
 )
 | project
-    AgentName, Platform,
+    Name, Platform,
     OwnerDisplay, LifecycleStatus, PublishedStatus,
     McpServerCount, McpServers,
     DeclaredToolCount, DeclaredTools,

@@ -8,7 +8,7 @@ description: >-
   identities and service principals, eliminating standing privilege and
   requiring just-in-time activation with audited justification.
 tags: [govern, entra, pim, privileged-identity, just-in-time, agent-identity]
-atlas_techniques: [AML.T0046, AML.T0040]
+atlas_techniques: [AML.T0012, AML.T0040]
 d3fend_techniques: [D3-UAP, D3-JIT]
 nist_ai_rmf: [GOVERN-2.2, MANAGE-1.3]
 nist_csf: [PR.AA-05, PR.AC-04]

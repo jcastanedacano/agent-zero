@@ -9,7 +9,7 @@ description: >-
   session controls. grantControls mfa is invalid for non-human identities;
   only block or no grantControls applies.
 tags: [govern, entra, conditional-access, workload-identity, agent-identity]
-atlas_techniques: [AML.T0056, AML.T0046]
+atlas_techniques: [AML.T0012, AML.T0091.000]
 d3fend_techniques: [D3-UAP, D3-NTF]
 nist_ai_rmf: [GOVERN-2.2, MANAGE-1.3]
 nist_csf: [PR.AA-05, PR.AC-01]

@@ -11,8 +11,10 @@ tags:
   - shadow-ai
 frameworks:
   mitre_atlas:
-    - AML.T0010  # ML Supply Chain Compromise
-    - AML.T0016  # Obtain Capabilities
+    - AML.T0010      # AI Supply Chain Compromise
+    - AML.T0010.005  # AI Supply Chain Compromise: AI Agent Tool (MCP servers, plugins)
+    - AML.T0109      # AI Supply Chain Rug Pull (trusted tool turns malicious via update)
+    - AML.T0016      # Obtain Capabilities
   d3fend:
     - D3-SFA    # Software Feature Analysis
     - D3-AC     # Application Configuration
@@ -40,7 +42,7 @@ Identify and evaluate every active third-party AI agent in the tenant — ISV Co
 
 First-party agents (built by the internal team) go through Entra Agent ID and Copilot Studio governance. Third-party agents are typically installed from the marketplace or connected directly, bypassing that same review.
 
-The reference framework is OWASP Agentic AI AG05 (Supply Chain Compromise) and MITRE ATLAS AML.T0010 (ML Supply Chain Compromise).
+The reference framework is the OWASP Top 10 for Agentic Applications (2026), ASI04 — Agentic Supply Chain Vulnerabilities, and MITRE ATLAS AML.T0010 (ML Supply Chain Compromise).
 
 ## Workflow
 

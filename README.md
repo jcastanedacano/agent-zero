@@ -26,7 +26,7 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks. 
 
 <br>
 
-A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Agentic Top 10, the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
+A complete framework for securing agentic AI in enterprise Microsoft environments: 19 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 45+ production KQL queries (live-tenant validated against Microsoft 365, June 2026), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Top 10 for Agentic Applications (2026, ASI01–ASI10), the OWASP Top 10 for LLM Applications (2026, LLM01–LLM10), the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
 
 </details>
 
@@ -188,7 +188,7 @@ agent-zero/
 │   ├── README.md
 │   ├── P01-Agent-Discovery.kql
 │   ├── P02-Governance-Gaps.kql
-│   ├── P03-Access-Anomalies.kql      ← Q7 membership inference + Q8 model inversion added
+│   ├── P03-Access-Anomalies.kql      ← Q7 membership inference + Q8 model inversion + Q11 BehaviorInfo + Q12 Agent ID object changes added
 │   ├── P04-Exfiltration-Detection.kql
 │   └── P05-Jailbreak-Detection.kql              ← Q7 LPCI + Q8 agentic ransomware chain
 ├── skills/                          ← 30 agent skills (agentskills.io format, ATLAS + NIST mapped)
@@ -240,7 +240,7 @@ The ARM template deploys: Log Analytics workspace + Microsoft Sentinel + 3 pre-c
 
 ## Skills Library
 
-30 agent skills in [agentskills.io](https://agentskills.io) format, mapped to MITRE ATLAS v5.4, D3FEND v1.3, NIST AI RMF, and NIST CSF 2.0.
+30 agent skills in [agentskills.io](https://agentskills.io) format, mapped to MITRE ATLAS (2026.09), D3FEND v1.3, NIST AI RMF, and NIST CSF 2.0.
 
 Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappings, license and role requirements), step-by-step workflow, KQL queries, and verification checklist.
 
@@ -252,7 +252,7 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 | [04 Protect](./skills/protect/) | `protect-data-loss-prevention-agent-outputs` · `protect-sensitivity-labels-ai-outputs` · `protect-purview-ai-hub-monitoring` · `protect-information-barriers-agents` · `protect-insider-risk-management-agents` |
 | [05 Detect](./skills/detect/) | `detect-alert-prompt-injection-sentinel` · `detect-anomalous-agent-behavior` · `detect-data-exfiltration-agent` · `detect-agent-identity-abuse` · `detect-respond-playbook-agent-containment` · `detect-sentinel-mcp-server` · `detect-security-copilot-triage` |
 
-→ [Framework cross-reference](./skills/references/frameworks.md) — all 30 skills mapped to ATLAS, D3FEND, NIST AI RMF, and NIST CSF.
+→ [Framework cross-reference](./skills/references/frameworks.md) — the ATLAS table is generated from all 30 skills; every skill also carries its D3FEND, NIST AI RMF, and NIST CSF identifiers in its frontmatter.
 
 ---
 
@@ -262,11 +262,11 @@ All queries in the KQL Library have been validated against a live Microsoft 365 
 
 | File | Tables | Last Validated | Notes |
 |------|--------|---------------|-------|
-| [P01-Agent-Discovery.kql](./KQL-Library/P01-Agent-Discovery.kql) | `AgentsInfo`, `CloudAppEvents`, `OfficeActivity` | 2026-06-28 | Migrated from `AIAgentsInfo` (deprecated July 1, 2026). Real column is `Name` (not `AgentName`). Q6 added: MCP server + tool count risk. |
-| [P02-Governance-Gaps.kql](./KQL-Library/P02-Governance-Gaps.kql) | `AgentsInfo`, `AuditLogs`, `CloudAppEvents` | 2026-06-28 | Migrated from `AIAgentsInfo`. `Owners` (dynamic) cast to string before grouping. Q6 added: compound actions without per-step HITL events (AIRT Taxonomy v2.0 §5.4). |
-| [P03-Access-Anomalies.kql](./KQL-Library/P03-Access-Anomalies.kql) | `CloudAppEvents`, `EntraIdSpnSignInEvents`, `AuditLogs` | 2026-06-28 | Migrated from `AADSpnSignInEventsBeta` (deprecated Dec 2025). Field is `Country` (not `Location`). Q5b: capability/architecture disclosure (AIRT Taxonomy v2.0 §4.9). Q7: membership inference detection (privacy classification per Microsoft threat modeling). Q8: model inversion / training data reconstruction. |
+| [P01-Agent-Discovery.kql](./KQL-Library/P01-Agent-Discovery.kql) | `AgentsInfo`, `CloudAppEvents`, `OfficeActivity` | 2026-09-16 | Migrated from `AIAgentsInfo` (deprecated July 1, 2026). Display-name column is `Name`, not `AgentName` (confirmed live via `getschema` against tenant `AgentsInfo`, Sep 2026 — an earlier pass had this backwards). Q6 added: MCP server + tool count risk. Q1 and Q2 now classify identity in three states (`NoEntraIdentity`, `BlueprintOnly`, `AgentIdentity`) from `EntraAgentID` and `EntraBlueprintID`; a blueprint-only agent no longer counts as "no identity" or reaches High on its own. |
+| [P02-Governance-Gaps.kql](./KQL-Library/P02-Governance-Gaps.kql) | `AgentsInfo`, `AuditLogs`, `CloudAppEvents` | 2026-06-28 | Migrated from `AIAgentsInfo`. `Owners` (dynamic) cast to string before grouping. Q6 added: compound actions without per-step HITL events (AIRT Taxonomy v2.0 §5.4). Q1 splits identity orphans into `NoEntraIdentity` and `BlueprintOnly`. |
+| [P03-Access-Anomalies.kql](./KQL-Library/P03-Access-Anomalies.kql) | `CloudAppEvents`, `EntraIdSpnSignInEvents`, `AuditLogs`, `AgentsInfo`, `BehaviorInfo` | 2026-09-16 | Migrated from `AADSpnSignInEventsBeta` (deprecated Dec 2025). Field is `Country` (not `Location`). Q5b: capability/architecture disclosure (AIRT Taxonomy v2.0 §4.9). Q7: membership inference detection (privacy classification per Microsoft threat modeling). Q8: model inversion / training data reconstruction. Q10: `AgentsInfo` display-name column is `Name`, not `AgentName`. Q11 added: real-time protection blocks via `BehaviorInfo` (Microsoft Defender Security for AI). Q12 added: credential, owner, and sponsor changes on Agent ID objects, correlating `AuditLogs` with `AgentsInfo` by object id (validated on a live tenant, Oct 2026). |
 | [P04-Exfiltration-Detection.kql](./KQL-Library/P04-Exfiltration-Detection.kql) | `CloudAppEvents`, `MicrosoftPurviewInformationProtection` | — | Sentinel tables — `TimeGenerated` correct. |
-| [P05-Jailbreak-Detection.kql](./KQL-Library/P05-Jailbreak-Detection.kql) | `CloudAppEvents`, `BehaviorAnalytics`, `AgentsInfo` | — | Sentinel tables. Q6: goal hijacking via sustained objective drift (AIRT Taxonomy v2.0 §4.4). Q7: LPCI via tool responses (OWASP AST03, arXiv:2507.10457). Q8: agentic ransomware chain detection — JadePuffer pattern (discovery → credential → lateral → encryption in compressed time window). |
+| [P05-Jailbreak-Detection.kql](./KQL-Library/P05-Jailbreak-Detection.kql) | `LLMActivity`, `CloudAppEvents`, `MicrosoftPurviewInformationProtection`, `AuditLogs` | 2026-09-16 | Q1 rewritten to use `LLMActivity` (`RecordType == "CopilotInteraction"`, `mv-expand` on `LLMEventData.Messages`, `JailbreakDetected`), matching the official Microsoft example — confirmed live that `CloudAppEvents` has no `AgentInteraction` ActionType for this scenario. Q6: goal hijacking via sustained objective drift (AIRT Taxonomy v2.0 §4.4). Q7: LPCI via tool responses (OWASP AST03, arXiv:2507.10457). Q8: agentic ransomware chain detection — JadePuffer pattern (discovery → credential → lateral → encryption in compressed time window). |
 
 **Live tenant findings (June 2026):** P01-Q2 returned shadow AI agents (Mural, Matter, 1Page, Teamflect, Priority Matrix) that had been operating for 951 days without an Entra Agent ID or assigned owner — validating the shadow AI detection logic.
 
@@ -504,7 +504,8 @@ This framework does not invent a taxonomy. It maps six published threat models t
 | Framework | Scope | Effort to adopt | Best used for |
 |---|---|---|---|
 | **PHANTOM-B** | The LLM call | Low | First pass on every agent in the inventory (Module 01) |
-| **OWASP Agentic Top 10** | Agent system | Low | Vulnerability classification and reporting |
+| **OWASP Top 10 for Agentic Applications** | Agent system | Low | Vulnerability classification and reporting |
+| **OWASP Top 10 for LLM Applications** | Model / inference layer | Low | Data exposure, unbounded consumption, supply chain at the model layer |
 | **OWASP Agentic Skills Top 10** | Skill / MCP layer | Low | Third-party tool and plugin review (Module 07) |
 | **CIS Controls v8.1** | Control catalog | Medium | Mapping agent work into an existing CIS program |
 | **MAESTRO** | Multi-agent architecture | High | Cross-layer propagation in agent-to-agent designs |
@@ -513,22 +514,33 @@ This framework does not invent a taxonomy. It maps six published threat models t
 **Which to start with:** PHANTOM-B per agent, escalate to MAESTRO only when agents call other agents. The two answer different questions and the effort difference is real.
 
 <details>
-<summary><b>OWASP Agentic AI Top 10 (2026)</b> — AG01–AG10 · agent system level</summary>
+<summary><b>OWASP Top 10 for Agentic Applications (2026)</b> — ASI01–ASI10 · agent system level</summary>
 
 <br>
 
+Published 9 December 2025 by the OWASP GenAI Security Project (100+ contributors, built on real incident data). This table replaces an earlier internal "AG01–AG10" shorthand this repo used before OWASP's official taxonomy shipped — some categories that shorthand listed (model extraction, membership inference, denial of service) turned out to belong to the separate **OWASP Top 10 for LLM Applications**, not this one; see the note below the table.
+
 | OWASP Category | This Framework | Primary Pillar |
 |----------------|---------------|----------------|
-| AG01 — Unsafe Agent Autonomy | Tiered Autonomy principle; CA policy enforcement; human-in-the-loop controls | 02 Govern |
-| AG02 — Prompt Injection | KQL P05 jailbreak detection; Track C Module-03 lab; Sentinel analytics rule | 05 Detect |
-| AG03 — Excessive Permissions | Least Agency; Entra Agent ID scoped permissions; PIM just-in-time | 03 Secure |
-| AG04 — Memory Poisoning | KQL Q5a memory/session poisoning; Track C Module-04 point 5 | 04 Protect |
-| AG05 — Supply Chain Compromise | KQL Q5c behavioral anomaly; Track C Module-04 point 6; model supply chain notes | 04 Protect |
-| AG06 — Model Extraction | KQL P03-Q6 endpoint query anomaly; Track B/C Module-03 | 03 Secure |
-| AG07 — Membership Inference | KQL P03-Q7 (high-volume low-distinctness probing, privacy classification); KQL P03-Q8 (model inversion); Track B/C Module-04 | 04 Protect |
-| AG08 — Multi-Agent Trust | KQL Q5b lateral movement; Track B/C Module-02/04; multi-agent trust boundaries | 02 Govern |
-| AG09 — Shadow AI / Ungoverned Agents | Discover pillar; Defender AI Inventory; Agent 365 Registry; KQL P01 | 01 Discover |
-| AG10 — Denial of AI Service | KQL P03-Q1 scope expansion; rate limit monitoring via Q6 | 03 Secure |
+| ASI01 — Agent Goal Hijack | Tiered Autonomy principle; CA policy enforcement; KQL P05 jailbreak detection; human-in-the-loop controls | 02 Govern / 05 Detect |
+| ASI02 — Tool Misuse & Exploitation | CAGE control-plane model (independent evaluation outside agent reasoning); CoreBreak direct tool-invocation defense | 02 Govern |
+| ASI03 — Identity & Privilege Abuse | Least Agency; Entra Agent ID scoped permissions; PIM just-in-time | 03 Secure |
+| ASI04 — Agentic Supply Chain Vulnerabilities | KQL Q5c behavioral anomaly; Track B/C Module-04 point 6; MCP/vendor supply chain (Module 07) | 04 Protect / 07 Vendor |
+| ASI05 — Unexpected Code Execution (RCE) | CoreBreak direct tool invocation + forged-approval defense (Module 02 point 11); OffGuard guardrail RCE (Module 03 point 12) | 02 Govern / 03 Secure |
+| ASI06 — Memory & Context Poisoning | KQL Q5a memory/session poisoning; Track B/C Module-04 point 5 | 04 Protect |
+| ASI07 — Insecure Inter-Agent Communication | KQL Q5b lateral movement; multi-agent trust boundaries; Track B/C Module-02/04 | 02 Govern / 04 Protect |
+| ASI08 — Cascading Failures | MAESTRO cross-layer propagation; multi-agent trust boundary controls (Module 04) | 04 Protect |
+| ASI09 — Human-Agent Trust Exploitation | CAGE model — approval screens must show the actual command, not the agent's description of it (Module 02 point 5) | 02 Govern |
+| ASI10 — Rogue Agents | Three-level kill switch (Module 02 point 10); ID Protection for agents confirm-compromise workflow (Module 02 point 12) | 02 Govern |
+
+**Two categories from the old AG-list weren't Agentic Applications risks at all — they're OWASP LLM Top 10 (2026) risks, at the model/inference layer, not the agent-system layer:**
+
+| OWASP Category | Old shorthand | This Framework | Primary Pillar |
+|----------------|---------------|-----------------|-----------------|
+| LLM06 — Unbounded Consumption | (was "AG06 — Model Extraction") | KQL P03-Q6 endpoint query anomaly; Foundry per-identity rate limiting | 03 Secure |
+| LLM02 — Sensitive Information Disclosure | (was "AG07 — Membership Inference") | KQL P03-Q7/Q8 (query-pattern + model inversion detection); Foundry RBAC; no fine-tuning on raw PII | 04 Protect |
+
+**One category ("AG09 — Shadow AI / Ungoverned Agents") had no OWASP Top 10 equivalent at all**, in either list — it's a governance/inventory gap, not a runtime vulnerability class. It stays covered here via CIS Controls AI Agent Companion Guide, Control 5 (Account Management), and the Discover pillar (Module 01, KQL P01), without an OWASP tag.
 
 </details>
 
@@ -537,7 +549,7 @@ This framework does not invent a taxonomy. It maps six published threat models t
 
 <br>
 
-The [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-top-10/) (AST01–AST10) covers risks specific to the **skill/plugin layer** — the MCP servers, tools, and agent extensions that load into agent runtimes at execution time. Distinct from the Agentic AI Top 10 (AG01–AG10) which covers the agent system level.
+The [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-top-10/) (AST01–AST10) covers risks specific to the **skill/plugin layer** — the MCP servers, tools, and agent extensions that load into agent runtimes at execution time. Distinct from the OWASP Top 10 for Agentic Applications (ASI01–ASI10) above, which covers the agent system level.
 
 | OWASP AST | Risk | Severity | This Framework |
 |-----------|------|----------|----------------|
@@ -795,6 +807,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 | [microsoft/Data-and-Agent-Governance-and-Security-Accelerator](https://github.com/microsoft/Data-and-Agent-Governance-and-Security-Accelerator) | Automates Purview DSPM for AI onboarding, DLP, sensitivity labels, and audit logging via `azd up` | Automation accelerator for deployment — not a learning framework. Use it after you understand what you're deploying. |
 | [microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) | Policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers OWASP Agentic Top 10. | Framework-agnostic governance SDK (Python, any LLM). Complements this project's Microsoft-native focus. |
 | [microsoft/agentic-ai-lab](https://github.com/microsoft/agentic-ai-lab) | Azure AI Foundry & Agents development workshop — RAG, MCP, red teaming, observability | Developer-focused lab for building agents, not securing them in enterprise environments. |
+| [Cloud-Architekt/AzureAD-Attack-Defense](https://github.com/Cloud-Architekt/AzureAD-Attack-Defense) | Entra ID Attack & Defense Playbook: attack scenarios, detections, and mitigations for Microsoft Entra ID. Its Agent Identities chapter (announced September 2026) covers a three-phase agent attack lifecycle, "Living off the Agent's Tools", and the Agent ID object model. | Attacker-side reference for the identity plane. This project uses it in Track C Module 06 (point 8) and keeps its own detections and multi-track structure. |
 | [Azure/Azure-Sentinel Training Lab](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Training/Azure-Sentinel-Training-Lab) | Single-track Sentinel hands-on lab with pre-loaded data via ARM template | Sentinel product training for one audience. This project adds multi-track structure and an agentic security domain layer on top. |
 
 ---

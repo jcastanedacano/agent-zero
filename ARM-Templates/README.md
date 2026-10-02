@@ -12,7 +12,7 @@ Deploy a pre-configured Microsoft Sentinel workspace for Track B and C labs.
 - **Data connectors.** This template does not deploy the Microsoft 365, Defender XDR, or Purview connectors. Without them, `AgentsInfo` and `CloudAppEvents` are empty and the rules have nothing to fire on. Connect them from Sentinel → Data connectors in your tenant, or via the demo tenant setup in `/Facilitator-Kit`.
 - **Demo data.** No sample activity is pre-loaded. The rules run against your tenant's real telemetry once the connectors above are active.
 
-**Schema note:** the analytics rules query `AgentsInfo` (Defender Advanced Hunting / Sentinel). The predecessor table `AIAgentsInfo` was retired 1 July 2026 — if you copy these queries elsewhere, confirm you're on the current schema (`CreatedDateTime`, `LifecycleStatus`, `Owners`, `AgentName`), not the old `AIAgentsInfo` column names.
+**Schema note:** the analytics rules query `AgentsInfo` (Defender Advanced Hunting / Sentinel). The predecessor table `AIAgentsInfo` was retired 1 July 2026 — if you copy these queries elsewhere, confirm you're on the current schema (`CreatedDateTime`, `LifecycleStatus`, `Owners`, `Name` — note the display-name column is `Name`, not `AgentName`, confirmed live via `getschema` against tenant `AgentsInfo`, Sep 2026), not the old `AIAgentsInfo` column names.
 
 ## Deploy
 

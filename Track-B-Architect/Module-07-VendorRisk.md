@@ -152,7 +152,7 @@ AgentsInfo
 | extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
 | extend McpServerCount = array_length(McpServers)
 | project
-    AgentName, Platform, OwnerDisplay, LifecycleStatus,
+    Name, Platform, OwnerDisplay, LifecycleStatus,
     McpServerCount, McpServers,
     RiskNote = "Agent has external MCP server connections — vendor assessment required"
 | sort by McpServerCount desc

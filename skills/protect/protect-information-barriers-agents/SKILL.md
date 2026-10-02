@@ -9,7 +9,7 @@ description: >-
   preventing an agent in the finance area from accessing legal area data or
   vice versa, meeting regulatory requirements for information separation.
 tags: [protect, purview, information-barriers, segmentation, compliance, teams, sharepoint]
-atlas_techniques: [AML.T0057, AML.T0048]
+atlas_techniques: [AML.T0057, AML.T0036]
 d3fend_techniques: [D3-NI, D3-EAC]
 nist_ai_rmf: [GOVERN-6.2, MANAGE-2.2]
 nist_csf: [PR.DS-05, PR.AC-05]

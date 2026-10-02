@@ -104,6 +104,12 @@ EntraIdSpnSignInEvents
 //      consent tokens or craft tool-specific injection payloads
 // Reference: Microsoft AIRT Taxonomy v2.0 §4.9 | No OWASP mapping yet (emerging)
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 1h | Severity: Medium
+// NOTE: ActionType == "AgentInteraction" is NOT verified against a live tenant.
+//       The identical ActionType was confirmed to NOT EXIST in CloudAppEvents for
+//       the P05-Q1 jailbreak scenario (fixed to use LLMActivity + RecordType ==
+//       "CopilotInteraction" instead — see P05-Jailbreak-Detection.kql). Run
+//       `CloudAppEvents | take 5 | getschema` and confirm the real ActionType
+//       values in your tenant before trusting this query in production.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(1h)
@@ -150,7 +156,17 @@ CloudAppEvents
 // Use: Detect attackers systematically querying Azure AI Foundry or Copilot
 //      endpoints to reconstruct the model through input/output pairs
 //      Threshold: >500 AI API calls per hour from a single identity (adjust per baseline)
-// Reference: OWASP Agentic AI AG06 — Model Extraction; Red Teaming AI Ch.6
+// Reference: OWASP LLM Top 10 2026, LLM06 — Unbounded Consumption (model
+//            extraction/theft folded into this category in the 2026 edition);
+//            Red Teaming AI Ch.6
+// NOTE: "AgentInteraction" in the ActionType list below is NOT verified against
+//       a live tenant. That exact value was confirmed to NOT EXIST in
+//       CloudAppEvents for the P05-Q1 jailbreak scenario (fixed to use
+//       LLMActivity + RecordType == "CopilotInteraction" instead — see
+//       P05-Jailbreak-Detection.kql). Run `CloudAppEvents | take 5 | getschema`
+//       and confirm the real ActionType values in your tenant before trusting
+//       this query in production; AIInference/ModelInference/CompletionRequest
+//       are equally unverified.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
@@ -197,6 +213,11 @@ CloudAppEvents
 // Reference: Mileva AI Security Fundamentals Level 3 — Model Extraction & Membership Inference
 // MITRE ATLAS: AML.T0040 (AI Model Inference API Access)
 // Recommended: Analytics Rule | Frequency: 1h | Lookback: 4h | Severity: Medium (privacy)
+// NOTE: "AgentInteraction" in the ActionType list below is NOT verified against
+//       a live tenant — confirmed NOT to exist in CloudAppEvents for the P05-Q1
+//       jailbreak scenario (see P05-Jailbreak-Detection.kql for the corrected
+//       LLMActivity-based pattern). Confirm real ActionType values with
+//       `CloudAppEvents | take 5 | getschema` before trusting this query.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(4h)
@@ -254,6 +275,11 @@ CloudAppEvents
 //      targeting named entities: people, documents, records.
 // Reference: MITRE ATLAS AML.T0040; Carlini et al. "Extracting Training Data from LLMs"
 // Recommended: Analytics Rule | Frequency: 4h | Lookback: 24h | Severity: High
+// NOTE: "AgentInteraction" in the ActionType list below is NOT verified against
+//       a live tenant — confirmed NOT to exist in CloudAppEvents for the P05-Q1
+//       jailbreak scenario (see P05-Jailbreak-Detection.kql for the corrected
+//       LLMActivity-based pattern). Confirm real ActionType values with
+//       `CloudAppEvents | take 5 | getschema` before trusting this query.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(24h)
@@ -368,7 +394,7 @@ AgentsInfo
 | extend OwnerUPN = tostring(Owner)
 | join kind=inner DisabledOrDeletedUsers on $left.OwnerUPN == $right.DisabledUPN
 | project
-    AgentName       = Name,
+    Name,
     Platform,
     LifecycleStatus,
     OrphanedSponsor = OwnerUPN,
@@ -396,4 +422,81 @@ AuditLogs
     TargetPrincipal,
     ActivatedBy,
     OperationName
+| sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q11: Real-Time Protection Blocks — What Actually Got Stopped at the Tool Layer
+// Use: Audit BehaviorInfo for agent tool invocations audited or blocked by
+//      Microsoft Defender real-time protection (Agent 365, Copilot Studio,
+//      Foundry). When a custom blocking rule covers an agent, near-real-time
+//      alerts stop generating for it — this table is the record of what
+//      happened even when the alert feed goes quiet.
+// Reference: Microsoft Learn, "Protect AI agents in real time using
+//      Microsoft Defender" and "BehaviorInfo (Preview)" table reference.
+// -----------------------------------------------------------------------------
+BehaviorInfo
+| where Timestamp > ago(7d)
+| where DataSources has_any ("Security for AI", "Agent 365", "Copilot", "Foundry")
+    or Categories has_any ("PromptInjection", "AgentAbuse", "InitialAccess")
+| project
+    Timestamp,
+    BehaviorId,
+    Title,
+    Description,
+    Categories,
+    AttackTechniques,
+    ActionType,
+    AccountUpn,
+    DetectionSource,
+    ServiceSource
+| sort by Timestamp desc
+
+
+// -----------------------------------------------------------------------------
+// Q12: Agent ID Objects — Credential, Owner, and Sponsor Changes
+// Use: Hunt for credential additions and ownership/sponsorship changes on Entra
+//      Agent ID objects (blueprint and agent identity). Credentials on a blueprint
+//      or agent identity are rare, high-signal events; owners and sponsors decide
+//      who can modify, re-enable, or delete the agent.
+// Why correlate by ID: validated on a live tenant (Oct 2026) — Agent ID objects are
+//      logged in AuditLogs as GENERIC application / service principal operations,
+//      with no agent-specific OperationName, and ResType is only "Application" or
+//      "ServicePrincipal". The display name is chosen by the creator (a Foundry
+//      agent identity shows a GUID; "Hermes Identity" has no "blueprint" in it),
+//      so a name filter misses objects. AgentsInfo.EntraAgentID and
+//      EntraBlueprintID are the keys that matched the object ids in AuditLogs.
+// Coverage limit: the blueprint PRINCIPAL (the blueprint's service principal, where
+//      "Consent to application" and "Add app role assignment" were logged) did NOT
+//      match either AgentsInfo column, so consent and app-role changes there are not
+//      caught by this join. Agents with both IDs empty in AgentsInfo are not covered.
+// Actor types seen: "user" (a person), "application" (for example a Graph PowerShell
+//      app adding a credential), and Microsoft-internal provisioning ("Microsoft
+//      Azure AD Internal - Jit Provisioning" created the first-party Copilot Studio
+//      blueprint service principal). Review "application" actors first.
+// Note: the en dash in "Update application – Certificates and secrets management"
+//      is why this uses `contains` for that operation instead of an exact match.
+// Recommended: Hunting query or Analytics Rule | Frequency: 1h | Lookback: 7d
+// -----------------------------------------------------------------------------
+let AgentObjects = AgentsInfo
+    | where Timestamp > ago(90d)
+    | summarize by AgentRecord = Name, Platform, EntraAgentID, EntraBlueprintID
+    | mv-expand Key = pack_array(EntraAgentID, EntraBlueprintID)
+    | extend Key = tolower(tostring(Key))
+    | where isnotempty(Key)
+    | project Key, AgentRecord, Platform;
+AuditLogs
+| where TimeGenerated > ago(7d)
+| where OperationName in (
+        "Add service principal credentials",
+        "Add owner to application",
+        "Add owner to service principal",
+        "Add user sponsor")
+    or OperationName contains "Certificates and secrets management"
+| mv-expand TR = TargetResources
+| extend ObjectId = tolower(tostring(TR.id)), ObjectType = tostring(TR.type), ObjectName = tostring(TR.displayName)
+| join kind=inner AgentObjects on $left.ObjectId == $right.Key
+| extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+| extend ActorType = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), "user", "application")
+| project TimeGenerated, OperationName, ObjectType, ObjectName, AgentRecord, Platform, Actor, ActorType
 | sort by TimeGenerated desc

@@ -9,7 +9,7 @@ description: >-
   exposed network surface and preventing exfiltration via unauthorized
   network channels.
 tags: [secure, network, private-endpoint, vnet, nsg, foundry, isolation]
-atlas_techniques: [AML.T0048, AML.T0040]
+atlas_techniques: [AML.T0025, AML.T0040]
 d3fend_techniques: [D3-NI, D3-NTF, D3-ANCI]
 nist_ai_rmf: [MANAGE-1.3, GOVERN-6.2]
 nist_csf: [PR.AC-05, DE.CM-01]

@@ -9,7 +9,7 @@ description: >-
   applications with sensitive Graph API permissions that lack a security
   review.
 tags: [discover, entra, shadow-ai, service-principal, oauth, graph-permissions]
-atlas_techniques: [AML.T0056, AML.T0040]
+atlas_techniques: [AML.T0084, AML.T0040, AML.T0103]
 d3fend_techniques: [D3-UAP, D3-SFA]
 nist_ai_rmf: [MAP-1.1, GOVERN-2.1]
 nist_csf: [ID.AM-02, PR.AA-01]
