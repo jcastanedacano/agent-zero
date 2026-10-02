@@ -89,7 +89,7 @@ Available policy types:
 ### Step 5 — Connect to Sentinel
 
 AI Hub generates events in the `MicrosoftDataLossPrevention` and `PurviewAuditLog` tables.
-Verify the Purview connector is active in {workspace-name} and that events are flowing.
+Verify the Purview connector is active in your Sentinel workspace and that events are flowing.
 
 ```kql
 // Verify event flow from AI Hub

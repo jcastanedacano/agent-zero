@@ -40,7 +40,7 @@ Is the resource Azure-native and does it support Entra auth?
              └── No → rotate manually every 90 days with an alert
 ```
 
-## API versions validated for {workspace-name}
+## API versions validated against a live Sentinel workspace
 
 | Resource | API Version |
 |---|---|

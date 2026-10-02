@@ -11,7 +11,7 @@ Based on agentskills.io, adapted for the Microsoft Security stack.
 skills/{pillar}/{skill-name}/
 ├── SKILL.md          ← Definition (YAML frontmatter + Markdown)
 ├── queries/
-│   └── *.kql         ← KQL for {workspace-name} (validated against existing tables)
+│   └── *.kql         ← KQL for your Sentinel workspace (validated against existing tables)
 └── references/
     └── frameworks.md ← ATLAS, D3FEND, NIST AI RMF, CSF 2.0 mappings
 ```
@@ -81,7 +81,7 @@ All skills **must** include `deny_write` for at minimum:
 ## Prerequisites
 ## Workflow
 ## Verification
-## {workspace-name} notes
+## Environment notes
 ```
 
 ## Naming convention

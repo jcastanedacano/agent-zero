@@ -19,7 +19,7 @@ effort_hours: 4
 
 ## When to use
 
-- CopilotStudio_CL and/or FoundryAgents_CL connectors active with data in {workspace-name}
+- CopilotStudio_CL and/or FoundryAgents_CL connectors active with data in your Sentinel workspace
 - As the first analytics rule in the AISOC — highest detection ROI
 - Covers MITRE ATLAS AML.T0051 (LLM Prompt Injection)
 
@@ -107,7 +107,7 @@ On incident creation:
 3. If `AttemptCount >= 10`: suspend the agent's active session
 4. Notify the AISOC Teams channel with a summary
 
-### Step 5 — Validate with synthetic data in {workspace-name}
+### Step 5 — Validate with synthetic data in your Sentinel workspace
 
 If there is no real traffic, inject a test event via DCR:
 ```bash

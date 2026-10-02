@@ -42,7 +42,7 @@ Look for secrets in:
 
 ### Step 2 — Create or reuse an existing Key Vault
 
-{workspace-name} has `{kv-name}` available. For new agents, create a dedicated KV:
+Reuse an existing Key Vault if your environment already has one. For new agents, create a dedicated KV:
 
 ```bash
 az keyvault create \

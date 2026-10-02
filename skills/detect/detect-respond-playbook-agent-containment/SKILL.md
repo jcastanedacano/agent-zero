@@ -47,7 +47,7 @@ Remediation requires human review.
 ### Step 1 — Create the Logic App in Azure
 
 ```bash
-# Create the Logic App in {workspace-name}
+# Create the Logic App in the Sentinel resource group
 az logic workflow create \
   --resource-group {resource-group} \
   --location centralus \

@@ -1,5 +1,5 @@
 // skill: discover-inventory-agents-copilot-studio
-// workspace: {workspace-name} | tenant: contoso.com
+// workspace: {workspace-name} | tenant: {tenant-domain}
 // prerequisito: verificar que CopilotStudio_CL tiene datos antes de ejecutar
 //   union CopilotStudio_CL | summarize count() — debe retornar > 0
 
