@@ -215,6 +215,15 @@ Run `KQL-Library/P03-Access-Anomalies.kql`, Q12. It correlates `AuditLogs` with 
 
 **Expected output:** one row per credential, owner, or sponsor change in the last 7 days on an object listed in `AgentsInfo`, with `ObjectType` (`Application` for a blueprint, `ServicePrincipal` for an agent identity), `Actor` and `ActorType`.
 
+**ATT&CK mapping (our own, ATT&CK Enterprise v19.2, ids and names checked against the ATT&CK data):**
+
+| `OperationName` | ATT&CK technique | Note |
+|---|---|---|
+| `Add service principal credentials`; `Create application – Certificates and secrets management`; `Update application – Certificates and secrets management` | T1098.001 Account Manipulation: Additional Cloud Credentials | ATT&CK's detection strategy DET0531 (analytic AN1469) lists `azure:audit` `Add service principal credentials` for this technique |
+| `Add owner to application`; `Add owner to service principal`; `Add user sponsor` | T1098 Account Manipulation | No sub-technique covers ownership or sponsorship, so T1098 is the closest match (our judgment). An owner can add credentials, which is T1098.001 |
+
+Consent and app role changes on the blueprint principal are not mapped here because this query does not cover them.
+
 **Document in your playbook:** Which rows have `ActorType = application`? For each credential change, is there a change record? Who are the owners and sponsors added, and are they the people your governance registry says are accountable (Track B Module 02)?
 
 **If it returns no rows:** either nothing changed in 7 days, or the agent has both `EntraAgentID` and `EntraBlueprintID` empty in `AgentsInfo`, or the change was on the blueprint principal, which this join does not cover. Widen the window to 90 days before concluding anything.

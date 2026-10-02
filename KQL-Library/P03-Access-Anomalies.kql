@@ -480,6 +480,15 @@ BehaviorInfo
 //      moving from agent identity only to agent identity + blueprint), so AgentObjects is reduced to
 //      one row per Key. Without it each matching audit event was returned twice (9 rows instead of 7
 //      on the validated tenant, 90-day window).
+// MITRE ATT&CK (Enterprise v19.2; our own mapping, ids and names checked against the ATT&CK STIX data):
+//      Add service principal credentials, and Create/Update application - Certificates and secrets
+//        management -> T1098.001 Account Manipulation: Additional Cloud Credentials (persistence,
+//        privilege escalation). ATT&CK's own detection strategy DET0531 (analytic AN1469) lists the
+//        azure:audit operation "Add service principal credentials" for this technique.
+//      Add owner to application, Add owner to service principal, Add user sponsor -> T1098 Account
+//        Manipulation. No sub-technique covers ownership or sponsorship, so T1098 is the closest match
+//        (our judgment); an owner can then add credentials, which is T1098.001.
+//      Not mapped: consent and app role changes on the blueprint principal, which this join does not cover.
 // Recommended: Hunting query or Analytics Rule | Frequency: 1h | Lookback: 7d
 // -----------------------------------------------------------------------------
 let AgentObjects = AgentsInfo
