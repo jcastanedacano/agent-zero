@@ -119,14 +119,15 @@ Get the label ID from Purview → Information protection → Labels → select l
 
 ### Step 3 — KQL: DLP policy matches in AI interactions
 
+> **Column names, validated on a Sentinel workspace (October 2026).** `MicrosoftPurviewInformationProtection` has no `Activity`, `UserAgent`, `SiteUrl`, `LabelId` or `PolicyDetails` column: it holds label events (`Operation`, `LabelName`, `SensitivityLabelId`, `ObjectId`, `UserId`, `Workload`). File access is in `OfficeActivity` (`Operation`, `OfficeObjectId`, `Site_Url`, `UserAgent`). **Not verified:** this version runs but returned no rows on the validation tenant, where that table has no DLP events and no `AIInteractions` workload. DLP rule matches that exist there (486 in 30 days) are in `OfficeActivity` (`RecordType` `ComplianceDLPSharePoint` and `ComplianceDLPExchange`, `Operation` `DLPRuleMatch` or `DlpRuleMatch`). Confirm where DLP for AI interactions lands in your tenant.
+
 ```kql
 MicrosoftPurviewInformationProtection
 | where TimeGenerated > ago(7d)
-| where Activity == "DLPRuleMatch"
+| where Operation == "DLPRuleMatch"
     and Workload == "AIInteractions"
 | extend SensitiveTypes = tostring(SensitiveInfoTypeData)
-| extend PolicyName = tostring(PolicyDetails[0].PolicyName)
-| extend MatchedRule = tostring(PolicyDetails[0].Rules[0].RuleName)
+| extend MatchedRule = ExecutionRuleName
 | summarize
     MatchCount = count(),
     LastMatch = max(TimeGenerated),
@@ -141,18 +142,28 @@ MicrosoftPurviewInformationProtection
 
 ### Step 4 — KQL: Agents accessing unlabeled documents
 
+> **Column names, validated on a Sentinel workspace (October 2026).** `MicrosoftPurviewInformationProtection` has no `Activity`, `UserAgent`, `SiteUrl`, `LabelId` or `PolicyDetails` column: it holds label events (`Operation`, `LabelName`, `SensitivityLabelId`, `ObjectId`, `UserId`, `Workload`). File access is in `OfficeActivity` (`Operation`, `OfficeObjectId`, `Site_Url`, `UserAgent`). Same logic and limits as Module 01 step 3: agent traffic is guessed from `UserAgent` (no rows on the validation tenant), and label events record changes, not the current label.
+
 ```kql
-MicrosoftPurviewInformationProtection
+let AgentUserAgents = dynamic(["agent", "copilot", "assistant", "bot", "power-automate"]);
+let LabelLookback = 90d;
+OfficeActivity
 | where TimeGenerated > ago(7d)
-| where Activity in ("FileAccessed", "FileDownloaded")
-| where isempty(LabelId) or LabelName == ""
-| extend IsAgentAccess = UserAgent has_any ("agent", "copilot", "assistant", "bot", "power-automate")
-| where IsAgentAccess == true
+| where RecordType == "SharePointFileOperation"
+    and Operation in ("FileAccessed", "FileDownloaded")
+| where UserAgent has_any (AgentUserAgents)
+| join kind=leftouter (
+    MicrosoftPurviewInformationProtection
+    | where TimeGenerated > ago(LabelLookback)
+    | where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied")
+    | distinct ObjectId
+) on $left.OfficeObjectId == $right.ObjectId
+| where isempty(ObjectId)
 | summarize
     UnlabeledAccesses = count(),
-    DocumentList = make_set(ObjectId, 10),
+    DocumentList = make_set(OfficeObjectId, 10),
     LastAccess = max(TimeGenerated)
-    by UserId, SiteUrl
+    by UserId, Site_Url
 | sort by UnlabeledAccesses desc
 ```
 

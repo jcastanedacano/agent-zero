@@ -2,7 +2,7 @@
 // P01 — DISCOVER & PRIORITIZE
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: AgentsInfo, CloudAppEvents, OfficeActivity
+// Tables: AgentsInfo, CloudAppEvents, OfficeActivity, MicrosoftPurviewInformationProtection
 // SCHEMA NOTES (verified live against tenant AgentsInfo via pack_all(), Sep 2026):
 //   AgentsInfo.Name | Owners: dynamic, can be null
 //   EntraAgentID (capital D at the end) | LifecycleStatus: Active/Blocked/Uninstalled/Deleted
@@ -117,24 +117,34 @@ AgentsInfo
 // -----------------------------------------------------------------------------
 // Q4: SharePoint Sites Accessed by Agents Without Sensitivity Labels
 // Use: Identify knowledge sources with data exposure risk before retrieval activation
+// Validated live (Oct 2026, Sentinel workspace): runs without errors. The earlier version failed because
+//      MicrosoftPurviewInformationProtection has no Activity column (label events are in Operation; values seen:
+//      FileSensitivityLabelApplied, SensitivityLabelApplied, AutoSensitivityLabelRuleMatch,
+//      SensitivityLabelPolicyMatched) and OfficeActivity has OfficeObjectId and Site_Url, not ObjectId and SiteUrl.
+//      The join key works: 972 of 22,418 SharePointFileOperation events (30 days) matched a label event.
+// Limits: OfficeActivity has no application or agent identity column, so agent traffic is guessed from UserAgent.
+//      On the validation tenant no user agent contained any of the terms below, so the query returns no rows:
+//      replace AgentUserAgents with the user agents your agent runtimes send. Label events record changes, not the
+//      current label, so a file labeled before LabelLookback appears as unlabeled; workspace retention caps LabelLookback.
 // -----------------------------------------------------------------------------
+let AgentUserAgents = dynamic(["agent", "copilot", "power-automate", "bot"]);
+let LabelLookback = 90d;
+let LabeledObjects = MicrosoftPurviewInformationProtection
+    | where TimeGenerated > ago(LabelLookback)
+    | where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied")
+    | distinct ObjectId;
 OfficeActivity
 | where TimeGenerated > ago(7d)
 | where RecordType == "SharePointFileOperation"
-    and UserAgent has "agent"
-| join kind=leftouter (
-    MicrosoftPurviewInformationProtection
-    | where TimeGenerated > ago(7d)
-    | where Activity == "LabelApplied"
-    | distinct ObjectId
-) on $left.ObjectId == $right.ObjectId
-| where isempty(ObjectId1)
+    and UserAgent has_any (AgentUserAgents)
+| join kind=leftouter LabeledObjects on $left.OfficeObjectId == $right.ObjectId
+| where isempty(ObjectId)
 | summarize
     AgentAccesses = count(),
     LastAccess = max(TimeGenerated)
-    by SiteUrl, OfficeObjectId, UserId
+    by Site_Url, OfficeObjectId, UserId
 | sort by AgentAccesses desc
-| project SiteUrl, OfficeObjectId, AgentAccesses, LastAccess, UserId
+| project Site_Url, OfficeObjectId, AgentAccesses, LastAccess, UserId
 
 
 // -----------------------------------------------------------------------------

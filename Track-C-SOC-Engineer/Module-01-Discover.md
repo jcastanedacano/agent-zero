@@ -150,26 +150,29 @@ AgentsInfo
 ### Step 3 — SharePoint sites accessed by agents without sensitivity labels
 
 ```kql
+let AgentUserAgents = dynamic(["agent", "copilot", "power-automate", "bot"]);
+let LabelLookback = 90d;
+let LabeledObjects = MicrosoftPurviewInformationProtection
+    | where TimeGenerated > ago(LabelLookback)
+    | where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied")
+    | distinct ObjectId;
 OfficeActivity
 | where TimeGenerated > ago(7d)
 | where RecordType == "SharePointFileOperation"
-    and UserAgent has_any ("agent", "copilot", "power-automate", "bot")
-| join kind=leftouter (
-    MicrosoftPurviewInformationProtection
-    | where TimeGenerated > ago(7d)
-    | where Activity == "LabelApplied"
-    | distinct ObjectId
-) on $left.ObjectId == $right.ObjectId
-| where isempty(ObjectId1)
+    and UserAgent has_any (AgentUserAgents)
+| join kind=leftouter LabeledObjects on $left.OfficeObjectId == $right.ObjectId
+| where isempty(ObjectId)
 | summarize
     AgentAccesses = count(),
     LastAccess = max(TimeGenerated)
-    by SiteUrl, OfficeObjectId, UserId
+    by Site_Url, OfficeObjectId, UserId
 | sort by AgentAccesses desc
-| project SiteUrl, OfficeObjectId, AgentAccesses, LastAccess, UserId
+| project Site_Url, OfficeObjectId, AgentAccesses, LastAccess, UserId
 ```
 
-**Expected output:** Sites accessed by agents that have no sensitivity label — oversharing candidates.
+**Expected output:** Sites accessed by agents that have no sensitivity label: oversharing candidates.
+
+**Column names, validated on a Sentinel workspace (October 2026).** `MicrosoftPurviewInformationProtection` has no `Activity` column: label events are in `Operation` (`FileSensitivityLabelApplied`, `SensitivityLabelApplied`). `OfficeActivity` uses `OfficeObjectId` and `Site_Url`, not `ObjectId` and `SiteUrl`. **Limits:** `OfficeActivity` has no agent identity column, so agent traffic is guessed from `UserAgent`; on the validation tenant no user agent contained any of these terms and the query returned no rows, so replace `AgentUserAgents` with what your agent runtimes send. Label events record changes, not the current label: a file labeled before `LabelLookback` shows as unlabeled.
 
 **Critical note:** Remediate oversharing in SharePoint **before** enabling retrieval on any agent. Every ACL error in the corpus is inherited by the agent and amplified to all users interacting with it.
 

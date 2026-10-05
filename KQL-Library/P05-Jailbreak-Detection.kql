@@ -82,25 +82,40 @@ CloudAppEvents
 // Use: Detect agent accessing sensitive labeled documents outside business hours
 //      Combine with P04-Q3 for full data protection coverage
 // Recommended: Analytics Rule | Frequency: 15m | Severity: High
+// Validated live (Oct 2026, Sentinel workspace): runs without errors. The earlier version failed because MicrosoftPurviewInformationProtection has no Activity, UserAgent, SiteUrl, LabelId or PolicyDetails column (checked with getschema on the
+//      validation workspace, Oct 2026): it holds label events (Operation, LabelName, SensitivityLabelId, ObjectId, UserId, Workload). File access
+//      is in OfficeActivity (Operation, OfficeObjectId, Site_Url, UserAgent).
+//      Limits: 413 of the 421 label events on the validation tenant have an empty LabelName (the label id is in
+//      SensitivityLabelId), so the name filter rarely matches: put the ids of your sensitive labels in
+//      HighlyConfidentialLabelIds. Agent traffic is guessed from UserAgent and label events record changes, not the
+//      current label (see P01-Q4). It returned no rows on the validation tenant.
 // -----------------------------------------------------------------------------
-MicrosoftPurviewInformationProtection
+let HighlyConfidentialLabelIds = dynamic([]);   // add the GUIDs of your sensitive labels
+OfficeActivity
 | where TimeGenerated > ago(1d)
-| where Activity in ("FileAccessed", "FileDownloaded")
-    and LabelName has_any ("Highly Confidential", "Restricted", "Secret")
+| where RecordType == "SharePointFileOperation"
+    and Operation in ("FileAccessed", "FileDownloaded")
+| join kind=inner (
+    MicrosoftPurviewInformationProtection
+    | where TimeGenerated > ago(90d)
+    | where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied")
+    | where LabelName has_any ("Highly Confidential", "Restricted", "Secret") or SensitivityLabelId in (HighlyConfidentialLabelIds)
+    | summarize arg_max(TimeGenerated, LabelName, SensitivityLabelId) by ObjectId
+) on $left.OfficeObjectId == $right.ObjectId
 | extend HourOfDay = datetime_part("Hour", TimeGenerated)
 | extend IsOffHours = HourOfDay < 7 or HourOfDay > 20
-| extend IsWeekend = dayofweek(TimeGenerated) in (0, 6)
+| extend IsWeekend = dayofweek(TimeGenerated) in (0d, 6d)
 | extend IsAgentAccess = UserAgent has_any ("agent", "copilot", "assistant", "bot", "power-automate")
 | where (IsOffHours or IsWeekend) and IsAgentAccess
 | project
     TimeGenerated,
     UserId,
-    ObjectId,
+    OfficeObjectId,
     LabelName,
-    Activity,
+    Operation,
     HourOfDay,
     IsWeekend,
-    SiteUrl,
+    Site_Url,
     RiskNote = "Sensitive document accessed by agent outside business hours"
 | sort by TimeGenerated desc
 

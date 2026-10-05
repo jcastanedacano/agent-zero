@@ -493,10 +493,14 @@ BehaviorInfo
 //      caught by this join (see Q13). Agents with both IDs empty in AgentsInfo are not covered, which includes Copilot
 //      Studio agents created before May 2026 that use an app registration.
 //      Learn documents agentType (agenticApp, agenticAppInstance, agentIdentityBlueprintPrincipal,
-//      agentIDuser) and blueprintId on AuditLogs targets, which would cover the blueprint principal
-//      and agent users without this join. A Graph directoryAudits sample from the validation tenant
-//      (Sep 2026) showed neither on targetResources, so check AuditLogs.TargetResources in your
-//      workspace before relying on them.
+//      agentIDuser) and blueprintId on AuditLogs targets. In the AuditLogs table of the validation
+//      workspace (Oct 2026) the key agentType exists on every target resource (and agentType plus
+//      blueprintId on InitiatedBy.app), but its only value in 90 days was "notAgentic", including for
+//      the Hermes blueprint and agent identity, so it cannot replace the AgentsInfo id join here.
+// Needs AgentsInfo next to AuditLogs: in the validation workspace the AgentsInfo table exists but has
+//      no rows, so ingest it into the workspace or run the AgentsInfo side in Advanced Hunting.
+// Validated live (Oct 2026): executed against the real AuditLogs of the validation workspace with AgentsInfo
+//      replaced by its real rows (30 days): 7 rows, including the refused credential add (Result = failure).
 // Deletions are not in this query. Deleting a blueprint or its principal cascades to the child agent identities
 //      as "Delete service principal" initiated by the application "Delete Agent Identities Task" (no app id), hours
 //      or days later (Microsoft Learn). Exclude that actor from any detection that watches deletions.
@@ -556,17 +560,16 @@ AuditLogs
 //      runtime (Microsoft Learn, inheritable permissions). The grants stay visible on the
 //      blueprint principal, so the audit event is the earliest signal.
 // Matching: AgentsInfo.EntraBlueprintID is the blueprint's id, and the app-role audit record
-//      names the receiving principal by its service principal names, which contain that id
-//      (checked on a Graph directoryAudits sample, Sep 2026: it matches the 2026-09-17 grant
-//      on the Hermes blueprint principal). A "Consent to application" record names its target
-//      by display name only, so it is matched only when the record carries
-//      agentType = "agentIdentityBlueprintPrincipal" (documented by Microsoft Learn, Microsoft
-//      Entra Agent ID logs; not present in the validation tenant's Graph output). Until your
-//      workspace shows that field, consent events on blueprint principals are not caught here.
-// NOT RUN against AuditLogs: the validation session had no Log Analytics workspace access. The pipeline
-//      itself was executed in Advanced Hunting (Oct 2026) against a datatable shaped like AuditLogs and the
-//      real AgentsInfo ids: the app-role record and a consent record carrying agentType matched, and a consent
-//      record with only a display name did not, which is the coverage limit above.
+//      names the receiving principal by its service principal names, which contain that id.
+// NOT VERIFIED (consent events): a "Consent to application" record names its target by display name only,
+//      so it is matched only when the record carries agentType = "agentIdentityBlueprintPrincipal"
+//      (Microsoft Learn, Microsoft Entra Agent ID logs). In the validation workspace the only agentType value
+//      in 90 days was "notAgentic", so that branch never matched and the consent on the Hermes blueprint
+//      principal was missed. The app-role branch is validated.
+// Validated live (Oct 2026, app-role events): executed against the real AuditLogs of the validation workspace
+//      with AgentsInfo replaced by its real rows (its AgentsInfo table is empty: ingest it or run that side
+//      in Advanced Hunting). Over 30 days it returned 1 row, the 2026-09-17 app-role assignment on the Hermes
+//      blueprint principal.
 // MITRE ATT&CK (Enterprise v19.2; our own mapping, ids and names checked against the ATT&CK data):
 //      Consent to application -> T1671 Cloud Application Integration (ATT&CK's detection
 //        strategy DET0539 lists the azure:audit operation "Consent to application").
@@ -609,8 +612,9 @@ AuditLogs
 //      little history, and in on-behalf-of flows the risk is attributed to the user, so an
 //      empty result is not proof of safety. The join key (AgentId = AgentsInfo.EntraAgentID)
 //      is an assumption from the column description, not verified.
-// NOT RUN against the real table: the validation session had no workspace access to confirm it exists. The
-//      pipeline was executed in Advanced Hunting (Oct 2026) against a datatable shaped like it and the real
+// NOT VERIFIED (no data): runs without errors on the validation workspace (Oct 2026), where AADAgentRiskEvents
+//      and AADRiskyAgents exist but have no rows (no agent risk events, and AgentsInfo is empty there), so it
+//      returns nothing. The join logic was also executed against a datatable shaped like the table and the real
 //      AgentsInfo ids: the join worked regardless of GUID case and a low-risk event was filtered out.
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 1h | Severity: High
 // -----------------------------------------------------------------------------

@@ -40,14 +40,20 @@ CloudAppEvents
 // Q2: Sensitive Data in Agent Prompts — DLP Policy Matches
 // Use: Identify prompts containing sensitive information types (SIT)
 //      Requires Purview DLP policy with AI interactions workload enabled
+// NOT VERIFIED (no data): the earlier version failed because MicrosoftPurviewInformationProtection has no Activity, UserAgent, SiteUrl, LabelId or PolicyDetails column (checked with getschema on the
+//      validation workspace, Oct 2026): it holds label events (Operation, LabelName, SensitivityLabelId, ObjectId, UserId, Workload). File access
+//      is in OfficeActivity (Operation, OfficeObjectId, Site_Url, UserAgent).
+//      This version runs without errors on the validation workspace (Oct 2026) but returns no rows: that table has
+//      no DLP events and no AIInteractions workload there. DLP rule matches that do exist (486 in 30 days) are in
+//      OfficeActivity (RecordType ComplianceDLPSharePoint and ComplianceDLPExchange, Operation DLPRuleMatch or
+//      DlpRuleMatch), without a PolicyDetails column. Confirm where DLP for AI interactions lands in your tenant.
 // -----------------------------------------------------------------------------
 MicrosoftPurviewInformationProtection
 | where TimeGenerated > ago(7d)
-| where Activity == "DLPRuleMatch"
+| where Operation == "DLPRuleMatch"
     and Workload == "AIInteractions"
 | extend SensitiveTypes = tostring(SensitiveInfoTypeData)
-| extend PolicyName = tostring(PolicyDetails[0].PolicyName)
-| extend MatchedRule = tostring(PolicyDetails[0].Rules[0].RuleName)
+| extend MatchedRule = ExecutionRuleName
 | summarize
     MatchCount = count(),
     LastMatch = max(TimeGenerated),
@@ -61,21 +67,33 @@ MicrosoftPurviewInformationProtection
 // Q3: Agent Access to Unlabeled Documents — Corpus Without Classification
 // Use: Find agents reading documents without sensitivity labels applied
 //      These are oversharing candidates — data the agent should not index
+// Validated live (Oct 2026, Sentinel workspace): runs without errors. The earlier version failed because MicrosoftPurviewInformationProtection has no Activity, UserAgent, SiteUrl, LabelId or PolicyDetails column (checked with getschema on the
+//      validation workspace, Oct 2026): it holds label events (Operation, LabelName, SensitivityLabelId, ObjectId, UserId, Workload). File access
+//      is in OfficeActivity (Operation, OfficeObjectId, Site_Url, UserAgent).
+//      Same logic and limits as P01-Q4: agent traffic is guessed from UserAgent, and label events record changes, not
+//      the current label. It returned no rows on the validation tenant (no agent user agents).
 // -----------------------------------------------------------------------------
-MicrosoftPurviewInformationProtection
+let AgentUserAgents = dynamic(["agent", "copilot", "assistant", "bot", "power-automate"]);
+let LabelLookback = 90d;
+OfficeActivity
 | where TimeGenerated > ago(7d)
-| where Activity in ("FileAccessed", "FileDownloaded")
-| where isempty(LabelId) or LabelName == ""
-| extend AccessedBy = tostring(UserId)
-| extend IsAgentAccess = UserAgent has_any ("agent", "copilot", "assistant", "bot")
-| where IsAgentAccess == true
+| where RecordType == "SharePointFileOperation"
+    and Operation in ("FileAccessed", "FileDownloaded")
+| where UserAgent has_any (AgentUserAgents)
+| join kind=leftouter (
+    MicrosoftPurviewInformationProtection
+    | where TimeGenerated > ago(LabelLookback)
+    | where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied")
+    | distinct ObjectId
+) on $left.OfficeObjectId == $right.ObjectId
+| where isempty(ObjectId)
 | summarize
     UnlabeledAccesses = count(),
-    DocumentList = make_set(ObjectId, 10),
+    DocumentList = make_set(OfficeObjectId, 10),
     LastAccess = max(TimeGenerated)
-    by AccessedBy, SiteUrl
+    by AccessedBy = UserId, Site_Url
 | sort by UnlabeledAccesses desc
-| project AccessedBy, SiteUrl, UnlabeledAccesses, DocumentList, LastAccess
+| project AccessedBy, Site_Url, UnlabeledAccesses, DocumentList, LastAccess
 
 
 // -----------------------------------------------------------------------------

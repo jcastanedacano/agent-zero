@@ -52,25 +52,33 @@ In the DSPM for AI dashboard, identify:
 
 ### Step 3 — Export the at-risk site inventory
 
+> **Column names, validated on a Sentinel workspace (October 2026).** `MicrosoftPurviewInformationProtection` has no `Activity`, `UserAgent`, `SiteUrl` or `LabelId` column: it holds label events. File access is in `OfficeActivity` (`Operation`, `OfficeObjectId`, `Site_Url`, `UserAgent`). Agent traffic is guessed from `UserAgent` (no rows on the validation tenant) and label events record changes, not the current label.
+
 ```kql
-MicrosoftPurviewInformationProtection
+let LabelLookback = 90d;
+let LabeledObjects = MicrosoftPurviewInformationProtection
+    | where TimeGenerated > ago(LabelLookback)
+    | where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied")
+    | distinct ObjectId;
+OfficeActivity
 | where TimeGenerated > ago(30d)
-| where Activity in ("FileAccessed", "FileDownloaded")
-| where Workload == "SharePoint"
-| extend IsAIAccess = UserAgent has_any ("copilot", "agent", "assistant", "bot")
-| where IsAIAccess == true
-| extend HasLabel = isnotempty(LabelId)
+| where RecordType == "SharePointFileOperation"
+    and Operation in ("FileAccessed", "FileDownloaded")
+| where UserAgent has_any ("copilot", "agent", "assistant", "bot")
+| join kind=leftouter LabeledObjects on $left.OfficeObjectId == $right.ObjectId
 | summarize
     TotalAccesses = count(),
-    UnlabeledAccesses = countif(HasLabel == false),
+    UnlabeledAccesses = countif(isempty(ObjectId)),
     LastAccess = max(TimeGenerated)
-    by SiteUrl, ObjectId
+    by Site_Url, OfficeObjectId
 | extend RiskScore = round(toreal(UnlabeledAccesses) / TotalAccesses * 100, 1)
 | sort by RiskScore desc
-| project SiteUrl, TotalAccesses, UnlabeledAccesses, RiskScore, LastAccess
+| project Site_Url, TotalAccesses, UnlabeledAccesses, RiskScore, LastAccess
 ```
 
 ### Step 4 — Identify the most frequent sensitive data types
+
+> **Not verified, and not runnable as written.** `MicrosoftPurviewInformationProtection` has no `Activity` or `ApplicationId` column (validated on a Sentinel workspace, October 2026), and that table held no DLP events and no `AIInteractions` workload there. DLP rule matches that exist are in `OfficeActivity` (`ComplianceDLP*`). Confirm where DLP for AI interactions lands in your tenant before using this query.
 
 ```kql
 MicrosoftPurviewInformationProtection
@@ -87,6 +95,8 @@ MicrosoftPurviewInformationProtection
 ```
 
 ### Step 5 — Correlate with the agent inventory
+
+> **Not verified, and not runnable as written.** It reads `Activity`, `LabelId` and `ApplicationId` from `MicrosoftPurviewInformationProtection`, which has none of them (validated on a Sentinel workspace, October 2026), and `AgentsInfo` has no rows in that workspace. It also needs an agent id that the Purview table does not carry. Treat it as a design sketch.
 
 ```kql
 AgentsInfo

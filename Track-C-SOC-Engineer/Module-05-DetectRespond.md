@@ -177,25 +177,35 @@ CloudAppEvents
 
 ### Step 4 — Detect sensitive document access outside business hours
 
+> **Column names, validated on a Sentinel workspace (October 2026).** `MicrosoftPurviewInformationProtection` has no `Activity`, `UserAgent`, `SiteUrl`, `LabelId` or `PolicyDetails` column: it holds label events (`Operation`, `LabelName`, `SensitivityLabelId`, `ObjectId`, `UserId`, `Workload`). File access is in `OfficeActivity` (`Operation`, `OfficeObjectId`, `Site_Url`, `UserAgent`). Limits: 413 of the 421 label events on the validation tenant have an empty `LabelName` (the label id is in `SensitivityLabelId`), so put the ids of your sensitive labels in `HighlyConfidentialLabelIds`. It returned no rows there.
+
 ```kql
-MicrosoftPurviewInformationProtection
+let HighlyConfidentialLabelIds = dynamic([]);   // add the GUIDs of your sensitive labels
+OfficeActivity
 | where TimeGenerated > ago(1d)
-| where Activity in ("FileAccessed", "FileDownloaded")
-    and LabelName has_any ("Highly Confidential", "Restricted")
+| where RecordType == "SharePointFileOperation"
+    and Operation in ("FileAccessed", "FileDownloaded")
+| join kind=inner (
+    MicrosoftPurviewInformationProtection
+    | where TimeGenerated > ago(90d)
+    | where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied")
+    | where LabelName has_any ("Highly Confidential", "Restricted") or SensitivityLabelId in (HighlyConfidentialLabelIds)
+    | summarize arg_max(TimeGenerated, LabelName, SensitivityLabelId) by ObjectId
+) on $left.OfficeObjectId == $right.ObjectId
 | extend HourOfDay = datetime_part("Hour", TimeGenerated)
 | extend IsOffHours = HourOfDay < 7 or HourOfDay > 20
-| extend IsWeekend = dayofweek(TimeGenerated) in (0, 6)
+| extend IsWeekend = dayofweek(TimeGenerated) in (0d, 6d)
 | extend IsAgentAccess = UserAgent has_any ("agent", "copilot", "assistant", "bot")
 | where (IsOffHours or IsWeekend) and IsAgentAccess
 | project
     TimeGenerated,
     UserId,
-    ObjectId,
+    OfficeObjectId,
     LabelName,
-    Activity,
+    Operation,
     HourOfDay,
     IsWeekend,
-    SiteUrl
+    Site_Url
 | sort by TimeGenerated desc
 ```
 
