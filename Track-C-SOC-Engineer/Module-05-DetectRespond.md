@@ -63,7 +63,9 @@ Microsoft Defender detects threats to agents managed through Agent 365 (Preview,
 
 Prerequisites: onboard the tenant to Agent 365, connect the Microsoft 365 connector with the components Microsoft Entra ID Management events and Microsoft 365 activities, and make sure the agent emits observability data (Copilot Studio, Foundry and Agent Builder agents do by default; Foundry only once published). Copilot Studio real-time protection also needs a Power Platform administrator. Treat the custom rules in this module as the layer for what the native detections do not cover, and measure the overlap before keeping both.
 
-> **Not verified:** Learn does not list the `ActionType` values that Agent 365 observability uses in `CloudAppEvents`. After onboarding, list them with `CloudAppEvents | summarize count() by ActionType` before building rules on them. On the validated tenant (Oct 2026) there were no such events, because it is not onboarded to Agent 365 observability.
+> **ActionType values and what they expose (Microsoft Learn, Agent 365 observability).** `CloudAppEvents` carries `InvokeAgent`, `InferenceCall`, `ExecuteToolBySDK`, `ExecuteToolByGateway` and `ExecuteToolByMCPServer`, with the per-span fields inside `RawEventData` (for example `TargetAgentId`, `AgentId`, `TargetAgentName`, `ConversationId`, `ToolName`, `ClientIP`, `UserKey`). Prompt and response text, tool arguments and results, and the model name are captured but not yet surfaced in advanced hunting, so rules that score prompt text cannot be built on this table today. Telemetry is dropped unless at least one tenant user holds a Microsoft 365 E7 or Agent 365 license, and a run without an `invoke_agent` root span stays queryable but is invisible in Defender's agent-activity views. **Not verified here:** on the validated tenant (Oct 2026) there were no such events, because it is not onboarded to Agent 365 observability; after onboarding, confirm with `CloudAppEvents | summarize count() by ActionType`.
+
+> **Sentinel data connector (Microsoft Learn, Sentinel data connectors reference).** The Agent 365 connector brings agent telemetry from Agent 365, AI Foundry, and Copilot into the Microsoft Sentinel data lake for hunting, and needs the data lake. Learn's connector page leaves its table list empty, so confirm the table names in your workspace before writing queries against them.
 
 ---
 
@@ -79,11 +81,13 @@ Prerequisites: onboard the tenant to Agent 365, connect the Microsoft 365 connec
    - Tactics: Execution, Initial Access
 3. **Set rule logic tab — paste this query:**
 
+   > **Telemetry limit (Microsoft Learn, October 2026).** The ActionType was `AgentInteraction`, which is not a documented value; it is now `InvokeAgent`. Agent 365 observability does not expose prompt text in `CloudAppEvents` (`gen_ai.input.messages` is "not yet surfaced in advanced hunting"), so `RawEventData["UserPrompt"]` has no documented source and this query returns no rows on that telemetry today. Use it as a pattern for a source that carries the prompt, and see P05-Q1 for the platform's own jailbreak signal in `LLMActivity`. The validation tenant had no agent ActionTypes in `CloudAppEvents` (30 days, October 2026).
+
 ```kql
 CloudAppEvents
 | where TimeGenerated > ago(1h)
 | where Application in ("Microsoft Copilot", "Copilot Studio", "Azure AI Foundry")
-    and ActionType == "AgentInteraction"
+    and ActionType == "InvokeAgent"
 | extend PromptText = tostring(RawEventData["UserPrompt"])
 | extend AgentId = tostring(RawEventData["AgentId"])
 | extend JailbreakScore = toint(
@@ -119,18 +123,18 @@ CloudAppEvents
 1. **Create** → **Scheduled query rule**
 2. Name: `Agentic AI — Volume Spike Anomaly`
 3. Severity: **Medium**
-4. **Query:**
+4. **Query:** (the ActionType was `AgentInteraction`, which is not a documented value; it is now `InvokeAgent`, per Microsoft Learn. The count needs no prompt text. Not run against live events: the validation tenant had no agent ActionTypes in `CloudAppEvents`, October 2026.)
 
 ```kql
 let Baseline = CloudAppEvents
     | where TimeGenerated between (ago(8d) .. ago(1d))
-    | where ActionType == "AgentInteraction"
+    | where ActionType == "InvokeAgent"
     | extend AgentId = tostring(RawEventData["AgentId"])
     | summarize HourlyCount = count() by AgentId, bin(TimeGenerated, 1h)
     | summarize BaselineAvg = avg(HourlyCount), BaselineStdDev = stdev(HourlyCount) by AgentId;
 CloudAppEvents
 | where TimeGenerated > ago(1h)
-| where ActionType == "AgentInteraction"
+| where ActionType == "InvokeAgent"
 | extend AgentId = tostring(RawEventData["AgentId"])
 | summarize CurrentCount = count() by AgentId, bin(TimeGenerated, 1h)
 | join kind=inner Baseline on AgentId

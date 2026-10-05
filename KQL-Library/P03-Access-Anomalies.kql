@@ -2,7 +2,7 @@
 // P03 — SECURE ACCESS
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: CloudAppEvents, EntraIdSpnSignInEvents, AuditLogs
+// Tables: CloudAppEvents, EntraIdSpnSignInEvents, AuditLogs, AgentsInfo, BehaviorInfo, AADAgentRiskEvents
 // =============================================================================
 
 
@@ -104,17 +104,20 @@ EntraIdSpnSignInEvents
 //      consent tokens or craft tool-specific injection payloads
 // Reference: Microsoft AIRT Taxonomy v2.0 §4.9 | No OWASP mapping yet (emerging)
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 1h | Severity: Medium
-// NOTE: ActionType == "AgentInteraction" is NOT verified against a live tenant.
-//       The identical ActionType was confirmed to NOT EXIST in CloudAppEvents for
-//       the P05-Q1 jailbreak scenario (fixed to use LLMActivity + RecordType ==
-//       "CopilotInteraction" instead — see P05-Jailbreak-Detection.kql). Run
-//       `CloudAppEvents | take 5 | getschema` and confirm the real ActionType
-//       values in your tenant before trusting this query in production.
+// NOTE: The ActionType was "AgentInteraction", which is not a documented value (it was also
+//       confirmed absent for the P05-Q1 jailbreak scenario). It is now "InvokeAgent", the
+//       documented ActionType for an agent invocation (Microsoft Learn, Agent 365 observability concepts).
+//       NOT RUNNABLE as a detection on that telemetry today: Learn lists prompt and response
+//       text (gen_ai.input.messages, gen_ai.output.messages) as "not yet surfaced in advanced
+//       hunting", so RawEventData["UserPrompt"] and ["AgentResponse"] have no documented
+//       source on this table. Keep it as a pattern for a source that carries the text.
+//       Not run against live events: the validation tenant has 0 agent ActionTypes in
+//       CloudAppEvents (30 days, Oct 2026).
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(1h)
 | where Application in ("Microsoft Copilot", "Copilot Studio", "Azure AI Foundry")
-    and ActionType == "AgentInteraction"
+    and ActionType == "InvokeAgent"
 | extend ResponseText = tostring(RawEventData["AgentResponse"])
 | extend PromptText = tostring(RawEventData["UserPrompt"])
 | extend AgentId = tostring(RawEventData["AgentId"])
@@ -159,19 +162,21 @@ CloudAppEvents
 // Reference: OWASP LLM Top 10 2026, LLM06 — Unbounded Consumption (model
 //            extraction/theft folded into this category in the 2026 edition);
 //            Red Teaming AI Ch.6
-// NOTE: "AgentInteraction" in the ActionType list below is NOT verified against
-//       a live tenant. That exact value was confirmed to NOT EXIST in
-//       CloudAppEvents for the P05-Q1 jailbreak scenario (fixed to use
-//       LLMActivity + RecordType == "CopilotInteraction" instead — see
-//       P05-Jailbreak-Detection.kql). Run `CloudAppEvents | take 5 | getschema`
-//       and confirm the real ActionType values in your tenant before trusting
-//       this query in production; AIInference/ModelInference/CompletionRequest
-//       are equally unverified.
+// NOTE: The ActionType list was "AIInference", "ModelInference", "AgentInteraction",
+//       "CompletionRequest"; none is a documented value. It is now "InvokeAgent" and
+//       "InferenceCall", the documented values for Agent 365 observability telemetry
+//       (Microsoft Learn, Agent 365 observability concepts).
+//       Not run against live events: the validation tenant has 0 agent ActionTypes in
+//       CloudAppEvents (30 days, Oct 2026). Learn also lists prompt text and the model name
+//       as "not yet surfaced in advanced hunting", so RawEventData["UserPrompt"] and
+//       ["ModelId"] have no documented source on this table, and CallerObjectId and
+//       EndpointUrl are not documented either (documented keys: UserKey, UserId,
+//       ServerAddress, ConversationId).
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
 | where Application in ("Azure AI Foundry", "Azure OpenAI", "Microsoft Copilot", "Copilot Studio")
-    and ActionType in ("AIInference", "ModelInference", "AgentInteraction", "CompletionRequest")
+    and ActionType in ("InvokeAgent", "InferenceCall")
 | extend CallerIdentity = coalesce(
     tostring(RawEventData["CallerObjectId"]),
     AccountObjectId,
@@ -213,16 +218,19 @@ CloudAppEvents
 // Reference: Mileva AI Security Fundamentals Level 3 — Model Extraction & Membership Inference
 // MITRE ATLAS: AML.T0040 (AI Model Inference API Access)
 // Recommended: Analytics Rule | Frequency: 1h | Lookback: 4h | Severity: Medium (privacy)
-// NOTE: "AgentInteraction" in the ActionType list below is NOT verified against
-//       a live tenant — confirmed NOT to exist in CloudAppEvents for the P05-Q1
-//       jailbreak scenario (see P05-Jailbreak-Detection.kql for the corrected
-//       LLMActivity-based pattern). Confirm real ActionType values with
-//       `CloudAppEvents | take 5 | getschema` before trusting this query.
+// NOTE: The ActionType list was "AIInference", "ModelInference", "AgentInteraction",
+//       "CompletionRequest"; none is a documented value. It is now "InvokeAgent" and
+//       "InferenceCall" (Microsoft Learn, Agent 365 observability concepts).
+//       Not run against live events (0 agent ActionTypes in the validation tenant, Oct 2026).
+//       This query needs prompt and response text, which Learn lists as "not yet surfaced in
+//       advanced hunting" (gen_ai.input.messages, gen_ai.output.messages): treat it as a
+//       pattern for a source that carries the text, not as a detection that works on this
+//       table today.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(4h)
 | where Application in ("Azure AI Foundry", "Azure OpenAI", "Microsoft Copilot", "Copilot Studio")
-    and ActionType in ("AIInference", "ModelInference", "AgentInteraction", "CompletionRequest")
+    and ActionType in ("InvokeAgent", "InferenceCall")
 | extend CallerIdentity = coalesce(
     tostring(RawEventData["CallerObjectId"]),
     AccountObjectId,
@@ -275,16 +283,19 @@ CloudAppEvents
 //      targeting named entities: people, documents, records.
 // Reference: MITRE ATLAS AML.T0040; Carlini et al. "Extracting Training Data from LLMs"
 // Recommended: Analytics Rule | Frequency: 4h | Lookback: 24h | Severity: High
-// NOTE: "AgentInteraction" in the ActionType list below is NOT verified against
-//       a live tenant — confirmed NOT to exist in CloudAppEvents for the P05-Q1
-//       jailbreak scenario (see P05-Jailbreak-Detection.kql for the corrected
-//       LLMActivity-based pattern). Confirm real ActionType values with
-//       `CloudAppEvents | take 5 | getschema` before trusting this query.
+// NOTE: The ActionType list was "AIInference", "ModelInference", "AgentInteraction",
+//       "CompletionRequest"; none is a documented value. It is now "InvokeAgent" and
+//       "InferenceCall" (Microsoft Learn, Agent 365 observability concepts).
+//       Not run against live events (0 agent ActionTypes in the validation tenant, Oct 2026).
+//       This query needs prompt and response text, which Learn lists as "not yet surfaced in
+//       advanced hunting" (gen_ai.input.messages, gen_ai.output.messages): treat it as a
+//       pattern for a source that carries the text, not as a detection that works on this
+//       table today.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(24h)
 | where Application in ("Azure AI Foundry", "Azure OpenAI", "Microsoft Copilot", "Copilot Studio")
-    and ActionType in ("AIInference", "ModelInference", "AgentInteraction", "CompletionRequest")
+    and ActionType in ("InvokeAgent", "InferenceCall")
 | extend CallerIdentity = coalesce(
     tostring(RawEventData["CallerObjectId"]),
     AccountObjectId,
@@ -345,6 +356,9 @@ CloudAppEvents
 //      Risk can derive from the agent's own anomalous actions or from sponsor account compromise
 //      Feed into CA review and sponsor notification workflow
 // Ref: https://learn.microsoft.com/en-us/entra/id-protection/concept-risky-agents
+// NOTE: Microsoft Learn documents the destination of agent risk exports as the tables AADRiskyAgents and
+//       AADAgentRiskEvents (see Q14). The AuditLogs categories filtered on below were not found in Learn in the
+//       Oct 2026 review and were not validated; prefer Q14.
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(7d)
@@ -460,9 +474,12 @@ BehaviorInfo
 // -----------------------------------------------------------------------------
 // Q12: Agent ID Objects — Credential, Owner, and Sponsor Changes
 // Use: Hunt for credential additions and ownership/sponsorship changes on Entra
-//      Agent ID objects (blueprint and agent identity). Credentials on a blueprint
-//      or agent identity are rare, high-signal events; owners and sponsors decide
-//      who can modify, re-enable, or delete the agent.
+//      Agent ID objects (blueprint and agent identity). Only the blueprint holds
+//      credentials (Learn: they are created on the blueprint, not on agent identities),
+//      so a credential operation on an agent
+//      identity is a refused attempt and shows Result = "failure" (seen on the
+//      validation tenant, Sep 2026). Owners and sponsors decide who can modify,
+//      re-enable, or delete the agent.
 // Why correlate by ID: validated on a live tenant (Oct 2026) — Agent ID objects are
 //      logged in AuditLogs as GENERIC application / service principal operations,
 //      with no agent-specific OperationName, and ResType is only "Application" or
@@ -473,13 +490,18 @@ BehaviorInfo
 // Coverage limit: the blueprint PRINCIPAL (the blueprint's service principal, where
 //      "Consent to application" and "Add app role assignment" were logged) did NOT
 //      match either AgentsInfo column, so consent and app-role changes there are not
-//      caught by this join. Agents with both IDs empty in AgentsInfo are not covered, which includes Copilot
+//      caught by this join (see Q13). Agents with both IDs empty in AgentsInfo are not covered, which includes Copilot
 //      Studio agents created before May 2026 that use an app registration.
+//      Learn documents agentType (agenticApp, agenticAppInstance, agentIdentityBlueprintPrincipal,
+//      agentIDuser) and blueprintId on AuditLogs targets, which would cover the blueprint principal
+//      and agent users without this join. A Graph directoryAudits sample from the validation tenant
+//      (Sep 2026) showed neither on targetResources, so check AuditLogs.TargetResources in your
+//      workspace before relying on them.
 // Deletions are not in this query. Deleting a blueprint or its principal cascades to the child agent identities
 //      as "Delete service principal" initiated by the application "Delete Agent Identities Task" (no app id), hours
 //      or days later (Microsoft Learn). Exclude that actor from any detection that watches deletions.
 // Actor types seen: "user" (a person), "application" (for example a Graph PowerShell
-//      app adding a credential), and Microsoft-internal provisioning ("Microsoft
+//      app that tried to add a credential to an agent identity and was refused), and Microsoft-internal provisioning ("Microsoft
 //      Azure AD Internal - Jit Provisioning" created the first-party Copilot Studio
 //      blueprint service principal). Review "application" actors first.
 // Note: the en dash in "Update application – Certificates and secrets management"
@@ -493,10 +515,11 @@ BehaviorInfo
 //        management -> T1098.001 Account Manipulation: Additional Cloud Credentials (persistence,
 //        privilege escalation). ATT&CK's own detection strategy DET0531 (analytic AN1469) lists the
 //        azure:audit operation "Add service principal credentials" for this technique.
+//        A refused attempt (Result = "failure") is still an attempt at the same technique.
 //      Add owner to application, Add owner to service principal, Add user sponsor -> T1098 Account
 //        Manipulation. No sub-technique covers ownership or sponsorship, so T1098 is the closest match
 //        (our judgment); an owner can then add credentials, which is T1098.001.
-//      Not mapped: consent and app role changes on the blueprint principal, which this join does not cover.
+//      Consent and app role changes on the blueprint principal are in Q13 (T1671, T1098.003).
 // Recommended: Hunting query or Analytics Rule | Frequency: 1h | Lookback: 7d
 // -----------------------------------------------------------------------------
 let AgentObjects = AgentsInfo
@@ -519,5 +542,88 @@ AuditLogs
 | join kind=inner AgentObjects on $left.ObjectId == $right.Key
 | extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
 | extend ActorType = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), "user", "application")
-| project TimeGenerated, OperationName, ObjectType, ObjectName, AgentRecord, Platform, Actor, ActorType
+| project TimeGenerated, OperationName, Result, ObjectType, ObjectName, AgentRecord, Platform, Actor, ActorType
 | sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q13: Blueprint Principals — Consent and App-Role Grants (Inheritable Permissions)
+// Use: Hunt for consent and app-role grants on the service principal of an agent identity
+//      blueprint. A grant on a blueprint principal can reach every current and future agent
+//      identity created from that blueprint when the resource app is configured as
+//      inheritable, and inherited permissions are not shown on the agent identities in the
+//      Entra admin center or Microsoft Graph, only in the token's scp / roles claims at
+//      runtime (Microsoft Learn, inheritable permissions). The grants stay visible on the
+//      blueprint principal, so the audit event is the earliest signal.
+// Matching: AgentsInfo.EntraBlueprintID is the blueprint's id, and the app-role audit record
+//      names the receiving principal by its service principal names, which contain that id
+//      (checked on a Graph directoryAudits sample, Sep 2026: it matches the 2026-09-17 grant
+//      on the Hermes blueprint principal). A "Consent to application" record names its target
+//      by display name only, so it is matched only when the record carries
+//      agentType = "agentIdentityBlueprintPrincipal" (documented by Microsoft Learn, Microsoft
+//      Entra Agent ID logs; not present in the validation tenant's Graph output). Until your
+//      workspace shows that field, consent events on blueprint principals are not caught here.
+// NOT RUN against AuditLogs: the validation session had no Log Analytics workspace access. The pipeline
+//      itself was executed in Advanced Hunting (Oct 2026) against a datatable shaped like AuditLogs and the
+//      real AgentsInfo ids: the app-role record and a consent record carrying agentType matched, and a consent
+//      record with only a display name did not, which is the coverage limit above.
+// MITRE ATT&CK (Enterprise v19.2; our own mapping, ids and names checked against the ATT&CK data):
+//      Consent to application -> T1671 Cloud Application Integration (ATT&CK's detection
+//        strategy DET0539 lists the azure:audit operation "Consent to application").
+//      Add app role assignment to service principal -> T1098.003 Account Manipulation:
+//        Additional Cloud Roles (DET0277 lists "Add app role assignment").
+// Recommended: Hunting query or Analytics Rule | Frequency: 1h | Lookback: 7d
+// -----------------------------------------------------------------------------
+let BlueprintIds = toscalar(
+    AgentsInfo
+    | where Timestamp > ago(90d)
+    | where isnotempty(EntraBlueprintID)
+    | summarize make_set(tolower(EntraBlueprintID))
+);
+AuditLogs
+| where TimeGenerated > ago(7d)
+| where OperationName in ("Consent to application", "Add app role assignment to service principal")
+| mv-expand TR = TargetResources
+| extend TargetName = tolower(tostring(TR.displayName)), TargetType = tostring(TR.type), AgentType = tostring(TR.agentType)
+| where AgentType == "agentIdentityBlueprintPrincipal"
+    or TargetName has_any (coalesce(BlueprintIds, dynamic(["00000000-0000-0000-0000-000000000000"])))
+| extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+| extend ActorType = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), "user", "application")
+| project TimeGenerated, OperationName, Result, TargetType, TargetName, Actor, ActorType, Details = tostring(TargetResources)
+| sort by TimeGenerated desc
+
+
+// -----------------------------------------------------------------------------
+// Q14: Agent Risk Events — ID Protection Detections on Agent Identities
+// Use: Surface Entra ID Protection risk detections on agent identities, agent users, and
+//      blueprint principals (eight offline detection types, Track B Module 02 point 12) and
+//      attach the agent's AgentsInfo record. Learn does not say whether these detections
+//      raise a Defender XDR alert: check in your tenant, and if they do not, this is the
+//      path to the SOC queue.
+// Table: AADAgentRiskEvents (Azure Monitor reference columns: ActivityDateTime, AgentId,
+//      AgentDisplayName, IdentityType, RiskEventType, RiskLevel, RiskState, RiskDetail,
+//      DetectionTimingType). Needs the Entra diagnostic settings to export the agent risk
+//      categories to the workspace (Microsoft Learn, export risk data) and an Agent 365 license
+//      (Learn: "starting soon"; Entra ID P2 during the preview).
+// Limits: detections are offline, kept 90 days, suppressed by learning mode for agents with
+//      little history, and in on-behalf-of flows the risk is attributed to the user, so an
+//      empty result is not proof of safety. The join key (AgentId = AgentsInfo.EntraAgentID)
+//      is an assumption from the column description, not verified.
+// NOT RUN against the real table: the validation session had no workspace access to confirm it exists. The
+//      pipeline was executed in Advanced Hunting (Oct 2026) against a datatable shaped like it and the real
+//      AgentsInfo ids: the join worked regardless of GUID case and a low-risk event was filtered out.
+// Recommended: Analytics Rule | Frequency: 15m | Lookback: 1h | Severity: High
+// -----------------------------------------------------------------------------
+let Agents = AgentsInfo
+    | where Timestamp > ago(1d)
+    | where isnotempty(EntraAgentID)
+    | summarize arg_max(Timestamp, *) by EntraAgentID
+    | project AgentKey = tolower(EntraAgentID), AgentRecord = Name, Platform, EntraBlueprintID;
+AADAgentRiskEvents
+| where TimeGenerated > ago(1h)
+| where RiskLevel in ("medium", "high") or RiskState in ("atRisk", "confirmedCompromised")
+| extend AgentKey = tolower(AgentId)
+| join kind=leftouter Agents on AgentKey
+| project TimeGenerated, ActivityDateTime, DetectionTimingType, AgentDisplayName, AgentId, IdentityType,
+    RiskEventType, RiskLevel, RiskState, RiskDetail, AgentRecord, Platform, EntraBlueprintID
+| sort by ActivityDateTime desc

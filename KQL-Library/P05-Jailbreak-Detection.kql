@@ -39,10 +39,17 @@ LLMActivity
 // Use: Detect agents with call volume significantly above their 7-day baseline
 //      Signals: compromised agent, looping behavior, orchestration attack
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 1h
+// NOTE: The ActionType was "AgentInteraction", which is not a documented value; it is now
+//       "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
+//       The count needs no prompt text, so this is the P05 query most likely to work once
+//       agent telemetry exists. Not run against live events: the validation tenant has 0
+//       agent ActionTypes in CloudAppEvents (30 days, Oct 2026), and Learn says telemetry is
+//       dropped unless a tenant user holds a Microsoft 365 E7 or Agent 365 license and the
+//       agent emits an invoke_agent span.
 // -----------------------------------------------------------------------------
 let Baseline = CloudAppEvents
     | where TimeGenerated between (ago(8d) .. ago(1d))
-    | where ActionType == "AgentInteraction"
+    | where ActionType == "InvokeAgent"
     | extend AgentId = tostring(RawEventData["AgentId"])
     | summarize
         AvgHourlyCallCount = avg(count()),
@@ -54,7 +61,7 @@ let Baseline = CloudAppEvents
         by AgentId;
 CloudAppEvents
 | where TimeGenerated > ago(1h)
-| where ActionType == "AgentInteraction"
+| where ActionType == "InvokeAgent"
 | extend AgentId = tostring(RawEventData["AgentId"])
 | summarize CurrentHourlyCount = count() by AgentId, bin(TimeGenerated, 1h)
 | join kind=inner Baseline on AgentId
@@ -165,6 +172,12 @@ AuditLogs
 //      with goal hijacking via adversarial instructions surviving multi-step reasoning
 // Reference: Microsoft AIRT Taxonomy v2.0 §4.4 | OWASP ASI01
 // Recommended: Analytics Rule | Frequency: 30m | Lookback: 2h | Severity: High
+// NOTE: The session-start ActionType was "AgentInteraction", which is not a documented value;
+//       it is now "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
+//       SessionId and StepIndex are not documented RawEventData keys (documented: ConversationId,
+//       SessionIdentity), and it is not verified that the high-privilege events on the other
+//       side of the join carry the agent's session key, so the join may never match. Not run
+//       against live events.
 // -----------------------------------------------------------------------------
 let HighPrivilegeActions = dynamic([
     "FilePermanentlyDeleted", "FileDeleted", "MessageSent",
@@ -173,7 +186,7 @@ let HighPrivilegeActions = dynamic([
 ]);
 let SessionFirstAction = CloudAppEvents
     | where TimeGenerated > ago(2h)
-    | where ActionType == "AgentInteraction"
+    | where ActionType == "InvokeAgent"
     | extend SessionId = tostring(RawEventData["SessionId"])
     | extend AgentId = tostring(RawEventData["AgentId"])
     | summarize SessionStart = min(TimeGenerated) by SessionId, AgentId, AccountDisplayName;
@@ -210,6 +223,12 @@ CloudAppEvents
 // Reference: OWASP AST03 (Over-Privileged Skills) | Atta et al. arXiv:2507.10457
 //            MITRE ATLAS AML.T0051 (Prompt Injection via Third-Party Content)
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 2h | Severity: High
+// NOTE: ExecuteToolByGateway is a documented ActionType (Microsoft Learn, Agent 365 observability concepts), but the
+//       tool result text is not: Learn lists tool arguments and results as "not yet surfaced in
+//       advanced hunting", and the MCP server name (gen_ai.tool.server.name) is not exposed
+//       either, so RawEventData["ToolResponse"] and ["McpServerName"] have no documented source.
+//       Documented tool keys: ToolName, ToolType, ToolId, ToolDescription. Pattern only; not run
+//       against live events.
 // -----------------------------------------------------------------------------
 let LpciPatterns = dynamic([
     "you are now operating as",
@@ -287,10 +306,13 @@ ToolResponseEvents
 //      from human-operated ransomware (intermittent, variable command patterns).
 // Reference: OWASP AST03 | JadePuffer (Sysdig, 2026) | MITRE ATLAS AML.T0051
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 60m | Severity: Critical
+// NOTE: "AgentInteraction" in DiscoveryActions was not a documented ActionType; it is now
+//       "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
+//       Not run against live events (0 agent ActionTypes in the validation tenant, Oct 2026).
 // -----------------------------------------------------------------------------
 let WindowMinutes = 60;
 let DiscoveryActions = dynamic([
-    "AgentInteraction", "FileAccessed", "SearchQueryPerformed",
+    "InvokeAgent", "FileAccessed", "SearchQueryPerformed",
     "DirectoryQueried", "ServiceEnumerated"
 ]);
 let CredentialActions = dynamic([
@@ -378,6 +400,11 @@ AgentsWithDiscovery
 // Reference: CrowdStrike PT0200 (Algorithmic Payload Decomposition, 2025)
 //            MITRE ATLAS AML.T0051 | OWASP ASI01 (Agent Goal Hijack, 2026)
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 2h | Severity: High
+// NOTE: The ActionType was "AgentInteraction", which is not a documented value; it is now
+//       "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
+//       Prompt text is "not yet surfaced in advanced hunting" per Learn, so
+//       RawEventData["UserPrompt"] has no documented source: pattern only. Not run against
+//       live events (0 agent ActionTypes in the validation tenant, Oct 2026).
 // -----------------------------------------------------------------------------
 let SessionWindow = 2h;
 let FragmentPatterns = dynamic([
@@ -389,7 +416,7 @@ let FragmentPatterns = dynamic([
 let PromptScores = CloudAppEvents
     | where TimeGenerated > ago(SessionWindow)
     | where Application in ("Microsoft Copilot", "Copilot Studio", "Azure AI Foundry")
-        and ActionType == "AgentInteraction"
+        and ActionType == "InvokeAgent"
     | extend PromptText = tolower(tostring(RawEventData["UserPrompt"]))
     | extend AgentId = tostring(RawEventData["AgentId"])
     | extend SessionId = tostring(RawEventData["SessionId"])

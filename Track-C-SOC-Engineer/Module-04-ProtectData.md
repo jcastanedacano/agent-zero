@@ -190,11 +190,13 @@ CloudAppEvents
 
 ### Step 6 — KQL: Prompt injection pattern detection
 
+> **Telemetry limit (Microsoft Learn, October 2026).** The ActionType was `AgentInteraction`, which is not a documented value; it is now `InvokeAgent`. Agent 365 observability does not expose prompt text in `CloudAppEvents` (`gen_ai.input.messages` is "not yet surfaced in advanced hunting"), so `RawEventData["UserPrompt"]` has no documented source and this query returns no rows on that telemetry today. Use it as a pattern for a source that carries the prompt, and see P05-Q1 for the platform's own jailbreak signal in `LLMActivity`. The validation tenant had no agent ActionTypes in `CloudAppEvents` (30 days, October 2026).
+
 ```kql
 CloudAppEvents
 | where TimeGenerated > ago(7d)
 | where Application in ("Microsoft Copilot", "Copilot Studio")
-    and ActionType == "AgentInteraction"
+    and ActionType == "InvokeAgent"
 | extend PromptText = tostring(RawEventData["UserPrompt"])
 | extend HasInjectionPattern = PromptText has_any (
     "ignore previous instructions",

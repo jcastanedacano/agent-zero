@@ -36,9 +36,9 @@ At the end of this module, you will be able to configure a Conditional Access po
 
 5. **Agent ID objects leave an audit trail, but under generic names: correlate by ID, not by name.** Validated on a live tenant (October 2026): the blueprint is logged in Entra `AuditLogs` as an *Application* and the agent identity as a *ServicePrincipal*, and every operation observed on them was a generic one: `Add application`, `Add service principal`, `Create application – Certificates and secrets management`, `Update application – Certificates and secrets management`, `Add service principal credentials`, `Add owner to application`, `Add owner to service principal`, `Add user sponsor`, `Consent to application`, `Add app role assignment to service principal`, and `Update application` / `Update service principal`. No operation name identifies an object as an agent, and `ResType` only says `Application` or `ServicePrincipal`. The display name does not work as a filter either: the creator chooses it, a Foundry agent identity appeared with a GUID as its name, and an agent identity named "Hermes Identity" contains no "blueprint". The reliable key is `AgentsInfo`: in the validated tenant, joining `EntraAgentID` and `EntraBlueprintID` against the object id in `AuditLogs` matched the blueprint's Application object and the agent identity's ServicePrincipal object (KQL P03-Q12).
 
-   **What to look for, in order of signal.** A credential added to a blueprint or an agent identity (`Add service principal credentials`, `… – Certificates and secrets management`) is rare and high-signal; the platform's own ID Protection detection flags new blueprint credentials only after they are *used* (`suspiciousCredentialUsage`), so the hunt for the addition itself is the earlier signal. Owner and sponsor changes (`Add owner to …`, `Add user sponsor`) show who can modify, re-enable, or delete the agent. Read the actor before the operation: in the validated tenant a person created a blueprint and its identity, a Graph PowerShell application added the credential to the agent identity, and Microsoft's own provisioning (`Microsoft Azure AD Internal - Jit Provisioning`) created the first-party Copilot Studio blueprint service principal with no human involved. An `application` actor on a credential change deserves review before a `user` one; Microsoft-internal provisioning is a baseline, not an alert.
+   **What to look for, in order of signal.** A credential added to a blueprint (`Add service principal credentials`, `… – Certificates and secrets management`) is rare and high-signal. Only the blueprint holds credentials (Microsoft Learn: you create credentials on the blueprint, not on individual agent identities), so the operation on an agent identity is refused: the one attempt seen on the validation tenant appears with `Result` = `failure`, a blocked attempt that is still worth reading. Per Microsoft Learn, the Agent ID Developer role can configure federated identity credentials on a blueprint, the create-blueprint page names Agent ID Administrator for adding a secret or certificate, and the permissions reference also lists `agentIdentityBlueprints/credentials/update` under AI Administrator. The platform's own ID Protection detection flags new blueprint credentials only after they are *used* (`suspiciousCredentialUsage`), so the hunt for the addition itself is the earlier signal. Owner and sponsor changes (`Add owner to …`, `Add user sponsor`) show who can modify, re-enable, or delete the agent. Read the actor before the operation: in the validated tenant a person created a blueprint and its identity, a Graph PowerShell application tried to add a credential to the agent identity and was refused (`Result` = `failure`, 2026-09-17), and Microsoft's own provisioning (`Microsoft Azure AD Internal - Jit Provisioning`) created the first-party Copilot Studio blueprint service principal with no human involved. An `application` actor on a credential change deserves review before a `user` one; Microsoft-internal provisioning is a baseline, not an alert.
 
-   **Two coverage limits to state in the lab.** The blueprint *principal* (the blueprint's service principal, where `Consent to application` and `Add app role assignment` were logged) matched neither `AgentsInfo` column, so consent and app-role changes on it are outside this join. And an agent with both IDs empty in `AgentsInfo` is invisible to it. In the framing of the Entra Attack & Defense Playbook's upcoming Agent Identities chapter (see Module 06, point 8), changes to ownership and credentials sit in the pre-breach phase, targeting the agent entity.
+   **Two coverage limits to state in the lab.** The blueprint *principal* (the blueprint's service principal, where `Consent to application` and `Add app role assignment` were logged) matched neither `AgentsInfo` column, so consent and app-role changes on it are outside this join. And an agent with both IDs empty in `AgentsInfo` is invisible to it. **A field that may close the first gap.** Microsoft Learn documents `agentType` (`agenticApp`, `agenticAppInstance`, `agentIdentityBlueprintPrincipal`, `agentIDuser`) and `blueprintId` on audit `targetResources`. In the validated tenant, Graph `directoryAudits` returned `agentType` on `initiatedBy` (`notAgentic` where present) but returned neither field on the `targetResources` of the Hermes blueprint and agent identity (six events, 2026-09-17), so this lab still joins on ids. Check `AuditLogs.TargetResources` in your workspace before relying on either; if the fields are there, filtering on them also covers blueprint principals and agent users. In this module's terms (Module 06, point 8), these changes are identity-plane persistence and privilege escalation, not input-plane attacks.
 
 ---
 
@@ -213,7 +213,7 @@ EntraIdSpnSignInEvents
 
 Run `KQL-Library/P03-Access-Anomalies.kql`, Q12. It correlates `AuditLogs` with `AgentsInfo` by object id, so it finds blueprints and agent identities whatever they are named.
 
-**Expected output:** one row per credential, owner, or sponsor change in the last 7 days on an object listed in `AgentsInfo`, with `ObjectType` (`Application` for a blueprint, `ServicePrincipal` for an agent identity), `Actor` and `ActorType`.
+**Expected output:** one row per credential, owner, or sponsor change in the last 7 days on an object listed in `AgentsInfo`, with `Result`, `ObjectType` (`Application` for a blueprint, `ServicePrincipal` for an agent identity), `Actor` and `ActorType`. A credential operation on an agent identity with `Result` = `failure` is a blocked attempt, not an added credential.
 
 **ATT&CK mapping (our own, ATT&CK Enterprise v19.2, ids and names checked against the ATT&CK data):**
 
@@ -222,11 +222,35 @@ Run `KQL-Library/P03-Access-Anomalies.kql`, Q12. It correlates `AuditLogs` with 
 | `Add service principal credentials`; `Create application – Certificates and secrets management`; `Update application – Certificates and secrets management` | T1098.001 Account Manipulation: Additional Cloud Credentials | ATT&CK's detection strategy DET0531 (analytic AN1469) lists `azure:audit` `Add service principal credentials` for this technique |
 | `Add owner to application`; `Add owner to service principal`; `Add user sponsor` | T1098 Account Manipulation | No sub-technique covers ownership or sponsorship, so T1098 is the closest match (our judgment). An owner can add credentials, which is T1098.001 |
 
-Consent and app role changes on the blueprint principal are not mapped here because this query does not cover them.
+Consent and app role changes on the blueprint principal are covered by Step 8. A refused credential attempt (`Result` = `failure`) is still an attempt at T1098.001.
 
-**Document in your playbook:** Which rows have `ActorType = application`? For each credential change, is there a change record? Who are the owners and sponsors added, and are they the people your governance registry says are accountable (Track B Module 02)?
+**Document in your playbook:** Which rows have `ActorType = application`, and which have `Result` = `failure`? For each credential change, is there a change record? Who are the owners and sponsors added, and are they the people your governance registry says are accountable (Track B Module 02)?
 
 **If it returns no rows:** either nothing changed in 7 days, or the agent has both `EntraAgentID` and `EntraBlueprintID` empty in `AgentsInfo`, or the change was on the blueprint principal, which this join does not cover. Widen the window to 90 days before concluding anything.
+
+---
+
+### Step 8 — KQL: consent and app-role grants on blueprint principals
+
+Run `KQL-Library/P03-Access-Anomalies.kql`, Q13. A blueprint declares two lists that grant nothing by themselves, *required resource access* and *inheritable permissions*; consent on the blueprint principal is what grants, and when the resource app is inheritable the grant reaches every current and future agent identity from that blueprint. Inherited permissions are not shown on the agent identities in the Entra admin center or Microsoft Graph, only in the token's `scp` and `roles` claims at runtime (Microsoft Learn, inheritable permissions). The grants themselves stay visible on the blueprint principal, so the audit event is the earliest signal.
+
+**Expected output:** one row per `Consent to application` or `Add app role assignment to service principal` in the last 7 days whose target is a blueprint principal, with `Result`, `Actor`, `ActorType`, and the raw `TargetResources` for the permission details.
+
+**Coverage, stated plainly.** `AgentsInfo` carries the blueprint's id but not the principal's object id, and a `Consent to application` record names its target by display name only. Q13 therefore matches app-role assignments by the blueprint id found in the principal's service principal names (checked on a Graph `directoryAudits` sample: it matches the 2026-09-17 grant on the Hermes blueprint principal), and matches consent events only when the record carries `agentType` = `agentIdentityBlueprintPrincipal`, which Microsoft Learn documents and this tenant's Graph output did not show. Q13 was not run against `AuditLogs`: the validation session had no Log Analytics workspace access.
+
+**ATT&CK mapping (our own, ATT&CK Enterprise v19.2, ids and names checked against the ATT&CK data):** `Consent to application` maps to T1671 Cloud Application Integration (ATT&CK's detection strategy DET0539 lists the `azure:audit` operation `Consent to application`); `Add app role assignment to service principal` maps to T1098.003 Account Manipulation: Additional Cloud Roles (DET0277 lists `Add app role assignment`).
+
+**Document in your playbook:** Which blueprints are multi-tenant? Who consented, was it an admin consent, and does the permission list match what the blueprint declared in required resource access? Treat every grant on a third-party blueprint principal as potentially inherited by all of its agent identities, because the inheritance configuration lives in the publisher's tenant and cannot be verified locally.
+
+---
+
+### Step 9 — KQL: Identity Protection risk events on agents
+
+Run `KQL-Library/P03-Access-Anomalies.kql`, Q14. ID Protection for agents evaluates eight offline detection types (Track B Module 02, point 12). Microsoft Learn does not say whether these detections raise an incident or alert in Defender XDR: check in your tenant, and if they do not, a custom rule is the path to the SOC queue.
+
+**Prerequisites:** the Entra diagnostic settings must export the agent risk categories to your Log Analytics workspace (Microsoft Learn, export risk data), and ID Protection for agents requires an Agent 365 license (Learn: "starting soon"; Entra ID P2 during the preview). Detections are retained for 90 days, learning mode suppresses behavioral alerts for agents with little history, and in on-behalf-of flows the risk lands on the user, so an empty result is not proof of safety.
+
+**Expected output:** one row per medium or high risk event in the last hour, with the agent's `AgentsInfo` record when `AgentId` matches `EntraAgentID`. Not run against a workspace that has these tables: the validation session had no workspace access.
 
 ---
 
@@ -255,6 +279,8 @@ Use block or sessionControls only. Confirmed in What If test on [DATE].
 - [ ] Agent sign-ins outside business hours (daily)
 - [ ] Agents accessing more than [N] resources (weekly)
 - [ ] Credential, owner, and sponsor changes on Agent ID objects (hourly, review `application` actors first)
+- [ ] Consent and app-role grants on blueprint principals (hourly)
+- [ ] Identity Protection risk events on agents (every 15 minutes)
 
 ### Findings
 | Agent | Resources Accessed | Expected Scope | Gap |

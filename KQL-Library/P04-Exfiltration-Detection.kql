@@ -110,11 +110,18 @@ CloudAppEvents
 //      that persists across sessions (Copilot Studio with memory enabled)
 // Distinction: corpus poisoning = injected in SharePoint docs the agent reads
 //              memory poisoning = injected in the agent's persistent session memory
+// NOTE: The ActionType list was "AgentInteraction", "AgentMemoryUpdate", "AgentContextSet";
+//       none is a documented value. It is now "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
+//       There is no documented ActionType for a memory write, and Learn's attribute
+//       reference has no memory-content attribute (prompt and response text are "not yet
+//       surfaced in advanced hunting"), so RawEventData["MemoryContent"] has no documented
+//       source. Pattern only; not run against live events (0 agent ActionTypes in the
+//       validation tenant, Oct 2026).
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
 | where Application in ("Microsoft Copilot", "Copilot Studio")
-    and ActionType in ("AgentInteraction", "AgentMemoryUpdate", "AgentContextSet")
+    and ActionType == "InvokeAgent"
 | extend SessionId = tostring(RawEventData["SessionId"])
 | extend MemoryContent = tostring(RawEventData["MemoryContent"])
 | extend HasPoisoningPattern = MemoryContent has_any (
@@ -168,10 +175,15 @@ CloudAppEvents
 //      (Anthropic research). KQL cannot detect poisoning directly — but can
 //      flag behavioral deviation post-deployment as an early warning signal.
 // Reference: Anthropic Zero Trust for AI Agents — model supply chain
+// NOTE: The ActionType was "AgentInteraction", which is not a documented value; it is now
+//       "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
+//       Response text is "not yet surfaced in advanced hunting" per Learn, so
+//       RawEventData["AgentResponse"] has no documented source: pattern only. Not run
+//       against live events (0 agent ActionTypes in the validation tenant, Oct 2026).
 // -----------------------------------------------------------------------------
 let AgentBaseline = CloudAppEvents
     | where TimeGenerated between (ago(30d) .. ago(1d))
-    | where ActionType == "AgentInteraction"
+    | where ActionType == "InvokeAgent"
     | extend AgentId = tostring(RawEventData["AgentId"])
     | extend ResponseLength = strlen(tostring(RawEventData["AgentResponse"]))
     | extend HasExternalRef = tostring(RawEventData["AgentResponse"]) has_any ("http://", "https://", "click here", "download", "visit")
@@ -181,7 +193,7 @@ let AgentBaseline = CloudAppEvents
         by AgentId;
 CloudAppEvents
 | where TimeGenerated > ago(1d)
-| where ActionType == "AgentInteraction"
+| where ActionType == "InvokeAgent"
 | extend AgentId = tostring(RawEventData["AgentId"])
 | extend ResponseLength = strlen(tostring(RawEventData["AgentResponse"]))
 | extend HasExternalRef = tostring(RawEventData["AgentResponse"]) has_any ("http://", "https://", "click here", "download", "visit")
@@ -204,11 +216,16 @@ CloudAppEvents
 // Use: Identify patterns consistent with prompt injection in agent interactions
 //      Focus: unusual instruction sequences, role override attempts
 // Note: Pattern list is indicative — tune to your environment's prompt baseline
+// NOTE: The ActionType was "AgentInteraction", which is not a documented value; it is now
+//       "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
+//       Prompt text is "not yet surfaced in advanced hunting" per Learn, so
+//       RawEventData["UserPrompt"] has no documented source: pattern only. Not run against
+//       live events (0 agent ActionTypes in the validation tenant, Oct 2026).
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
 | where Application in ("Microsoft Copilot", "Copilot Studio")
-    and ActionType == "AgentInteraction"
+    and ActionType == "InvokeAgent"
 | extend PromptText = tostring(RawEventData["UserPrompt"])
 | extend HasInjectionPattern = PromptText has_any (
     "ignore previous instructions",

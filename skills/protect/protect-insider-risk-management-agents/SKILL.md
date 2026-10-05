@@ -59,9 +59,10 @@ let IRMAlerts = SecurityAlert
     | where TimeGenerated > ago(30d)
     | where ProductName == "Microsoft 365 Insider Risk Management"
     | project AlertTime = TimeGenerated, AffectedUser = tostring(Entities[0].Name), AlertName;
+// ActionType was "AgentInteraction" (not documented); InvokeAgent is the documented value (Microsoft Learn, Agent 365 observability). Not run against live events.
 let AgentActivity = CloudAppEvents
     | where TimeGenerated > ago(30d)
-    | where ActionType == "AgentInteraction"
+    | where ActionType == "InvokeAgent"
     | summarize AgentCalls = count(), UniqueAgents = dcount(tostring(RawEventData["AgentId"]))
         by UserId, bin(TimeGenerated, 1h);
 IRMAlerts
@@ -76,7 +77,7 @@ IRMAlerts
 // Establish a baseline of normal interactions per user
 CloudAppEvents
 | where TimeGenerated between (ago(30d) .. ago(1d))
-| where ActionType == "AgentInteraction"
+| where ActionType == "InvokeAgent"
 | summarize
     DailyAvg = avg(count()),
     DailyP90 = percentile(count(), 90)
