@@ -142,7 +142,9 @@ AuditLogs
 | where OperationName == "Consent to application"
 | extend ConsentedApp = tostring(TargetResources[0].displayName)
 | extend ConsentedBy = tostring(InitiatedBy.user.userPrincipalName)
-| extend ScopesGranted = tostring(TargetResources[0].modifiedProperties[0].newValue)
+| mv-apply MP = TargetResources[0].modifiedProperties on (
+    where tostring(MP.displayName) == "ConsentAction.Permissions"
+    | summarize ScopesGranted = take_any(tostring(MP.newValue)))
 | extend IsHighPrivilege = ScopesGranted has_any (
     "Files.ReadWrite.All",
     "Mail.ReadWrite",
@@ -162,6 +164,8 @@ AuditLogs
 
 **Expected output:** Consent events where high-privilege scopes were granted to application identities without a corresponding approval record.
 
+**Validated on a Sentinel workspace (October 2026).** The scopes are in the `ConsentAction.Permissions` property, not in `modifiedProperties[0]` (which is `ConsentContext.IsAdminConsent`): the earlier version could never match, and the fix turned 0 rows into 7 over 30 days. The query is not agent-specific: it lists every high-privilege consent.
+
 ---
 
 ### Step 5 — KQL: Agent sign-ins outside business hours
@@ -178,11 +182,11 @@ EntraIdSpnSignInEvents
     EarliestSignIn = min(Timestamp),
     LatestSignIn = max(Timestamp),
     LocationSet = make_set(Country)
-    by ServicePrincipalName, AppId
+    by ServicePrincipalName, ApplicationId
 | sort by OffHoursSignIns desc
 ```
 
-**Expected output:** Agent identities signing in outside configured business hours — a baseline deviation signal.
+**Expected output:** Agent identities signing in outside configured business hours — a baseline deviation signal. The column is `ApplicationId`: `EntraIdSpnSignInEvents` has no `AppId` (validated in Advanced Hunting, October 2026).
 
 ---
 
@@ -196,11 +200,11 @@ EntraIdSpnSignInEvents
     ResourcesAccessed = make_set(ResourceDisplayName),
     AccessCount = count(),
     LastAccess = max(Timestamp)
-    by ServicePrincipalId, ServicePrincipalName, AppId
+    by ServicePrincipalId, ServicePrincipalName, ApplicationId
 | extend ResourceCount = array_length(ResourcesAccessed)
 | where ResourceCount > 3
 | sort by ResourceCount desc
-| project ServicePrincipalName, AppId, ResourceCount, ResourcesAccessed, AccessCount, LastAccess
+| project ServicePrincipalName, ApplicationId, ResourceCount, ResourcesAccessed, AccessCount, LastAccess
 ```
 
 **Adjust the threshold** (`ResourceCount > 3`) based on your expected agent scope. An agent declared as a SharePoint reader with access to 12 distinct resources is a scope expansion signal.

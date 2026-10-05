@@ -293,10 +293,10 @@ CloudAppEvents
     and ActionType == "InvokeAgent"
 | extend PromptText = tostring(RawEventData["UserPrompt"])
 | extend ElicitScore = toint(
-    (PromptText has "what tools") * 2 +
-    (PromptText has "list your functions") * 2 +
-    (PromptText has "your system prompt") * 3 +
-    (PromptText has "show me your configuration") * 2
+    toint(PromptText has "what tools") * 2 +
+    toint(PromptText has "list your functions") * 2 +
+    toint(PromptText has "your system prompt") * 3 +
+    toint(PromptText has "show me your configuration") * 2
 )
 | where ElicitScore >= 2
 | project TimeGenerated, AccountDisplayName, ElicitScore,

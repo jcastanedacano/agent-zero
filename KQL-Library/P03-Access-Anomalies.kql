@@ -9,6 +9,9 @@
 // -----------------------------------------------------------------------------
 // Q1: Agents Accessing Resources Outside Their Declared Scope
 // Use: Detect permission scope expansion — agents accessing more than intended
+// Validated live (Oct 2026, Advanced Hunting): the earlier version failed because EntraIdSpnSignInEvents has no
+//      AppId column (it is ApplicationId). It now runs and returns no rows: 7 of 3,628 service principal sign-ins
+//      in 7 days had "agent" in the name, from 18 service principals. The filter is a name heuristic.
 // -----------------------------------------------------------------------------
 EntraIdSpnSignInEvents
 | where Timestamp > ago(7d)
@@ -17,11 +20,11 @@ EntraIdSpnSignInEvents
     ResourcesAccessed = make_set(ResourceDisplayName),
     AccessCount = count(),
     LastAccess = max(Timestamp)
-    by ServicePrincipalId, ServicePrincipalName, AppId
+    by ServicePrincipalId, ServicePrincipalName, ApplicationId
 | extend ResourceCount = array_length(ResourcesAccessed)
 | where ResourceCount > 3   // Adjust threshold based on expected agent scope
 | sort by ResourceCount desc
-| project ServicePrincipalName, AppId, ResourceCount, ResourcesAccessed, AccessCount, LastAccess
+| project ServicePrincipalName, ApplicationId, ResourceCount, ResourcesAccessed, AccessCount, LastAccess
 
 
 // -----------------------------------------------------------------------------
@@ -51,13 +54,20 @@ CloudAppEvents
 // -----------------------------------------------------------------------------
 // Q3: Unreviewed OAuth Consent Grants — Agents Accumulating Permissions
 // Use: Identify OAuth consent grants to agent service principals without review
+// Validated live (Oct 2026, Sentinel workspace): the earlier version read modifiedProperties[0], which is
+//      ConsentContext.IsAdminConsent ("True"), so it could never match a scope. The scopes are in the property
+//      ConsentAction.Permissions (a text that contains "Scope: ..."). Fixed: 0 rows became 7 over 30 days on the
+//      validation tenant. It is not agent-specific: it lists every high-privilege consent, and it reads the consent
+//      record only (an application permission is granted by an app role assignment, which this does not read).
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(30d)
 | where OperationName == "Consent to application"
 | extend ConsentedApp = tostring(TargetResources[0].displayName)
 | extend ConsentedBy = tostring(InitiatedBy.user.userPrincipalName)
-| extend ScopesGranted = tostring(TargetResources[0].modifiedProperties[0].newValue)
+| mv-apply MP = TargetResources[0].modifiedProperties on (
+    where tostring(MP.displayName) == "ConsentAction.Permissions"
+    | summarize ScopesGranted = take_any(tostring(MP.newValue)))
 | extend IsHighPrivilege = ScopesGranted has_any (
     "Files.ReadWrite.All",
     "Mail.ReadWrite",
@@ -80,6 +90,8 @@ AuditLogs
 // Q4: Agent Sign-ins from Unexpected Locations or Times
 // Use: Baseline deviation — agents operating outside normal parameters
 // Note: Adjust expected hours and locations for your environment
+// Validated live (Oct 2026, Advanced Hunting): the earlier version failed because EntraIdSpnSignInEvents has no
+//      AppId column (it is ApplicationId). It now runs and returned 1 row in 7 days.
 // -----------------------------------------------------------------------------
 EntraIdSpnSignInEvents
 | where Timestamp > ago(7d)
@@ -92,9 +104,9 @@ EntraIdSpnSignInEvents
     EarliestSignIn = min(Timestamp),
     LatestSignIn = max(Timestamp),
     LocationSet = make_set(Country)
-    by ServicePrincipalName, AppId
+    by ServicePrincipalName, ApplicationId
 | sort by OffHoursSignIns desc
-| project ServicePrincipalName, AppId, OffHoursSignIns, EarliestSignIn, LatestSignIn, LocationSet
+| project ServicePrincipalName, ApplicationId, OffHoursSignIns, EarliestSignIn, LatestSignIn, LocationSet
 
 
 // -----------------------------------------------------------------------------
@@ -123,22 +135,22 @@ CloudAppEvents
 | extend AgentId = tostring(RawEventData["AgentId"])
 // Score for schema/tool disclosure patterns in agent response
 | extend DisclosureScore = toint(
-    (ResponseText has "\"type\": \"function\"") * 3 +
-    (ResponseText has "\"parameters\":{") * 3 +
-    (ResponseText has "system_prompt") * 3 +
-    (ResponseText has "tool_use") * 2 +
-    (ResponseText has "function_call") * 2 +
-    (ResponseText has "\"description\":") * 1 +
-    (ResponseText has "\"required\":") * 1
+    toint(ResponseText has "\"type\": \"function\"") * 3 +
+    toint(ResponseText has "\"parameters\":{") * 3 +
+    toint(ResponseText has "system_prompt") * 3 +
+    toint(ResponseText has "tool_use") * 2 +
+    toint(ResponseText has "function_call") * 2 +
+    toint(ResponseText has "\"description\":") * 1 +
+    toint(ResponseText has "\"required\":") * 1
 )
 // Score for elicitation attempts in user prompt
 | extend ElicitScore = toint(
-    (PromptText has "what tools") * 2 +
-    (PromptText has "list your functions") * 2 +
-    (PromptText has "show your capabilities") * 2 +
-    (PromptText has "what can you access") * 1 +
-    (PromptText has "your system prompt") * 3 +
-    (PromptText has "repeat your instructions") * 3
+    toint(PromptText has "what tools") * 2 +
+    toint(PromptText has "list your functions") * 2 +
+    toint(PromptText has "show your capabilities") * 2 +
+    toint(PromptText has "what can you access") * 1 +
+    toint(PromptText has "your system prompt") * 3 +
+    toint(PromptText has "repeat your instructions") * 3
 )
 | where DisclosureScore >= 3 or ElicitScore >= 3
 | project
@@ -254,9 +266,9 @@ CloudAppEvents
 // Secondary signal: very few distinct responses suggests binary/categorical answers (yes/no, found/not found)
 | extend BinaryResponseSignal = DistinctResponses < 5
 | extend MembershipInferenceScore = toint(
-    (TotalQueries > 500) * 3 +
-    (DistinctnessRatio < 0.2) * 3 +
-    (BinaryResponseSignal == true) * 4
+    toint(TotalQueries > 500) * 3 +
+    toint(DistinctnessRatio < 0.2) * 3 +
+    toint(BinaryResponseSignal == true) * 4
 )
 | where MembershipInferenceScore >= 3
 | project
@@ -304,20 +316,20 @@ CloudAppEvents
 | extend PromptText = tostring(RawEventData["UserPrompt"])
 // Inversion signal 1: prompts contain "complete", "repeat", "verbatim", "what do you remember"
 | extend InversionKeywords = toint(
-    (PromptText has "complete the following") * 2 +
-    (PromptText has "repeat exactly") * 3 +
-    (PromptText has "verbatim") * 2 +
-    (PromptText has "what do you know about") * 1 +
-    (PromptText has "what information do you have on") * 1 +
-    (PromptText has "tell me everything about") * 1 +
-    (PromptText has "what was in the training") * 3 +
-    (PromptText has "memorized") * 2
+    toint(PromptText has "complete the following") * 2 +
+    toint(PromptText has "repeat exactly") * 3 +
+    toint(PromptText has "verbatim") * 2 +
+    toint(PromptText has "what do you know about") * 1 +
+    toint(PromptText has "what information do you have on") * 1 +
+    toint(PromptText has "tell me everything about") * 1 +
+    toint(PromptText has "what was in the training") * 3 +
+    toint(PromptText has "memorized") * 2
 )
 // Inversion signal 2: prompt contains personal identifiers (names, emails, IDs)
 | extend ContainsIdentifier = toint(
-    (PromptText matches regex @"\b[A-Z][a-z]+ [A-Z][a-z]+\b") * 1 +  // Person name pattern
-    (PromptText matches regex @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}") * 2 +  // Email
-    (PromptText matches regex @"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b") * 2  // Phone
+    toint(PromptText matches regex @"\b[A-Z][a-z]+ [A-Z][a-z]+\b") * 1 +  // Person name pattern
+    toint(PromptText matches regex @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}") * 2 +  // Email
+    toint(PromptText matches regex @"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b") * 2  // Phone
 )
 | where InversionKeywords >= 2 or ContainsIdentifier >= 2
 | summarize
@@ -330,10 +342,10 @@ CloudAppEvents
     LastSeen = max(TimeGenerated)
     by CallerIdentity
 | extend ModelInversionScore = toint(
-    (TotalQueries > 50) * 2 +
-    (MaxInversionKeywords >= 3) * 3 +
-    (MaxIdentifierScore >= 2) * 3 +
-    (DistinctPrompts > 30) * 2
+    toint(TotalQueries > 50) * 2 +
+    toint(MaxInversionKeywords >= 3) * 3 +
+    toint(MaxIdentifierScore >= 2) * 3 +
+    toint(DistinctPrompts > 30) * 2
 )
 | where ModelInversionScore >= 4
 | project
@@ -356,9 +368,10 @@ CloudAppEvents
 //      Risk can derive from the agent's own anomalous actions or from sponsor account compromise
 //      Feed into CA review and sponsor notification workflow
 // Ref: https://learn.microsoft.com/en-us/entra/id-protection/concept-risky-agents
-// NOTE: Microsoft Learn documents the destination of agent risk exports as the tables AADRiskyAgents and
-//       AADAgentRiskEvents (see Q14). The AuditLogs categories filtered on below were not found in Learn in the
-//       Oct 2026 review and were not validated; prefer Q14.
+// NOT VERIFIED (source does not exist): AuditLogs on the validation workspace has 13 categories and none is
+//       RiskyServicePrincipal or ServicePrincipalRiskEvents (IdentityProtection holds only DismissUser in 90 days),
+//       so this query runs and returns nothing. Microsoft Learn documents the destination of agent risk exports as
+//       the tables AADRiskyAgents and AADAgentRiskEvents: use Q14.
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(7d)
@@ -384,50 +397,69 @@ AuditLogs
 
 
 // -----------------------------------------------------------------------------
-// Q10: Orphaned Agent Identities — Sponsors Who Left the Organization
-// Use: Find agent identities whose sponsor's account is disabled or deleted
-//      Entra Lifecycle Workflows should auto-transfer to manager, but gaps occur
+// Q10: Orphaned Agent Identities — Owners Who Left the Organization
+// Use: Find agents whose owner's account is disabled or deleted
+//      Entra Lifecycle Workflows should auto-transfer sponsorships to the manager, but gaps occur
 //      when no manager is assigned or the workflow hasn't triggered yet
+// Validated live (Oct 2026): the earlier version failed (a tabular operator inside a scalar expression is invalid
+//      syntax) and could not have matched: AgentsInfo.Owners holds user OBJECT IDS, not UPNs, and AgentsInfo has no
+//      sponsors column, so this finds orphaned OWNERS. LifecycleStatus values seen: Active, Deleted, empty.
+//      The AuditLogs half ran on the validation workspace (1 disabled user in 90 days, 0 deleted); the join was
+//      exercised against a datatable shaped like AgentsInfo and returned no rows. On that tenant only 13 of 351 agents
+//      had owners, one of them the all-zeros GUID placeholder. AuditLogs (workspace) and AgentsInfo (Advanced Hunting
+//      here) are not in one surface: ingest AgentsInfo into the workspace, as for Q12.
 // -----------------------------------------------------------------------------
-let DisabledOrDeletedUsers =
-    AuditLogs
+let Deleted = AuditLogs
     | where TimeGenerated > ago(90d)
-    | where OperationName in ("Delete user", "Update user")
-    | extend UPN = tostring(TargetResources[0].userPrincipalName)
-    | extend AccountEnabled = tostring(
-        parse_json(tostring(TargetResources[0].modifiedProperties))
-        | where columnifexists("displayName","") == "AccountEnabled"
-        | project newValue)
-    | where OperationName == "Delete user" or AccountEnabled == "[false]"
-    | project DisabledUPN = UPN, DisabledAt = TimeGenerated;
+    | where OperationName == "Delete user"
+    | mv-expand TR = TargetResources
+    | where tostring(TR.type) == "User"
+    | project DisabledUserId = tolower(tostring(TR.id)), DisabledUPN = tostring(TR.userPrincipalName), DisabledAt = TimeGenerated, Reason = "deleted";
+let Disabled = AuditLogs
+    | where TimeGenerated > ago(90d)
+    | where OperationName == "Update user"
+    | mv-expand TR = TargetResources
+    | where tostring(TR.type) == "User"
+    | mv-expand MP = TR.modifiedProperties
+    | where tostring(MP.displayName) == "AccountEnabled" and tostring(MP.newValue) has "false"
+    | project DisabledUserId = tolower(tostring(TR.id)), DisabledUPN = tostring(TR.userPrincipalName), DisabledAt = TimeGenerated, Reason = "disabled";
+let DisabledOrDeletedUsers = union Deleted, Disabled;
 AgentsInfo
 | where Timestamp > ago(30d)
-| where LifecycleStatus != "Decommissioned"
-| extend OwnersStr = tostring(Owners)
+| where LifecycleStatus != "Deleted"
+| summarize arg_max(Timestamp, *) by AgentId
 | mv-expand Owner = Owners
-| extend OwnerUPN = tostring(Owner)
-| join kind=inner DisabledOrDeletedUsers on $left.OwnerUPN == $right.DisabledUPN
+| extend OwnerId = tolower(tostring(Owner))
+| join kind=inner DisabledOrDeletedUsers on $left.OwnerId == $right.DisabledUserId
 | project
     Name,
     Platform,
     LifecycleStatus,
-    OrphanedSponsor = OwnerUPN,
-    SponsorDisabledAt = DisabledAt,
-    RiskNote        = "Agent sponsor disabled/deleted — verify Lifecycle Workflow transferred sponsorship to manager"
-| sort by SponsorDisabledAt desc
+    OrphanedOwnerId = OwnerId,
+    OwnerUPN = DisabledUPN,
+    OwnerDisabledAt = DisabledAt,
+    Reason,
+    RiskNote = "Agent owner disabled or deleted: check who now owns it and whether sponsorship was transferred to the manager"
+| sort by OwnerDisabledAt desc
 
 
 // -----------------------------------------------------------------------------
 // Q5: PIM Activation Patterns for Agent Roles — Anomalous Elevation
 // Use: Detect unusual PIM activation patterns for agent-associated privileged roles
+// Validated live (Oct 2026, Sentinel workspace): the earlier version took TargetResources[1] as the principal, but
+//      in PIM events index 0 is the Role, indexes 1 and 2 are the Directory (the tenant name) and the user is the
+//      target of type User, so the "agent" filter could never match. Targets are now picked by type. The initiator
+//      of PIM events is an app, not the user, so ActivatedBy falls back to the target user. Over 90 days the
+//      original role terms matched nothing on the validation tenant; with a relaxed term the role and user came out.
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(7d)
 | where OperationName == "Add member to role in PIM requested (permanent)"
     or OperationName == "Add member to role completed (PIM activation)"
-| extend ActivatedRole = tostring(TargetResources[0].displayName)
-| extend ActivatedBy = tostring(InitiatedBy.user.userPrincipalName)
-| extend TargetPrincipal = tostring(TargetResources[1].displayName)
+| mv-apply TR = TargetResources on (
+    summarize ActivatedRole = take_anyif(tostring(TR.displayName), tostring(TR.type) == "Role"),
+              TargetPrincipal = take_anyif(tostring(TR.displayName), tostring(TR.type) in ("User", "ServicePrincipal")))
+| extend ActivatedBy = coalesce(tostring(InitiatedBy.user.userPrincipalName), TargetPrincipal)
 | where TargetPrincipal has "agent"
     or ActivatedRole has_any ("Global Admin", "Privileged Role", "Security Admin")
 | project

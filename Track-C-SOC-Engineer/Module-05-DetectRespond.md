@@ -91,12 +91,12 @@ CloudAppEvents
 | extend PromptText = tostring(RawEventData["UserPrompt"])
 | extend AgentId = tostring(RawEventData["AgentId"])
 | extend JailbreakScore = toint(
-    (PromptText has "ignore previous instructions") * 3 +
-    (PromptText has "disregard your system prompt") * 3 +
-    (PromptText has "you are now a") * 2 +
-    (PromptText has "act as if you have no") * 2 +
-    (PromptText has "forget all previous") * 2 +
-    (PromptText has "override:") * 1
+    toint(PromptText has "ignore previous instructions") * 3 +
+    toint(PromptText has "disregard your system prompt") * 3 +
+    toint(PromptText has "you are now a") * 2 +
+    toint(PromptText has "act as if you have no") * 2 +
+    toint(PromptText has "forget all previous") * 2 +
+    toint(PromptText has "override:") * 1
 )
 | where JailbreakScore >= 2
 | project

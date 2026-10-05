@@ -266,16 +266,16 @@ let ToolResponseEvents = CloudAppEvents
     | extend ToolResponseText = tolower(tostring(RawEventData["ToolResponse"]))
     | extend SessionId = tostring(RawEventData["SessionId"])
     | extend LpciScore = toint(
-        (ToolResponseText has "you are now operating as") * 3 +
-        (ToolResponseText has "new system instruction:") * 3 +
-        (ToolResponseText has "override previous role") * 3 +
-        (ToolResponseText has "ignore your prior instructions") * 3 +
-        (ToolResponseText has "as your administrator i") * 2 +
-        (ToolResponseText has "your new objective is") * 2 +
-        (ToolResponseText has "treat this as operator instruction") * 2 +
-        (ToolResponseText has "act with elevated permissions") * 2 +
-        (ToolResponseText has "disregard safety") * 1 +
-        (ToolResponseText has "from this point forward you") * 1
+        toint(ToolResponseText has "you are now operating as") * 3 +
+        toint(ToolResponseText has "new system instruction:") * 3 +
+        toint(ToolResponseText has "override previous role") * 3 +
+        toint(ToolResponseText has "ignore your prior instructions") * 3 +
+        toint(ToolResponseText has "as your administrator i") * 2 +
+        toint(ToolResponseText has "your new objective is") * 2 +
+        toint(ToolResponseText has "treat this as operator instruction") * 2 +
+        toint(ToolResponseText has "act with elevated permissions") * 2 +
+        toint(ToolResponseText has "disregard safety") * 1 +
+        toint(ToolResponseText has "from this point forward you") * 1
     )
     | where LpciScore >= 2;
 // Correlate with subsequent high-privilege actions in the same session
@@ -323,7 +323,9 @@ ToolResponseEvents
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 60m | Severity: Critical
 // NOTE: "AgentInteraction" in DiscoveryActions was not a documented ActionType; it is now
 //       "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
-//       Not run against live events (0 agent ActionTypes in the validation tenant, Oct 2026).
+//       Not run against live events (0 agent ActionTypes in the validation tenant, Oct 2026). It now runs without
+//       errors in Advanced Hunting: the stage count added booleans directly, which is invalid KQL ("Non-boolean
+//       context is not expected"); each stage is now toint(...), and the left-joined counts are coalesced.
 // -----------------------------------------------------------------------------
 let WindowMinutes = 60;
 let DiscoveryActions = dynamic([
@@ -375,12 +377,8 @@ AgentsWithDiscovery
 | join kind=leftouter AgentsWithCredAccess on AgentId
 | join kind=leftouter AgentsWithLateral on AgentId
 | join kind=leftouter AgentsWithEncryption on AgentId
-| extend StagesPresent = toint(
-    (DiscoveryCount > 0) +
-    (CredAccessCount > 0) +
-    (LateralCount > 0) +
-    (EncryptionCount > 0)
-)
+| extend StagesPresent = toint(DiscoveryCount > 0) + toint(coalesce(CredAccessCount, 0) > 0)
+    + toint(coalesce(LateralCount, 0) > 0) + toint(coalesce(EncryptionCount, 0) > 0)
 | where StagesPresent >= 3
 | extend ChainDurationMinutes = iff(
     isnotempty(EncryptionTime),
@@ -437,21 +435,21 @@ let PromptScores = CloudAppEvents
     | extend SessionId = tostring(RawEventData["SessionId"])
     | extend TurnIndex = toint(RawEventData["StepIndex"])
     | extend FragmentScore = toint(
-        (PromptText has "ignore") * 1 +
-        (PromptText has "disregard") * 1 +
-        (PromptText has "override") * 1 +
-        (PromptText has "forget") * 1 +
-        (PromptText has "bypass") * 1 +
-        (PromptText has "new instructions") * 2 +
-        (PromptText has "previous rules") * 2 +
-        (PromptText has "system prompt") * 2 +
-        (PromptText has "act as") * 1 +
-        (PromptText has "you are now") * 2 +
-        (PromptText has "your role is") * 2 +
-        (PromptText has "pretend you") * 1 +
-        (PromptText has "from now on") * 1 +
-        (PromptText has "starting now") * 1 +
-        (PromptText has "going forward") * 1
+        toint(PromptText has "ignore") * 1 +
+        toint(PromptText has "disregard") * 1 +
+        toint(PromptText has "override") * 1 +
+        toint(PromptText has "forget") * 1 +
+        toint(PromptText has "bypass") * 1 +
+        toint(PromptText has "new instructions") * 2 +
+        toint(PromptText has "previous rules") * 2 +
+        toint(PromptText has "system prompt") * 2 +
+        toint(PromptText has "act as") * 1 +
+        toint(PromptText has "you are now") * 2 +
+        toint(PromptText has "your role is") * 2 +
+        toint(PromptText has "pretend you") * 1 +
+        toint(PromptText has "from now on") * 1 +
+        toint(PromptText has "starting now") * 1 +
+        toint(PromptText has "going forward") * 1
     )
     | where FragmentScore >= 1  // Include low-score individual turns
     | project TimeGenerated, AccountDisplayName, AgentId, SessionId, TurnIndex, FragmentScore,
