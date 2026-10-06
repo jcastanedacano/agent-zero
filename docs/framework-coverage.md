@@ -16,7 +16,7 @@ Published 9 December 2025 by the OWASP GenAI Security Project (100+ contributors
 | ASI03 — Identity & Privilege Abuse | Least Agency; Entra Agent ID scoped permissions; PIM just-in-time | 03 Secure |
 | ASI04 — Agentic Supply Chain Vulnerabilities | KQL Q5c behavioral anomaly; Track B/C Module-04 point 6; MCP/vendor supply chain (Module 07) | 04 Protect / 07 Vendor |
 | ASI05 — Unexpected Code Execution (RCE) | CoreBreak direct tool invocation + forged-approval defense (Module 02 point 11); OffGuard guardrail RCE (Module 03 point 12) | 02 Govern / 03 Secure |
-| ASI06 — Memory & Context Poisoning | KQL Q5a memory/session poisoning; Track B/C Module-04 point 5 | 04 Protect |
+| ASI06 — Memory & Context Poisoning | KQL P04-Q5a (memory written during a flagged interaction); Track B/C Module-04 point 5 | 04 Protect |
 | ASI07 — Insecure Inter-Agent Communication | KQL Q5b lateral movement; multi-agent trust boundaries; Track B/C Module-02/04 | 02 Govern / 04 Protect |
 | ASI08 — Cascading Failures | MAESTRO cross-layer propagation; multi-agent trust boundary controls (Module 04) | 04 Protect |
 | ASI09 — Human-Agent Trust Exploitation | CAGE model — approval screens must show the actual command, not the agent's description of it (Module 02 point 5) | 02 Govern |

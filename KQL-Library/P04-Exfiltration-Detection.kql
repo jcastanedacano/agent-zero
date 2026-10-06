@@ -131,42 +131,55 @@ CloudAppEvents
 
 
 // -----------------------------------------------------------------------------
-// Q5a: Memory / Session Poisoning — Persistent Instruction Injection
-// Use: Detect agents that receive instruction-like content via memory or context
-//      that persists across sessions (Copilot Studio with memory enabled)
+// Q5a: Memory Poisoning Candidates — Memory Written During an Interaction the Platform Flagged
+// Use: Find Copilot interactions that wrote to the user's persistent memory while the platform flagged the
+//      interaction: a jailbreak attempt in a message (Q1) or a cross-prompt injection in a resource Copilot read
+//      (Q10). A memory written under an injection outlives the session and shapes later interactions, which is
+//      the persistent-instruction case of OWASP ASI06 (Memory & Context Poisoning).
 // Distinction: corpus poisoning = injected in SharePoint docs the agent reads
 //              memory poisoning = injected in the agent's persistent session memory
-// NOTE: The ActionType list was "AgentInteraction", "AgentMemoryUpdate", "AgentContextSet";
-//       none is a documented value. It is now "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
-//       There is no documented ActionType for a memory write, and Learn's attribute
-//       reference has no memory-content attribute (prompt and response text are "not yet
-//       surfaced in advanced hunting"), so RawEventData["MemoryContent"] has no documented
-//       source. Pattern only; not run against live events (0 agent ActionTypes in the
-//       validation tenant, Oct 2026). It runs without errors in Advanced Hunting and returns nothing.
+// Source: CopilotActivity, LLMEventData.MemoryUpdated (boolean), Messages[].JailbreakDetected and
+//      AccessedResources[].XPIADetected. The earlier version matched phrases in RawEventData["MemoryContent"] on
+//      CloudAppEvents InvokeAgent events: that key has no documented source, and no queryable table carries the
+//      memory text.
+// Response: the audit record says that memory was written, not what. Learn ("Manage Copilot personalization and
+//      memory"): memories live in the user's mailbox in a hidden folder, are discoverable with Purview eDiscovery or
+//      Content Search (item class IPM.Contact, folder CopilotMemory) and can be deleted through Microsoft Graph
+//      Explorer together with Purview.
+// Recommended: Analytics Rule | Frequency: 1h | Lookback: 1d | Severity: Medium
+// NOT VERIFIED (live tenant, Oct 2026): MemoryUpdated is not in Learn's list of Copilot audit properties, and Learn
+//      states that memory and personalization actions do not generate audit log entries in Purview, so what the flag
+//      means is unconfirmed (it may report that memory was written, or only that the memory feature was in play).
+//      The key is present on 3 of 151 interaction records on the validation workspace (180 days) and is false on
+//      all 3, so a true value has never been seen. The query runs without errors; on those real records (with
+//      MemoryUpdated == false and the flag filter removed) it returns actor, thread, app and IP; and on a datatable
+//      it returned only the interactions that had memory written and a jailbreak or XPIA flag, and handled records
+//      without Messages or AccessedResources.
 // -----------------------------------------------------------------------------
-CloudAppEvents
-| where TimeGenerated > ago(7d)
-| where Application in ("Microsoft Copilot", "Copilot Studio")
-    and ActionType == "InvokeAgent"
-| extend SessionId = tostring(RawEventData["SessionId"])
-| extend MemoryContent = tostring(RawEventData["MemoryContent"])
-| extend HasPoisoningPattern = MemoryContent has_any (
-    "ignore previous instructions",
-    "from now on",
-    "always respond",
-    "never mention",
-    "your new role is",
-    "remember this for all future",
-    "override your default"
-)
-| where HasPoisoningPattern == true
+CopilotActivity
+| where TimeGenerated > ago(1d)
+| where RecordType == "CopilotInteraction"
+| where tobool(LLMEventData.MemoryUpdated) == true
+| mv-apply Message = iff(array_length(LLMEventData.Messages) > 0, LLMEventData.Messages, dynamic([null])) on (
+    summarize JailbreakFlagged = countif(tobool(Message.JailbreakDetected) == true) > 0)
+| mv-apply Resource = iff(array_length(LLMEventData.AccessedResources) > 0, LLMEventData.AccessedResources, dynamic([null])) on (
+    summarize
+        XpiaFlagged = countif(tobool(Resource.XPIADetected) == true) > 0,
+        FlaggedResources = make_set_if(tostring(Resource.SiteUrl), tobool(Resource.XPIADetected) == true, 5))
+| where JailbreakFlagged or XpiaFlagged
 | project
     TimeGenerated,
-    AccountDisplayName,
-    SessionId,
-    ActionType,
-    MemoryPreview = substring(MemoryContent, 0, 300),
-    IPAddress
+    ActorName,
+    ActorUserId,
+    AppIdentity,
+    AppHost,
+    SrcIpAddr,
+    ThreadId = tostring(LLMEventData.ThreadId),
+    JailbreakFlagged,
+    XpiaFlagged,
+    FlaggedResources,
+    RecordId,
+    RiskNote = "Memory written during an interaction the platform flagged: review the user's Copilot memory for injected instructions"
 | sort by TimeGenerated desc
 
 

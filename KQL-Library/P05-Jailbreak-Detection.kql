@@ -521,7 +521,7 @@ PromptScores
 //      injection attack (XPIA, indirect prompt injection), and show that resource: the document, page or message
 //      to clean up or block. Complements Q1 (a jailbreak in the user's own message): an XPIA arrives in content
 //      the user never typed, so the flag is on the resource, not on the message. It also replaces the phrase
-//      patterns of P04-Q5 and Q5a, which have no prompt text to read.
+//      pattern of P04-Q5, which has no prompt text to read (P04-Q5a builds on this flag and Q1's).
 // Reference: Microsoft Learn, "Audit logs for Copilot and AI applications" (AccessedResources[].XPIADetected) |
 //            MITRE ATLAS AML.T0051 | OWASP ASI01
 // Recommended: Analytics Rule | Frequency: 5m | Lookback: 1h | Severity: High

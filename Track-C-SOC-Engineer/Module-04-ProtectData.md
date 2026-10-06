@@ -34,7 +34,7 @@ At the end of this module, you will be able to configure a Purview DLP policy fo
 
 4. **Remediation order as an architectural control:** Enabling retrieval before applying labels and remediating ACLs creates an active exposure window that can last weeks. The correct order is: (1) classify and label every candidate site, (2) audit and remediate ACL errors, (3) enable agent retrieval. Inverting this order is the most common error in agent deployments that touch SharePoint.
 
-5. **Memory/session poisoning vs. corpus poisoning:** These are two distinct vectors. Corpus poisoning lives in SharePoint documents the agent retrieves, and it persists until the document is removed. Memory/session poisoning injects malicious instructions into the agent's persistent memory, which affects every future interaction for every user, and it survives removal of the original document. The detection surfaces differ: corpus poisoning is visible in file access logs, memory poisoning is not.
+5. **Memory/session poisoning vs. corpus poisoning:** These are two distinct vectors. Corpus poisoning lives in SharePoint documents the agent retrieves, and it persists until the document is removed. Memory/session poisoning injects malicious instructions into the agent's persistent memory, which affects every future interaction for every user, and it survives removal of the original document. The detection surfaces differ: corpus poisoning is visible in file access logs, memory poisoning is not. The Copilot audit record carries a `MemoryUpdated` flag that P04-Q5a combines with the platform's jailbreak and XPIA flags, so you can see that memory was written during a flagged interaction but not what was written (Learn: memory actions generate no audit entries, and memory content is reviewed through eDiscovery). The flag is not documented and has never been true on the validation tenant.
 
 6. **Model supply chain vs. poisoned corpus:** Souly et al. document that roughly 250 malicious training documents are enough to backdoor models up to 13B parameters, with persistence through safety training, and critically that the number is near-constant rather than proportional to model size ([arXiv:2510.07192](https://arxiv.org/abs/2510.07192)). This is not detectable with KQL: it requires provider evaluation and post-deployment behavioral drift monitoring (P05-Q6). Corpus poisoning, by contrast, is detectable in your own telemetry.
 
@@ -169,11 +169,49 @@ OfficeActivity
 
 **Expected output:** Agent access events on documents with no sensitivity label — your oversharing inventory.
 
-> **For Copilot interactions, skip the guess.** The query above infers agent traffic from `UserAgent`. Copilot's own audit record lists the files it read and their label: P04-Q6 reads `AccessedResources[].SensitivityLabelId` in `CopilotActivity` (Learn, "Audit logs for Copilot and AI applications"), splits the files into unlabeled and sensitive, and counts policy blocks. Not verified on a real file read: the validation workspace only had web citations.
+---
+
+### Step 5 — KQL: Copilot reads of unlabeled or sensitive files
+
+Step 4 infers agent traffic from `UserAgent`. For Copilot interactions you do not have to guess: the Copilot audit record lists each file Copilot read to answer a prompt, with its sensitivity label (Microsoft Learn, "Audit logs for Copilot and AI applications"). In Sentinel it is the `CopilotActivity` table (Microsoft Copilot data connector). This is P04-Q6.
+
+1. List your sensitive labels with `Get-Label` in Security & Compliance PowerShell (Learn uses it to map label GUIDs to names) and paste the GUIDs of the sensitive ones into `SensitiveLabelIds`.
+2. To generate data, ask Microsoft 365 Copilot a question grounded on one unlabeled file and one file with a sensitive label in SharePoint, and allow time for the audit record to reach the workspace.
+3. Run the query.
+
+> **Run on a Sentinel workspace (Oct 2026).** The query runs and returned nothing: the only resources Copilot listed there were 2 web citations, no file. **Not verified** on a real file read, and not confirmed that a file with no label omits `SensitivityLabelId` (rather than the record not reporting it): check against a file you know is unlabeled before treating `Unlabeled` as a finding. The label logic was run on a datatable shaped like Learn's example.
+
+```kql
+let SensitiveLabelIds = dynamic([]);   // add the GUIDs of your sensitive labels
+CopilotActivity
+| where TimeGenerated > ago(1d)
+| where RecordType == "CopilotInteraction"
+| mv-expand Resource = LLMEventData.AccessedResources
+| extend ResourceUrl = tostring(Resource.SiteUrl), LabelId = tostring(Resource.SensitivityLabelId)
+| where ResourceUrl has ".sharepoint.com"
+| extend LabelState = case(
+    isempty(LabelId), "Unlabeled",
+    LabelId in (SensitiveLabelIds), "Sensitive",
+    "Labeled")
+| where LabelState in ("Unlabeled", "Sensitive")
+| summarize
+    Accesses = count(),
+    Users = dcount(ActorUserId),
+    FirstAccess = min(TimeGenerated),
+    LastAccess = max(TimeGenerated),
+    Actions = make_set(tostring(Resource.Action), 5),
+    Blocked = countif(isnotempty(tostring(Resource.PolicyDetails))),
+    Failures = countif(tostring(Resource.Status) =~ "failure"),
+    Apps = make_set(AppIdentity, 5)
+    by LabelState, ResourceUrl, LabelId
+| sort by LabelState asc, Accesses desc
+```
+
+**Expected output:** one row per file and label state. `Unlabeled` files are your oversharing inventory as Copilot sees it; `Sensitive` files show who read them; `Blocked` and `Failures` count the reads that a policy blocked or restricted.
 
 ---
 
-### Step 5 — KQL: External connector data egress
+### Step 6 — KQL: External connector data egress
 
 ```kql
 CloudAppEvents
@@ -201,7 +239,7 @@ CloudAppEvents
 
 ---
 
-### Step 6 — KQL: Prompt injection pattern detection
+### Step 7 — KQL: Prompt injection pattern detection
 
 > **Telemetry limit (Microsoft Learn, October 2026).** The ActionType was `AgentInteraction`, which is not a documented value; it is now `InvokeAgent`. Agent 365 observability does not expose prompt text in `CloudAppEvents` (`gen_ai.input.messages` is "not yet surfaced in advanced hunting"), so `RawEventData["UserPrompt"]` has no documented source and this query returns no rows on that telemetry today. Use it as a pattern for a source that carries the prompt, and see P05-Q1 for the platform's own jailbreak signal in `LLMActivity`. The validation tenant had no agent ActionTypes in `CloudAppEvents` (30 days, October 2026).
 
@@ -256,6 +294,7 @@ CloudAppEvents
 ### Exfiltration Detection KQL Queries (add to Sentinel)
 - [ ] DLP matches in AI interactions (daily)
 - [ ] Agents accessing unlabeled documents (weekly)
+- [ ] Copilot reads of unlabeled or sensitive files (daily)
 - [ ] External connector egress by volume (daily)
 - [ ] Prompt injection pattern detection (hourly)
 
