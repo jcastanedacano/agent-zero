@@ -261,6 +261,9 @@ agent-zero/
 ├── ARM-Templates/                   ← Deploy a pre-configured Sentinel workspace in one click
 │   ├── README.md
 │   └── azuredeploy.json
+├── Workbooks/                       ← Sentinel workbook: agent inventory and privileges
+│   ├── README.md
+│   └── agent-inventory-and-privileges.workbook.json
 └── Facilitator-Kit/                 ← Run the workshop: prerequisites, checklist, impact signals
     ├── README.md
     ├── Prerequisites.md

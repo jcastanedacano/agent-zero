@@ -1,0 +1,498 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Agent inventory and privileges\n\nReads the Entra sign-in, audit and Microsoft Graph activity logs in this workspace and shows which agents exist, what they can do and what changed on them. It does not change anything.\n\n**How agents are identified.** The `Agent` column of `AADServicePrincipalSignInLogs` (`agentType` of `agenticAppInstance` or `agentIdentityBlueprintPrincipal`), over the last 90 days. An agent that has not signed in during that period is not listed. Type the object ids (service principal id, app id or blueprint app id) of agents that never signed in, or of agents that are ordinary service principals, in **Extra ids** and every tab includes them. `AgentsInfo` is not used because it has no rows in a workspace without the Defender XDR connector.\n\n**Requires** the diagnostic settings `AADServicePrincipalSignInLogs`, `AuditLogs` and, for the Privileges tab, `MicrosoftGraphActivityLogs` exported to the workspace."
+      },
+      "name": "intro"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "d162cfae-6400-5b5c-b87f-f36a5aeeeb56",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Log Analytics workspace",
+            "type": 5,
+            "isRequired": true,
+            "multiSelect": false,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": [
+                "value::1"
+              ],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          },
+          {
+            "id": "cbe7efed-50a5-5bcf-8943-d8cb87eaaff8",
+            "version": "KqlParameterItem/1.0",
+            "name": "Days",
+            "label": "Time range",
+            "type": 2,
+            "isRequired": true,
+            "value": "30",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\": \"7\", \"label\": \"Last 7 days\"}, {\"value\": \"14\", \"label\": \"Last 14 days\"}, {\"value\": \"30\", \"label\": \"Last 30 days\", \"selected\": true}, {\"value\": \"90\", \"label\": \"Last 90 days\"}]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          },
+          {
+            "id": "fa06b8a4-a3a8-5626-92b5-5d8aab1dd1ed",
+            "version": "KqlParameterItem/1.0",
+            "name": "ExtraIds",
+            "label": "Extra ids (comma separated)",
+            "type": 1,
+            "isRequired": true,
+            "value": "00000000-0000-0000-0000-000000000000",
+            "description": "Service principal ids, app ids or blueprint app ids of agents that do not appear in the sign-in logs. Leave the default if you have none."
+          },
+          {
+            "id": "da84652b-e428-5ada-8349-14f268842399",
+            "version": "KqlParameterItem/1.0",
+            "name": "selectedTab",
+            "type": 1,
+            "isRequired": true,
+            "value": "inventory",
+            "isHiddenWhenLocked": true
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "99db6bb5-2e19-5524-952a-53f9fc0952b3",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Inventory",
+            "subTarget": "inventory",
+            "style": "link"
+          },
+          {
+            "id": "c4dd2fa9-95ef-5bb1-b396-a52f301e9d52",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Privileges",
+            "subTarget": "privileges",
+            "style": "link"
+          },
+          {
+            "id": "a5ad5bf5-fc40-5cef-bfa0-a785e9528c69",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Sign-in behavior",
+            "subTarget": "behavior",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "tabs"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "Which agent identities and blueprint principals exist, how active they are, and which blueprint created which identity. A blueprint principal is not an agent: it holds the credentials and creates agent identities, so it is listed separately by type."
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "inventory"
+      },
+      "name": "text-inventory"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nagent_signins\n| where TimeGenerated > ago({Days}d)\n| summarize Agents = dcount(ServicePrincipalId) by AgentType\n| order by Agents desc",
+        "size": 1,
+        "title": "Agents by type (signed in during the selected range)",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "barchart",
+        "showExportToExcel": true,
+        "noDataMessage": "No agent sign-in in the selected range."
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "inventory"
+      },
+      "name": "inv-types"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nagent_signins\n| where TimeGenerated > ago({Days}d)\n| summarize SignIns = count() by bin(TimeGenerated, 1d), AgentType",
+        "size": 1,
+        "title": "Agent sign-ins per day",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "timechart",
+        "showExportToExcel": true,
+        "noDataMessage": "No agent sign-in in the selected range."
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "inventory"
+      },
+      "name": "inv-daily"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nagent_signins\n| where TimeGenerated > ago({Days}d)\n| summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), SignIns = count(), Succeeded = countif(ResultType == \"0\"),\n    IPs = dcount(IPAddress), Countries = dcount(Location), Resources = make_set(ResourceDisplayName, 5), ConditionalAccess = make_set(ConditionalAccessStatus, 3)\n    by ServicePrincipalName, ServicePrincipalId, AppId, AgentType, BlueprintAppId\n| extend DaysSinceLastSignIn = datetime_diff(\"day\", now(), LastSeen)\n| order by LastSeen desc",
+        "size": 0,
+        "title": "Agent identities and blueprint principals that signed in",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No agent sign-in in the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "inventory"
+      },
+      "name": "inv-list"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nagent_signins\n| summarize LastSeen = max(TimeGenerated), SignIns = count() by ServicePrincipalName, ServicePrincipalId, AppId, AgentType\n| where LastSeen < ago({Days}d)\n| extend DaysSinceLastSignIn = datetime_diff(\"day\", now(), LastSeen)\n| order by LastSeen desc",
+        "size": 0,
+        "title": "Agents seen in the last 90 days with no sign-in in the selected range",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "Every agent seen in the last 90 days signed in during the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "inventory"
+      },
+      "name": "inv-dormant"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nlet agent_types = agent_signins\n    | extend K = pack_array(ServicePrincipalId, AppId)\n    | mv-expand K\n    | extend K = tolower(tostring(K))\n    | where isnotempty(K)\n    | summarize InitiatorType = take_any(AgentType) by K;\nAuditLogs\n| where TimeGenerated > ago({Days}d)\n| where OperationName in (\"Add application\", \"Add service principal\")\n| extend K = tolower(coalesce(tostring(InitiatedBy.app.servicePrincipalId), tostring(InitiatedBy.app.appId)))\n| join kind=inner agent_types on K\n| where InitiatorType == \"agentIdentityBlueprintPrincipal\"\n| project TimeGenerated, OperationName, Result, Initiator = tostring(InitiatedBy.app.displayName),\n    NewObject = tostring(TargetResources[0].displayName), NewObjectId = tostring(TargetResources[0].id), NewObjectType = tostring(TargetResources[0].type)\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Objects created by an agent blueprint (the documented way agent identities are created)",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No object was created by an agent blueprint principal in the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "inventory"
+      },
+      "name": "inv-created"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "What the agents can do, from three sources: the roles and scopes carried by their Microsoft Graph tokens, the role, app role and consent changes recorded in `AuditLogs`, and who changed credentials, owners and sponsors on agent objects. Inherited permissions are not shown on agent identities in the Entra admin center or Microsoft Graph, only in the token claims at runtime, so the first table is the one that shows them."
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "privileges"
+      },
+      "name": "text-privileges"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nlet agent_keys = set_union(\n    coalesce(toscalar(agent_signins | extend K = pack_array(ServicePrincipalId, AppId, BlueprintAppId) | mv-expand K | extend K = tolower(tostring(K)) | where isnotempty(K) | summarize make_set(K)), dynamic([])),\n    extra);\nMicrosoftGraphActivityLogs\n| where TimeGenerated > ago({Days}d)\n| where tolower(ServicePrincipalId) in (agent_keys) or tolower(AppId) in (agent_keys)\n| extend Path = replace_string(tostring(split(RequestUri, \"?\")[0]), \"https://graph.microsoft.com/\", \"/\")\n| summarize Calls = count(), Failed = countif(ResponseStatusCode >= 400), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated),\n    Methods = make_set(RequestMethod, 5), Paths = make_set(Path, 5) by AppId, ServicePrincipalId, Roles, Scopes\n| order by Calls desc",
+        "size": 0,
+        "title": "Roles and scopes the agent tokens carried on Microsoft Graph",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No Microsoft Graph call from an agent in the selected range (the MicrosoftGraphActivityLogs diagnostic setting must be on).",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "privileges"
+      },
+      "name": "priv-token"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nlet agent_keys = set_union(\n    coalesce(toscalar(agent_signins | extend K = pack_array(ServicePrincipalId, AppId, BlueprintAppId) | mv-expand K | extend K = tolower(tostring(K)) | where isnotempty(K) | summarize make_set(K)), dynamic([])),\n    extra);\nAuditLogs\n| where TimeGenerated > ago({Days}d)\n| where OperationName in (\"Add app role assignment to service principal\", \"Add app role assignment grant to user\", \"Add delegated permission grant\",\n    \"Consent to application\", \"Add member to role\", \"Add eligible member to role\", \"Create role assignment\")\n| where tolower(tostring(TargetResources)) has_any (agent_keys) or tolower(tostring(InitiatedBy)) has_any (agent_keys)\n| mv-expand TR = TargetResources\n| mv-expand MP = TR.modifiedProperties\n| extend Prop = tostring(MP.displayName), Value = trim(@'[\\[\\]\" ]+', tostring(MP.newValue))\n| where Prop in (\"AppRole.Value\", \"DelegatedPermissionGrant.Scope\", \"Role.DisplayName\", \"ConsentContext.IsAdminConsent\")\n| extend Detail = case(Prop == \"ConsentContext.IsAdminConsent\", strcat(\"admin consent: \", Value), isempty(Value), \"(no role value)\", Value)\n| extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),\n    ActorType = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), \"user\", \"application\")\n| summarize Detail = make_set(Detail), Targets = make_set(coalesce(tostring(TR.displayName), tostring(TR.userPrincipalName)))\n    by TimeGenerated, OperationName, Result, CorrelationId, Actor, ActorType\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Role assignments, app roles and consents involving agent objects",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No role, app role or consent change involving an agent object in the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "privileges"
+      },
+      "name": "priv-grants"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nlet agent_keys = set_union(\n    coalesce(toscalar(agent_signins | extend K = pack_array(ServicePrincipalId, AppId, BlueprintAppId) | mv-expand K | extend K = tolower(tostring(K)) | where isnotempty(K) | summarize make_set(K)), dynamic([])),\n    extra);\nAuditLogs\n| where TimeGenerated > ago({Days}d)\n| where OperationName in (\"Add service principal credentials\", \"Add owner to application\", \"Add owner to service principal\", \"Add user sponsor\")\n    or OperationName contains \"Certificates and secrets management\"\n| where tolower(tostring(TargetResources)) has_any (agent_keys)\n| mv-apply TR = TargetResources on (\n    summarize Objects = make_set(strcat(tostring(TR.type), \": \", coalesce(tostring(TR.displayName), tostring(TR.userPrincipalName), tostring(TR.id)))))\n| extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),\n    ActorType = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), \"user\", \"application\")\n| project TimeGenerated, OperationName, Result, Objects, Actor, ActorType\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Credential, owner and sponsor changes on agent objects",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No credential, owner or sponsor change on an agent object in the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "privileges"
+      },
+      "name": "priv-owners"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nlet agent_types = agent_signins\n    | extend K = pack_array(ServicePrincipalId, AppId)\n    | mv-expand K\n    | extend K = tolower(tostring(K))\n    | where isnotempty(K)\n    | summarize InitiatorType = take_any(AgentType) by K;\nAuditLogs\n| where TimeGenerated > ago({Days}d)\n| where OperationName in (\"Add application\", \"Add service principal\")\n| extend K = tolower(coalesce(tostring(InitiatedBy.app.servicePrincipalId), tostring(InitiatedBy.app.appId)))\n| join kind=inner agent_types on K\n| where InitiatorType != \"agentIdentityBlueprintPrincipal\"\n| project TimeGenerated, OperationName, Result, Initiator = tostring(InitiatedBy.app.displayName), InitiatorType,\n    NewObject = tostring(TargetResources[0].displayName), NewObjectType = tostring(TargetResources[0].type)\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Agent identities creating applications or service principals (agent spawning)",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No agent identity created an application or service principal in the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "privileges"
+      },
+      "name": "priv-spawn"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "How the agents sign in: new IP addresses, more than one country, and which sign-ins Conditional Access evaluated. For agent identities the only Conditional Access control is Block. Sign-ins at the `AAD Token Exchange Endpoint: Public` and the token a blueprint requests to create identities are outside Conditional Access and show as `notApplied`, so judge the policy on sign-ins to a real resource such as Microsoft Graph. The policy design is in the `secure-ca-policy-agents` skill."
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "behavior"
+      },
+      "name": "text-behavior"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nlet signins = agent_signins | where ResultType == \"0\";\nsignins\n| summarize FirstSeenIP = min(TimeGenerated), SignIns = count() by ServicePrincipalName, ServicePrincipalId, AgentType, IPAddress, Location\n| join kind=leftouter (signins | summarize FirstSeenAgent = min(TimeGenerated) by ServicePrincipalId) on ServicePrincipalId\n| where FirstSeenIP > ago({Days}d)\n| extend Baseline = iff(FirstSeenAgent < ago({Days}d), \"New IP for an agent with earlier sign-ins\", \"Agent has no earlier history\")\n| project FirstSeenIP, ServicePrincipalName, ServicePrincipalId, AgentType, IPAddress, Location, SignIns, Baseline\n| order by FirstSeenIP desc",
+        "size": 0,
+        "title": "IP addresses an agent used for the first time in the selected range",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No agent used a new IP address in the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "behavior"
+      },
+      "name": "beh-newip"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nagent_signins\n| where TimeGenerated > ago({Days}d)\n| where ResultType == \"0\" and isnotempty(Location)\n| summarize Countries = make_set(Location), CountryCount = dcount(Location), IPs = dcount(IPAddress), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)\n    by ServicePrincipalName, ServicePrincipalId, AgentType\n| where CountryCount > 1\n| order by CountryCount desc",
+        "size": 0,
+        "title": "Agents that signed in from more than one country",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No agent signed in from more than one country in the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "behavior"
+      },
+      "name": "beh-countries"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let extra = set_difference(split(tolower(replace_string('{ExtraIds}', ' ', '')), ','), dynamic([\"\", \"00000000-0000-0000-0000-000000000000\"]));\nlet agent_signins = AADServicePrincipalSignInLogs\n    | where TimeGenerated > ago(90d)\n    | extend A = parse_json(Agent)\n    | extend AgentType = tostring(A.agentType), BlueprintAppId = tostring(A.parentAppId)\n    | where AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\") or tolower(ServicePrincipalId) in (extra)\n    | extend AgentType = iff(AgentType in (\"agenticAppInstance\", \"agentIdentityBlueprintPrincipal\"), AgentType, \"listed in ExtraIds\");\nagent_signins\n| where TimeGenerated > ago({Days}d)\n| summarize SignIns = count(), Succeeded = countif(ResultType == \"0\") by AgentType, ResourceDisplayName, ConditionalAccessStatus\n| order by SignIns desc",
+        "size": 0,
+        "title": "Conditional Access outcome of agent sign-ins, by resource",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "showExportToExcel": true,
+        "noDataMessage": "No agent sign-in in the selected range.",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "behavior"
+      },
+      "name": "beh-ca"
+    }
+  ],
+  "fallbackResourceIds": [
+    "Azure Monitor"
+  ],
+  "styleSettings": {},
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
