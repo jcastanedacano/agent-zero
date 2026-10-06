@@ -65,7 +65,7 @@ Complete one section per module during the Track C workshop. Each section maps t
 
 ### Known Gaps — Agent Builder Bypass
 
-**Gap:** Agent Builder (M365 Copilot) activates agents immediately without passing through Copilot Studio Requests approval flow.
+**Gap:** Agent Builder (M365 Copilot) activates agents immediately without passing through Copilot Studio Requests approval flow. By default every user can share an agent with the whole organization; an admin can restrict who can.
 
 **Affected agents identified:**
 
@@ -75,14 +75,15 @@ Complete one section per module during the Track C workshop. Each section maps t
 
 **Current mitigation options:**
 - Conditional Access policy targeting Agent Builder app ID
-- Alert rule on `AuditLogs` for `AgentPublished` where `AgentSource == "AgentBuilder"` (not verified on a live tenant: confirm the event name first; see Module 02, Step 5)
+- Restrict who can share agents with the organization in the Microsoft 365 admin center (all users is the default; specific users or groups, or no users). When sharing is restricted, an admin must approve and deploy the agent before others can use it (Microsoft Learn, Agent Builder)
+- Detection: no audit operation for sharing an Agent Builder agent is documented, so there is no sharing alert to build. Check the agent in use in `CopilotActivity` (`AgentName`, `AgentId`; not verified on a live tenant) and search the Purview audit log for the maker and the time (see Module 06, Attack 2)
 - Review agent submissions in the Microsoft 365 admin center (Agent Store requests); sharing an agent is not covered by that review
 - Manual review process (document owner and responsible)
 
 ### Analytics Rules Deployed
 
 - [ ] `Agents Without Entra Agent ID` — Frequency: daily | Severity: Medium
-- [ ] `Agents Published Without Approval` — Frequency: daily | Severity: High
+- [ ] `Copilot Studio Agents Created, Published or Shared` (P02-Q2, Copilot Studio only) — Frequency: daily | Severity: Medium
 - [ ] `Permission Grants Without Approval Correlation` — Frequency: weekly | Severity: Medium
 
 ### Top Findings
