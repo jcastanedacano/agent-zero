@@ -3,7 +3,7 @@
 **Module duration:** 90 minutes
 
 **Learning objective:**
-By the end of this module, participants will be able to design an agent governance model covering ownership, approval, lifecycle, and DLP policies; configure Entra Agent ID and the Copilot Studio approval flow in a demo tenant; detect Agent Builder bypass via KQL; and document their organization's governance gaps with a prioritized remediation roadmap.
+By the end of this module, participants will be able to design an agent governance model covering ownership, approval, lifecycle, and DLP policies; configure Entra Agent ID and operate the admin approval queue for published agents in a demo tenant; restrict and review Agent Builder sharing; and document their organization's governance gaps with a prioritized remediation roadmap.
 
 **Module agenda:**
 
@@ -18,11 +18,11 @@ By the end of this module, participants will be able to design an agent governan
 
 **Core content (points the facilitator must cover):**
 
-1. **Agent Builder bypass as a systemic gap:** Agent Builder (M365 Copilot) activates agents immediately without going through the Copilot Studio approval flow. This is a product-level design bypass — not a configuration error. The compensating control is a Conditional Access policy on the Agent Builder App ID, or a Sentinel alert rule on `AuditLogs` filtering `AgentSource == "AgentBuilder"`.
+1. **Agent Builder sharing as a systemic gap:** by default every licensed user can create an Agent Builder agent (M365 Copilot) and share it with the whole organization without a request to an admin; only submission to the organization catalog goes to admin review. This is an open default, not a product limit. The controls are administrative: restrict who can share agents (specific users or groups, or no users) and block agents in the Microsoft 365 admin center (Microsoft Learn, Agent Builder, Oct 2026). Learn documents neither a Conditional Access target for Agent Builder nor an audit operation for sharing, so neither a Conditional Access policy nor an `AuditLogs` alert rule is a control here: detection is by registry inventory (type **Shared by creator**) and by the agent in use in `CopilotActivity`.
 
 2. **Graph drift as accumulated risk:** Without a periodic permission review process, agents accumulate OAuth scopes without correlation to approvals. The drift is gradual and invisible: `Sites.Read.All` becomes `Sites.ReadWrite.All` after a developer adds it without a change management process. The architectural solution is PIM just-in-time for agent permissions — not just for human roles.
 
-3. **Applicable Microsoft controls:** Entra Agent ID establishes a manageable identity per agent, separate from user identities and generic service principals. Copilot Studio governance enables the pre-publication approval flow. Foundry RBAC + API-level controls restrict what agents can do in Azure AI. Power Platform DLP classifies and blocks connectors by category (Business / Non-business / Blocked). **CIS Controls alignment:** Agent identities map directly to CIS Control 5 (Account Management) — provisioning, scoped permissions, periodic review, and decommission with token revocation. Graph drift (point 2 above) is the agentic form of CIS 5.3 (disable dormant accounts). Lifecycle management (point 4) maps to CIS 5.1 (maintain authorized account inventory). Reference: CIS Controls AI Agent Companion Guide (2026), Control 5 — Agent Applicability.
+3. **Applicable Microsoft controls:** Entra Agent ID establishes a manageable identity per agent, separate from user identities and generic service principals. Publishing a Copilot Studio agent to the organization requires admin approval in the Microsoft 365 admin center (Agents > All agents > Requests). Foundry RBAC + API-level controls restrict what agents can do in Azure AI. Power Platform DLP classifies and blocks connectors by category (Business / Non-business / Blocked). **CIS Controls alignment:** Agent identities map directly to CIS Control 5 (Account Management) — provisioning, scoped permissions, periodic review, and decommission with token revocation. Graph drift (point 2 above) is the agentic form of CIS 5.3 (disable dormant accounts). Lifecycle management (point 4) maps to CIS 5.1 (maintain authorized account inventory). Reference: CIS Controls AI Agent Companion Guide (2026), Control 5 — Agent Applicability.
 
 4. **Lifecycle as an active security control:** Agent decommission must include: token revocation, Entra permission removal, Agent 365 registry closure, and archival of ownership documentation. An "abandoned" agent with active permissions is an attack vector with a legitimate identity.
 
@@ -97,12 +97,12 @@ By the end of this module, participants will be able to design an agent governan
 - **Format:** Individual
 - **Description:**
   1. In Entra ID → App registrations, create `demo-sales-agent` with `Sites.Read.All` permission and mark it as an Entra Agent ID in the manifest (`"tags": ["agent365", "EntraAgentID"]`)
-  2. In Copilot Studio admin center → Settings → Agent publishing, enable the approval flow and configure an approver
+  2. In Copilot Studio, publish a test agent to the Teams and Microsoft Copilot channel; in the Microsoft 365 admin center → Agents → All agents → Requests, review it and publish or reject it (AI Administrator or Global Administrator role)
   3. In Power Platform admin center, create the DLP policy "Agentic AI — Restrict External Connectors" blocking HTTP and HTTP with Azure AD
   4. Run the governance queries from the KQL Library (P02-Governance-Gaps.kql): agents without Entra Agent ID, Copilot Studio agents published or shared, graph drift
   5. **Kill switch drill:** on the `demo-sales-agent` created in step 1, execute the three-level shutdown and time each one: (a) L1 session revocation via Graph Explorer `POST /servicePrincipals/{id}/revokeSignInSessions`; (b) L2 disable the identity in Entra ID → Enterprise applications → Properties → Enabled for users to sign-in = No; (c) L3 unpublish the agent in Copilot Studio. Record the total time from decision to confirmed stop, and who had to intervene at each level
   6. Complete the "Domain 2 — Govern" section of the Gap Assessment Template with real findings from the demo tenant
-- **Required tools:** Entra ID (App registrations + Manifest editor + Enterprise applications), Copilot Studio admin center, Power Platform admin center, Microsoft Graph Explorer, Microsoft Sentinel (Logs), KQL Library P02, Gap Assessment Template
+- **Required tools:** Entra ID (App registrations + Manifest editor + Enterprise applications), Copilot Studio, Microsoft 365 admin center (Agents), Power Platform admin center, Microsoft Graph Explorer, Microsoft Sentinel (Logs), KQL Library P02, Gap Assessment Template
 - **Deliverable:** Entra Agent ID created and verified in Agent 365 Registry + documented kill switch procedure with measured RTO + Domain 2 section of the Gap Assessment completed with identified gaps, assigned owners, and target dates
 
 ---

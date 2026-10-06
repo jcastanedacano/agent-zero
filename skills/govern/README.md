@@ -39,4 +39,4 @@ OUTPUT: Agents under formal control → input for Pillar 3 (Secure) and Pillar 4
 | `continuousAccessEvaluation` + `reportOnly` are incompatible | Error when creating the policy | Use `disabled` or `enabled` |
 | PIM for SPs requires Workload ID Premium | Without the license, unavailable for SPs | Use role assignments with expiration |
 | Purview auto-labeling via API is limited | Some policies cannot be created via ARM | Use the Compliance Portal |
-| Agent Builder bypasses Requests | Shadow AI not controlled by Agent 365 | Power Platform DLP or CA on M365 Copilot |
+| Agent Builder sharing creates no request (open by default) | Agents shared with the whole organization without admin review | Restrict who can share and block agents in the Microsoft 365 admin center; Power Platform DLP for Copilot Studio connectors |

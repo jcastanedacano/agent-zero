@@ -74,7 +74,6 @@ Complete one section per module during the Track C workshop. Each section maps t
 | | | | Bypassed |
 
 **Current mitigation options:**
-- Conditional Access policy targeting Agent Builder app ID
 - Restrict who can share agents with the organization in the Microsoft 365 admin center (all users is the default; specific users or groups, or no users). When sharing is restricted, an admin must approve and deploy the agent before others can use it (Microsoft Learn, Agent Builder)
 - Detection: no audit operation for sharing an Agent Builder agent is documented, so there is no sharing alert to build. Check the agent in use in `CopilotActivity` (`AgentName`, `AgentId`; not verified on a live tenant) and search the Purview audit log for the maker and the time (see Module 06, Attack 2)
 - Review agent submissions in the Microsoft 365 admin center (Agent Store requests); sharing an agent is not covered by that review

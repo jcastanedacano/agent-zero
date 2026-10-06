@@ -9,7 +9,7 @@
 
 ## Learning Objective
 
-At the end of this module, you will be able to configure Entra Agent ID with lifecycle management, create a DLP policy in Power Platform to restrict makers, enable Copilot Studio approval flow, and write KQL to detect agents that bypassed governance controls.
+At the end of this module, you will be able to configure Entra Agent ID with lifecycle management, create a DLP policy in Power Platform to restrict makers, operate the admin approval queue for published agents, restrict Agent Builder sharing, and write KQL to inventory the Copilot Studio agents published or shared.
 
 ---
 
@@ -26,11 +26,11 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 ## Core Content
 
-1. **Agent Builder bypass as a systemic gap:** Agent Builder activates agents immediately without going through the Copilot Studio approval flow. This is a product-level design gap — not a configuration error. The compensating control is a CA policy on the Agent Builder App ID, or a Sentinel analytics rule filtering `AgentSource == "AgentBuilder"` on `AuditLogs`.
+1. **Agent Builder sharing as a systemic gap:** by default every licensed user can create an Agent Builder agent and share it with the whole organization without a request to an admin; only submission to the organization catalog goes to admin review. This is an open default, not a product limit: an admin can restrict who can share (specific users or groups, or no users) and can block agents (Microsoft Learn, Agent Builder, Oct 2026). No audit operation for sharing is documented, so detection is by inventory (the registry type **Shared by creator**) and by the agent in use in `CopilotActivity`, not by an alert rule.
 
 2. **Identity graph drift:** Agents accumulate OAuth permissions over time without review. The signal is in `AuditLogs` under `Add delegated permission grant` without a corresponding `AgentPermissionApproved` event — that absent join is the drift indicator. Caveat: `AgentPermissionApproved` is not confirmed to exist (see the note in Step 6), so as written every grant appears unapproved.
 
-3. **Applicable Microsoft controls:** Entra Agent ID establishes a manageable identity per agent, separate from generic service principals. Copilot Studio governance enables the pre-publication approval flow. Foundry RBAC restricts operations in Azure AI. Power Platform DLP classifies and blocks connectors by category (Business / Non-business / Blocked).
+3. **Applicable Microsoft controls:** Entra Agent ID establishes a manageable identity per agent, separate from generic service principals. Publishing a Copilot Studio agent to the organization requires admin approval in the Microsoft 365 admin center (Agents > All agents > Requests). Foundry RBAC restricts operations in Azure AI. Power Platform DLP classifies and blocks connectors by category (Business / Non-business / Blocked).
 
 4. **`grantControls: mfa` is invalid for agents:** Agents cannot complete interactive MFA. A CA policy with this control on agent identities appears active but generates no enforcement. Only `block` or `sessionControls` are valid for policies targeting `clientApplications.includeAgentIdServicePrincipals`.
 
@@ -42,9 +42,9 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 ## Background
 
-### The Agent Builder bypass — the most common governance gap
+### The Agent Builder sharing path: an open-by-default governance gap
 
-Agent Builder (available in M365 Copilot) lets any licensed user create and publish an agent **immediately**, without passing through the Copilot Studio Requests approval flow. The agent appears in Agent 365 Registry but has no Entra Agent ID, no technical owner, and no DLP policy review. This is the most frequent shadow AI vector in tenants with M365 E5.
+Agent Builder (available in M365 Copilot) lets any licensed user create an agent and share it with the whole organization **immediately**, without a request to an admin: the **Requests** queue only receives agents submitted for approval, such as Copilot Studio agents published to the organization and Agent Builder submissions to the organization catalog. The shared agent appears in the agent registry as **Shared by creator**, with its creator as owner, but its identity, data sources and connectors get no formal review. An admin can restrict who can share and can block any agent.
 
 ### Why `grantControls: mfa` doesn't work for agents
 
@@ -87,16 +87,18 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 
 ---
 
-### Step 2 — Enable Copilot Studio approval flow
+### Step 2 — Operate the admin approval queue for published agents
 
-1. In **Copilot Studio admin center** → **Settings** → **Agent publishing**
-2. Enable: **Require admin approval before publishing agents to the organization**
-3. Set approvers: add your demo admin account as approver
-4. Save
+1. In the **Microsoft 365 admin center** → **Agents** → **All agents** → **Requests**
+2. In **Copilot Studio**, publish a test agent to the **Teams and Microsoft Copilot** channel
+3. Refresh **Requests**: the agent appears as a request awaiting review (the states are **Pending review**, **Pending update** and **Pending activate**). Open it and check its description, owner, data sources and tools
+4. As an **AI Administrator** or **Global Administrator**, select **Publish to store** (choose the users or groups, a policy template and the permissions) or **Reject submission**
 
-**Test:** In Copilot Studio, attempt to publish a new agent. Verify it enters "Pending approval" status instead of activating immediately.
+**Test:** Verify the agent is not available to other users until you publish it.
 
-**Note the gap:** Agents created via **Agent Builder** (M365 Copilot → Copilot → Agent Builder) still activate immediately. This bypass is by design at current product state — document it as a known gap.
+> **Not found in Learn (Oct 2026).** The earlier version of this step enabled "Require admin approval before publishing agents to the organization" under Copilot Studio admin center → Settings → Agent publishing and set approvers. Learn documents the approval as part of publishing to the organization (the request waits in **Requests** for the AI Administrator or Global Administrator roles); it documents no such toggle and no approver list.
+
+**Note the gap:** agents created in **Agent Builder** (M365 Copilot → Copilot → Agent Builder) reach other users by **sharing**, which creates no request. By default every user can share an agent with the whole organization. An admin can restrict who can share (all users by default, specific users or groups, or no users); with sharing restricted, an admin must approve and deploy the agent before others can use it (Microsoft Learn, Agent Builder, Oct 2026). Decide the setting for your tenant and document it.
 
 ---
 
@@ -216,13 +218,13 @@ AuditLogs
 
 ### Configuration Deployed
 - [ ] Entra Agent ID created for demo agent
-- [ ] Copilot Studio approval flow enabled
+- [ ] Admin approval queue (Requests) reviewed by AI Administrator or Global Administrator role holders
 - [ ] Power Platform DLP policy: Agentic AI — Restrict External Connectors
 
 ### Known Gaps Documented
-- [ ] Agent Builder bypass: agents activate immediately without approval
+- [ ] Agent Builder sharing: open by default, agents shared without admin review
   - Affected agents: [LIST]
-  - Mitigation: [conditional access policy targeting Agent Builder app ID]
+  - Mitigation: [who can share agents restricted in the Microsoft 365 admin center, blocked agents, or a documented decision to leave it open]
 
 ### Governance KQL Queries (add to Sentinel)
 - [ ] Agents with no Entra identity, and blueprint-only agents reviewed separately (daily)
@@ -240,7 +242,7 @@ AuditLogs
 ## Closing Questions
 
 - What technical difference did you observe between an agent with `EntraAgentID` field populated vs. one where it is empty? What does that mean for a forensic investigation when you try to attribute an action to a specific agent?
-- If you needed to create a Sentinel analytics rule that fires when an agent is published via Agent Builder (bypassing approval), which table would you use and what field would you filter on?
+- Which audit source would you use to detect an agent shared from Agent Builder? What does Microsoft Learn document for it, and what would you have to confirm in your own tenant before building a rule?
 
 ---
 
