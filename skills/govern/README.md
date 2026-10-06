@@ -30,6 +30,7 @@ OUTPUT: Agents under formal control → input for Pillar 3 (Secure) and Pillar 4
 | `govern-pim-agent-roles` | Entra PIM | sentinel-pim-activations.kql |
 | `govern-dlp-policy-copilot-prompts` | Purview DLP for Microsoft 365 Copilot | sentinel-dlp-agents.kql |
 | `govern-lifecycle-decommission-agent` | M365 admin center, Power Platform, Graph API | sentinel-inactive-agents.kql |
+| `govern-foundry-rbac` | Microsoft Foundry, Azure RBAC, Azure Policy | sentinel-foundry-rbac.kql |
 
 ## Known constraints in the Microsoft stack
 

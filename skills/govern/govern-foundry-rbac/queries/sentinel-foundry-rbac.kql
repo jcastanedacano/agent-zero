@@ -1,0 +1,118 @@
+// skill: govern-foundry-rbac
+// workspace: {workspace-name} | conectores: Azure Activity; Q1 y Q2 corren en Azure Resource Graph (no en Log Analytics)
+// Validado en un workspace Sentinel y en Azure Resource Graph (oct 2026): la version anterior del skill apuntaba a un archivo que no existia y su consulta leia MICROSOFT.MACHINELEARNINGSERVICES y una
+// propiedad agentId que el Activity Log no trae. Foundry es Microsoft.CognitiveServices/accounts (kind AIServices) y sus proyectos son recursos hijos. Las conexiones y los despliegues NO estan en Resource Graph (solo
+// cuentas y proyectos): se leen con la CLI (pasos 3 y 4 del skill). Q1 a Q4 compilan y se ejecutaron; el resultado de la cuenta de validacion esta junto a cada consulta.
+
+// ── Query 1 (Azure Resource Graph): matriz de roles relevantes para Foundry por nivel de alcance y tipo de principal ──
+// Los IDs son los de los roles integrados (los roles Foundry cambiaron de nombre: por eso se usa el ID). Un rol Foundry en Grupo de recursos o Suscripcion aplica a todas las cuentas Foundry de ese alcance.
+// Resultado en la cuenta de validacion: 10 filas (incluye Foundry User a nivel de suscripcion, Azure AI Developer en la cuenta y Contributor y Owner de varias entidades de servicio).
+authorizationresources
+| where type =~ "microsoft.authorization/roleassignments"
+| extend Scope = tolower(tostring(properties.scope)), RoleId = tolower(tostring(split(tostring(properties.roleDefinitionId), "/")[-1])), PrincipalType = tostring(properties.principalType)
+| extend Role = case(
+    RoleId == "53ca6127-db72-4b80-b1b0-d745d6d5456d", "Foundry User",
+    RoleId == "eed3b665-ab3a-47b6-8f48-c9382fb1dad6", "Foundry Agent Consumer",
+    RoleId == "eadc314b-1a2d-4efa-be10-5d325db5065e", "Foundry Project Manager",
+    RoleId == "e47c6f54-e4a2-4754-9501-8e0985b135e1", "Foundry Account Owner",
+    RoleId == "c883944f-8b7b-4483-af10-35834be79c4a", "Foundry Owner",
+    RoleId == "a97b65f3-24c7-4388-baec-2e87135dc908", "Cognitive Services User",
+    RoleId == "25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68", "Cognitive Services Contributor",
+    RoleId == "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd", "Cognitive Services OpenAI User",
+    RoleId == "a001fd3d-188f-4b5d-821b-7da978bf7442", "Cognitive Services OpenAI Contributor",
+    RoleId == "64702f94-c441-49e6-a78b-ef80e0188fee", "Azure AI Developer",
+    RoleId == "3afb7f49-54cb-416e-8c09-6dc049efa503", "Azure AI Inference Deployment Operator",
+    RoleId == "b78c5d69-af96-48a3-bf8d-a8b4d589de94", "Azure AI Administrator",
+    RoleId == "8e3af657-a8ff-443c-a75c-2fe8c4bcb635", "Owner",
+    RoleId == "b24988ac-6180-42a0-ab88-20f7382dd24c", "Contributor",
+    RoleId == "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9", "User Access Administrator",
+    "")
+| where isnotempty(Role)
+| extend ScopeLevel = case(
+    Scope contains "/agents/", "Agente",
+    Scope contains "/projects/", "Proyecto",
+    Scope contains "microsoft.cognitiveservices/accounts", "Cuenta Foundry",
+    Scope contains "/resourcegroups/", "Grupo de recursos",
+    "Suscripcion")
+| summarize Assignments = count() by Role, ScopeLevel, PrincipalType
+| order by ScopeLevel asc, Role asc
+
+// ── Query 2 (Azure Resource Graph): asignaciones que requieren una decision ─────────────────────────────────────────
+// Marca los roles de Cognitive Services (listan claves), Azure AI Developer (es de Azure Machine Learning), Azure AI Inference Deployment Operator (crea despliegues, no llama), Owner y Contributor (gestionan la cuenta
+// y, con las claves activas, pueden listarlas), y cualquier rol Foundry con alcance mayor que la cuenta. Owner y Contributor a nivel de suscripcion no son especificos de Foundry: son ruido esperado en un tenant de laboratorio.
+// Resultado en la cuenta de validacion: 13 filas en 3 grupos de recursos y la suscripcion; PrincipalId es el objeto de Entra (resuelvelo en el directorio).
+authorizationresources
+| where type =~ "microsoft.authorization/roleassignments"
+| extend Scope = tolower(tostring(properties.scope)), RoleId = tolower(tostring(split(tostring(properties.roleDefinitionId), "/")[-1])), PrincipalType = tostring(properties.principalType), PrincipalId = tostring(properties.principalId), CreatedOn = todatetime(properties.createdOn)
+| extend Role = case(
+    RoleId == "53ca6127-db72-4b80-b1b0-d745d6d5456d", "Foundry User",
+    RoleId == "eed3b665-ab3a-47b6-8f48-c9382fb1dad6", "Foundry Agent Consumer",
+    RoleId == "eadc314b-1a2d-4efa-be10-5d325db5065e", "Foundry Project Manager",
+    RoleId == "e47c6f54-e4a2-4754-9501-8e0985b135e1", "Foundry Account Owner",
+    RoleId == "c883944f-8b7b-4483-af10-35834be79c4a", "Foundry Owner",
+    RoleId == "a97b65f3-24c7-4388-baec-2e87135dc908", "Cognitive Services User",
+    RoleId == "25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68", "Cognitive Services Contributor",
+    RoleId == "64702f94-c441-49e6-a78b-ef80e0188fee", "Azure AI Developer",
+    RoleId == "3afb7f49-54cb-416e-8c09-6dc049efa503", "Azure AI Inference Deployment Operator",
+    RoleId == "8e3af657-a8ff-443c-a75c-2fe8c4bcb635", "Owner",
+    RoleId == "b24988ac-6180-42a0-ab88-20f7382dd24c", "Contributor",
+    "")
+| where isnotempty(Role)
+| extend ScopeLevel = case(
+    Scope contains "/agents/", "Agente",
+    Scope contains "/projects/", "Proyecto",
+    Scope contains "microsoft.cognitiveservices/accounts", "Cuenta Foundry",
+    Scope contains "/resourcegroups/", "Grupo de recursos",
+    "Suscripcion")
+| extend Risk = case(
+    RoleId in ("a97b65f3-24c7-4388-baec-2e87135dc908", "25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68"), "Rol de Cognitive Services: puede listar las claves de la cuenta",
+    RoleId == "64702f94-c441-49e6-a78b-ef80e0188fee", "Azure AI Developer: es de Azure Machine Learning y hubs, no de proyectos Foundry",
+    RoleId == "3afb7f49-54cb-416e-8c09-6dc049efa503", "Crea despliegues, no es un rol para llamar a agentes ni modelos",
+    RoleId in ("8e3af657-a8ff-443c-a75c-2fe8c4bcb635", "b24988ac-6180-42a0-ab88-20f7382dd24c"), "Gestiona la cuenta; con las claves activas puede listarlas y llamar sin pasar por RBAC",
+    ScopeLevel in ("Grupo de recursos", "Suscripcion"), "Rol Foundry con alcance mayor que la cuenta: aplica a todas las cuentas Foundry de ese alcance",
+    "")
+| where isnotempty(Risk)
+| project CreatedOn, Role, ScopeLevel, PrincipalType, PrincipalId, Scope, Risk
+| order by ScopeLevel asc, Role asc
+
+// ── Query 3: Cambios de gestion en Foundry (cuentas, proyectos, conexiones y despliegues de modelos) ────────────────
+// Una conexion nueva o un despliegue nuevo cambian que puede alcanzar un agente. Quien los hace deberia ser alguien con rol de gestion (Foundry Account Owner o Foundry Owner), no una identidad de aplicacion inesperada.
+// El Activity Log no trae el cuerpo de estas operaciones en el workspace de validacion: dice quien, cuando y sobre que recurso, no que propiedad cambio. El nombre se lee de Properties.entity.
+// Resultado en la cuenta de validacion: 6 filas en 90 dias (la cuenta, un despliegue, dos conexiones y dos escrituras de proyecto).
+let lookback = 90d;
+AzureActivity
+| where TimeGenerated > ago(lookback)
+| where ActivityStatusValue == "Success"
+| where OperationNameValue in~ (
+    "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/WRITE", "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/DELETE",
+    "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/PROJECTS/WRITE", "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/PROJECTS/DELETE",
+    "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/CONNECTIONS/WRITE", "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/CONNECTIONS/DELETE",
+    "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/PROJECTS/CONNECTIONS/WRITE", "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/PROJECTS/CONNECTIONS/DELETE",
+    "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/DEPLOYMENTS/WRITE", "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/DEPLOYMENTS/DELETE")
+| extend Entity = tostring(parse_json(Properties).entity)
+| extend Kind = case(
+        OperationNameValue has "CONNECTIONS", "Conexion",
+        OperationNameValue has "DEPLOYMENTS", "Despliegue de modelo",
+        OperationNameValue has "PROJECTS", "Proyecto",
+        "Cuenta Foundry"),
+    Action = iff(OperationNameValue endswith "DELETE", "Borrado", "Alta o cambio"),
+    Name = tostring(split(Entity, "/")[-1]),
+    CallerKind = case(Caller matches regex @"^[0-9a-fA-F-]{36}$", "Identidad de aplicacion", Caller has "@", "Usuario", "Otro")
+| project TimeGenerated, Caller, CallerKind, Kind, Action, Name, CallerIpAddress
+| order by TimeGenerated desc
+
+// ── Query 4: Asignaciones y retiradas de roles bajo el alcance de una cuenta Foundry ────────────────────────────────
+// Solo cubre las asignaciones hechas en la cuenta, un proyecto o un agente; las de grupo de recursos o suscripcion salen en Q2 de Resource Graph, no aqui. El rol concreto de una asignacion
+// nueva esta en el evento Start (ver Q3 del skill secure-managed-identity-foundry); una retirada no trae cuerpo.
+// Resultado en la cuenta de validacion: 3 asignaciones en 180 dias (dos en la cuenta y una en el proyecto), ninguna retirada.
+let lookback = 180d;
+AzureActivity
+| where TimeGenerated > ago(lookback)
+| where OperationNameValue in~ ("MICROSOFT.AUTHORIZATION/ROLEASSIGNMENTS/WRITE", "MICROSOFT.AUTHORIZATION/ROLEASSIGNMENTS/DELETE") and ActivityStatusValue == "Success"
+| extend Entity = tostring(parse_json(Properties).entity)
+| where tolower(Entity) contains "microsoft.cognitiveservices/accounts"
+| extend Scope = tolower(tostring(split(Entity, "/providers/Microsoft.Authorization")[0]))
+| extend ScopeLevel = case(Scope contains "/agents/", "Agente", Scope contains "/projects/", "Proyecto", "Cuenta Foundry"),
+         Action = iff(OperationNameValue endswith "DELETE", "Retirada", "Asignacion")
+| project TimeGenerated, Caller, Action, ScopeLevel, Scope, CallerIpAddress
+| order by TimeGenerated desc
