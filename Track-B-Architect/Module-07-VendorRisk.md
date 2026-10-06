@@ -108,7 +108,7 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 | C1 | How does the vendor authenticate API calls? | API key scoped per customer, or Entra-based auth |
 | C2 | Does the vendor support key rotation without service interruption? | Key rotation < 4h downtime |
 | C3 | Is access logging available for all API calls? | Per-call audit log exportable to your SIEM |
-| C4 | Can access be revoked instantly (kill switch)? | Token revocation < 5 minutes |
+| C4 | Can access be revoked instantly (kill switch)? | Access removed < 5 minutes (identity disabled, credentials removed; tokens already issued expire within their lifetime) |
 | C5 | Can the provider verify and revoke identity at the individual agent level, or only via a shared tenant key? | Per-agent identity attribution and revocation supported. A shared key means no forensic attribution and no granular revocation — document as an accepted gap if unavoidable |
 
 ### Domain D — MCP Server Specific (if applicable)

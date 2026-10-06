@@ -190,7 +190,7 @@ INCORRECT ORDER (live exposure):
 
 | Rule Name | Severity | Frequency | Table | Status |
 |-----------|----------|-----------|-------|--------|
-| Agentic AI — Jailbreak Attempt Detected | High | 5 min | CloudAppEvents | ☐ Enabled |
+| Agentic AI — Jailbreak Attempt Detected | High | 5 min | CopilotActivity | ☐ Enabled |
 | Agentic AI — Volume Spike Anomaly | Medium | 15 min | CloudAppEvents | ☐ Enabled |
 | Agentic AI — Sensitive Data Access Off-Hours | High | 15 min | MicrosoftPurviewInformationProtection | ☐ Enabled |
 
@@ -198,9 +198,9 @@ INCORRECT ORDER (live exposure):
 
 | Field | Value |
 |-------|-------|
-| Rule name | Auto-revoke on Jailbreak Alert |
+| Rule name | Revoke user sessions on Jailbreak Alert |
 | Trigger | Alert name contains "Jailbreak" |
-| Action | Run playbook: `playbook-revoke-agent-token` |
+| Action | Run playbook: `playbook-revoke-actor-sessions` |
 | Status | ☐ Enabled |
 
 ### Enforcement Flow
@@ -208,7 +208,7 @@ INCORRECT ORDER (live exposure):
 ```
 T+0     Jailbreak alert fires (Sentinel analytics rule)
 T+0:02  Automation rule triggers Logic App
-T+0:05  Token revoked via Graph API (POST /revokeSignInSessions)
+T+0:05  User sessions revoked via Graph API (POST /users/{id}/revokeSignInSessions)
 T+0:05  Incident comment added in Sentinel (automated)
 T+0:05  Email sent to agent technical owner
 T+0:30  SOC analyst reviews incident, confirms revocation, closes or escalates

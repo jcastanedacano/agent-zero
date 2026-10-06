@@ -9,7 +9,7 @@
 
 ## Learning Objective
 
-At the end of this module, you will be able to create Sentinel analytics rules for jailbreak detection and agent behavioral anomalies, build a Logic App playbook that enforces token revocation on alert, and complete the agentic incident response playbook with a trigger-to-resolution flow.
+At the end of this module, you will be able to create Sentinel analytics rules for jailbreak detection and agent behavioral anomalies, build a Logic App playbook that revokes the flagged user's sessions on alert, and complete the agentic incident response playbook with a trigger-to-resolution flow.
 
 ---
 
@@ -32,7 +32,7 @@ At the end of this module, you will be able to create Sentinel analytics rules f
 
 3. **Applicable Microsoft controls:** Defender XDR integrates agentic behavioral signals with identity context. Microsoft Sentinel with the native MCP server allows querying agent status from within the investigation context. Security Copilot accelerates triage of complex incidents. Purview Audit provides the forensic chain of custody with immutability. Agent 365 correlates incident events with the agent ownership registry.
 
-4. **Automated enforcement as an architectural requirement:** Detection without response automation has MTTR limited by human reaction time. For agents acting in seconds, the target is: automatic detection → automatic containment (Logic App revokes token via Graph API) → human review. A "detection without enforcement" posture is not a control — it is an incident log.
+4. **Automated enforcement as an architectural requirement:** Detection without response automation has MTTR limited by human reaction time. For agents acting in seconds, the target is: automatic detection → automatic containment (Logic App revokes the user's sessions via Graph API) → human review. A "detection without enforcement" posture is not a control — it is an incident log.
 
 ---
 
@@ -40,7 +40,7 @@ At the end of this module, you will be able to create Sentinel analytics rules f
 
 ### Detection vs. enforcement — the 37% problem
 
-A Sentinel analytics rule that fires an alert is **detection**. The alert sitting in the queue without automated response is not enforcement. The gap between detection and enforcement is where most agentic incidents expand: the jailbreak is detected at T+0, but the token isn't revoked until T+4h when a human reviews the queue.
+A Sentinel analytics rule that fires an alert is **detection**. The alert sitting in the queue without automated response is not enforcement. The gap between detection and enforcement is where most agentic incidents expand: the jailbreak is detected at T+0, but the user's sessions aren't revoked until T+4h when a human reviews the queue.
 
 The Logic App playbook is the enforcement layer. Without it, Sentinel is a detection-only platform. With it, detection becomes a control.
 
@@ -149,18 +149,19 @@ CloudAppEvents
 ### Step 3 — Build the enforcement Logic App
 
 1. In **Azure Portal** → **Logic Apps** → **Create** → Consumption plan
-   - Name: `playbook-revoke-agent-token`
+   - Name: `playbook-revoke-actor-sessions`
    - Resource group: same as your Sentinel workspace
 2. In the Logic App designer, start with trigger: **Microsoft Sentinel — When a response to a Microsoft Sentinel alert is triggered**
-3. Add action: **HTTP** (to call Graph API for token revocation)
+3. Add action: **HTTP** (to call Graph API to revoke the sessions of the user who sent the flagged prompt)
    - Method: POST
-   - URI: `https://graph.microsoft.com/v1.0/servicePrincipals/<agentObjectId>/revokeSignInSessions`
-   - Authentication: Managed Identity (assign `Application.ReadWrite.All` to the Logic App's managed identity)
+   - URI: `https://graph.microsoft.com/v1.0/users/<actorUserId>/revokeSignInSessions` (`ActorUserId` of the alert's Account entity, from the P05-Q1 query)
+   - Authentication: Managed Identity (assign the `User.RevokeSessions.All` app role to the Logic App's managed identity)
+   - `revokeSignInSessions` exists for users only (agent user accounts included): there is no such call for a service principal or an agent identity. For an incident on an agent identity, add a second HTTP action behind an approval: `PATCH https://graph.microsoft.com/v1.0/servicePrincipals/<agentObjectId>` with body `{"accountEnabled": false}` (permission `Application.ReadWrite.All`)
 4. Add action: **Microsoft Sentinel — Add comment to incident**
-   - Comment: `Automated response: agent token revoked at @{utcNow()} by playbook-revoke-agent-token`
+   - Comment: `Automated response: sessions of the flagged user revoked at @{utcNow()} by playbook-revoke-actor-sessions`
 5. Add action: **Office 365 Outlook — Send an email**
    - To: agent technical owner (from `Owners` field in `AgentsInfo` or Agent 365 Registry)
-   - Subject: `[ALERT] Agent token revoked — review required`
+   - Subject: `[ALERT] User sessions revoked after a jailbreak alert — review required`
    - Body: include incident URL and AgentId
 6. Save the Logic App
 
@@ -168,7 +169,7 @@ CloudAppEvents
 - In Sentinel → **Automation** → **Automation rules** → **Create**
 - Trigger: When alert is created
 - Condition: Alert name contains "Jailbreak"
-- Action: Run playbook → `playbook-revoke-agent-token`
+- Action: Run playbook → `playbook-revoke-actor-sessions`
 
 ---
 
@@ -263,13 +264,13 @@ Using the [Playbook Template](./Templates/Incident-Response-Playbook-Template.md
 
 ### Automation Rule
 - Trigger: Alert name contains "Jailbreak"
-- Action: Run playbook-revoke-agent-token
+- Action: Run playbook-revoke-actor-sessions
 - Status: Enabled
 
 ### Enforcement Flow
 Jailbreak alert fires (T+0)
     → Automation rule triggers Logic App (T+0 to T+2 min)
-    → Token revoked via Graph API
+    → User sessions revoked via Graph API
     → Incident comment added in Sentinel
     → Email notification sent to agent technical owner
     → SOC analyst reviews incident in queue

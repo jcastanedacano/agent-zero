@@ -24,7 +24,7 @@ By the end of this module, participants will be able to evaluate the governance 
 
 3. **Applicable Microsoft controls:** Entra Agent ID provides a dedicated, manageable identity per agent. The Copilot Studio approval flow controls publication. Foundry RBAC and API controls restrict what agents can do in Azure AI. Power Platform DLP classifies and blocks unauthorized connectors.
 
-4. **Lifecycle as an active security control:** A decommissioned agent with active permissions is an attack vector. The offboarding process must include token revocation, Entra permission removal, and closure of the Agent 365 registry entry.
+4. **Lifecycle as an active security control:** A decommissioned agent with active permissions is an attack vector. The offboarding process must include disabling the identity and removing its credentials, Entra permission removal, and closure of the Agent 365 registry entry.
 
 ---
 

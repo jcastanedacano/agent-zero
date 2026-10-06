@@ -30,7 +30,7 @@ Every domain maps to named, configurable Microsoft controls. Expand a domain to 
 - Tiered Autonomy (Logic Apps playbook tiers)
 - CAGE model (independent control plane from reasoning path)
 - Entitlement Management access packages (time-bound least privilege)
-- Three-level kill switch (Graph `revokeSignInSessions` → Entra `accountEnabled=false` → runtime unpublish/deployment delete) with measured RTO
+- Three-level kill switch (mark compromised and revoke user or agent-user sessions → Entra `accountEnabled=false` → runtime quarantine, unpublish or deployment delete) with measured RTO
 - Human-on-the-loop override for tier 3 actions
 - Direct tool invocation awareness (approval events must be cryptographically bound to the request, not readable claims in session history)
 - Multi-owner agent governance (org-wide sharing policy default hardening, accountable-owner tracking outside the product, deletion-event monitoring for multi-owner agents)
