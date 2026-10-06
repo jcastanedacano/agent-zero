@@ -169,6 +169,8 @@ OfficeActivity
 
 **Expected output:** Agent access events on documents with no sensitivity label — your oversharing inventory.
 
+> **For Copilot interactions, skip the guess.** The query above infers agent traffic from `UserAgent`. Copilot's own audit record lists the files it read and their label: P04-Q6 reads `AccessedResources[].SensitivityLabelId` in `CopilotActivity` (Learn, "Audit logs for Copilot and AI applications"), splits the files into unlabeled and sensitive, and counts policy blocks. Not verified on a real file read: the validation workspace only had web citations.
+
 ---
 
 ### Step 5 — KQL: External connector data egress
@@ -202,6 +204,8 @@ CloudAppEvents
 ### Step 6 — KQL: Prompt injection pattern detection
 
 > **Telemetry limit (Microsoft Learn, October 2026).** The ActionType was `AgentInteraction`, which is not a documented value; it is now `InvokeAgent`. Agent 365 observability does not expose prompt text in `CloudAppEvents` (`gen_ai.input.messages` is "not yet surfaced in advanced hunting"), so `RawEventData["UserPrompt"]` has no documented source and this query returns no rows on that telemetry today. Use it as a pattern for a source that carries the prompt, and see P05-Q1 for the platform's own jailbreak signal in `LLMActivity`. The validation tenant had no agent ActionTypes in `CloudAppEvents` (30 days, October 2026).
+
+> **The platform's own flag.** Learn documents `AccessedResources[].XPIADetected` in the Copilot audit record: the platform marks the resource that carried a cross-prompt injection. P05-Q10 reads it from `CopilotActivity` and returns the resource to clean up. It flagged nothing on the validation workspace.
 
 ```kql
 CloudAppEvents

@@ -86,7 +86,7 @@ At the end of this module, you will be able to execute the five attack technique
 |---|---|---|---|
 | Reconnaissance | P03-Q5b (capability disclosure) | Elicitation attempts in prompts | Partial (UPIA detection) |
 | Initial Access | P05-Q1 (jailbreak detection) | Prompt injection patterns | Yes — UPIA blocked by default |
-| Corpus poisoning (XPIA) | P04 queries | Document access without sensitivity labels | Yes — XPIA blocked by default |
+| Corpus poisoning (XPIA) | P05-Q10 + P04-Q6 | The resource the platform flagged as an XPIA source; files Copilot read without a label | Yes — XPIA blocked by default |
 | Execution | P05-Q6 (goal hijacking) | High-privilege actions late in session | No telemetry from built-in block |
 | Exfiltration | P04 + P03-Q6 | Volume anomalies + connector egress | No |
 

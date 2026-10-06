@@ -513,3 +513,44 @@ PromptScores
     FragmentPreviews,
     RiskNote
 | sort by SessionFragmentScore desc, TurnsWithFragments desc
+
+
+// -----------------------------------------------------------------------------
+// Q10: Cross-Prompt Injection (XPIA) Flagged by the Platform — Which Resource Carried It
+// Use: Surface Copilot interactions in which the platform flagged a resource that Copilot read as a cross-prompt
+//      injection attack (XPIA, indirect prompt injection), and show that resource: the document, page or message
+//      to clean up or block. Complements Q1 (a jailbreak in the user's own message): an XPIA arrives in content
+//      the user never typed, so the flag is on the resource, not on the message. It also replaces the phrase
+//      patterns of P04-Q5 and Q5a, which have no prompt text to read.
+// Reference: Microsoft Learn, "Audit logs for Copilot and AI applications" (AccessedResources[].XPIADetected) |
+//            MITRE ATLAS AML.T0051 | OWASP ASI01
+// Recommended: Analytics Rule | Frequency: 5m | Lookback: 1h | Severity: High
+// Validated live (Oct 2026, Sentinel workspace): runs without errors and returned no rows. The XPIADetected key is
+//      present on the 2 resources that Copilot interactions listed in 90 days (3 records), both false: checked with
+//      == false, which returns them with actor, app, IP, URL and type. A resource flagged true has not been seen.
+//      Those 2 resources are web citations without Name, Status or SensitivityLabelId, so the query reads those with
+//      tostring and they come back empty when the record omits them.
+// -----------------------------------------------------------------------------
+CopilotActivity
+| where TimeGenerated > ago(1h)
+| where RecordType == "CopilotInteraction"
+| mv-expand Resource = LLMEventData.AccessedResources
+| where tobool(Resource.XPIADetected) == true
+| project
+    TimeGenerated,
+    ActorName,
+    ActorUserId,
+    AgentName,
+    AgentId,
+    AppIdentity,
+    AppHost,
+    SrcIpAddr,
+    ResourceUrl = tostring(Resource.SiteUrl),
+    ResourceName = tostring(Resource.Name),
+    ResourceType = tostring(Resource.Type),
+    Action = tostring(Resource.Action),
+    LabelId = tostring(Resource.SensitivityLabelId),
+    PolicyDetails = tostring(Resource.PolicyDetails),
+    RecordId,
+    RiskNote = "Resource flagged as a cross-prompt injection source: review and clean up the content"
+| sort by TimeGenerated desc

@@ -13,7 +13,7 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks. 
 
 |  |  |
 |---|---|
-| **18 modules** across Executive, Architect, and SOC Engineer tracks | **40 KQL library queries** plus 20 query files bundled with skills, with per-file validation status |
+| **18 modules** across Executive, Architect, and SOC Engineer tracks | **42 KQL library queries** plus 20 query files bundled with skills, with per-file validation status |
 | **30 agent skills** in agentskills.io format | **ARM template** deploys a preconfigured Sentinel workspace in one click |
 | **10+ frameworks mapped** to concrete Microsoft controls | **Facilitator kit** with prerequisites, checklists, and impact signals |
 
@@ -32,7 +32,7 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks. 
 
 <br>
 
-A complete framework for securing agentic AI in enterprise Microsoft environments: 18 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 40 production KQL queries in the KQL Library, plus 20 query files bundled with skills (validation status tracked per file), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Top 10 for Agentic Applications (2026, ASI01–ASI10), the OWASP Top 10 for LLM Applications (2026, LLM01–LLM10), the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
+A complete framework for securing agentic AI in enterprise Microsoft environments: 18 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 42 production KQL queries in the KQL Library, plus 20 query files bundled with skills (validation status tracked per file), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Top 10 for Agentic Applications (2026, ASI01–ASI10), the OWASP Top 10 for LLM Applications (2026, LLM01–LLM10), the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
 
 </details>
 
@@ -235,13 +235,13 @@ agent-zero/
 │   ├── Module-06-RedTeamPerspective.md          ← attacker perspective, 6 attacks
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
-├── KQL-Library/                     ← 40 production-ready queries for Sentinel + Defender XDR
+├── KQL-Library/                     ← 42 production-ready queries for Sentinel + Defender XDR
 │   ├── README.md
 │   ├── P01-Agent-Discovery.kql
 │   ├── P02-Governance-Gaps.kql
 │   ├── P03-Access-Anomalies.kql      ← Q7 membership inference + Q8 model inversion + Q11 BehaviorInfo + Q12 Agent ID object changes + Q13 blueprint principal grants + Q14 agent risk events added
-│   ├── P04-Exfiltration-Detection.kql
-│   └── P05-Jailbreak-Detection.kql              ← Q7 LPCI + Q8 agentic ransomware chain
+│   ├── P04-Exfiltration-Detection.kql           ← Q6 Copilot reads of unlabeled or sensitive files
+│   └── P05-Jailbreak-Detection.kql              ← Q7 LPCI + Q8 agentic ransomware chain + Q10 XPIA flagged by the platform
 ├── skills/                          ← 30 agent skills (agentskills.io format, ATLAS + NIST mapped)
 │   ├── SCHEMA.md                    ← Universal Skill Format security manifest (OWASP AST04/AST10)
 │   ├── discover/   (6 skills)
@@ -289,7 +289,7 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 
 ## KQL Library
 
-40 production-ready queries for Microsoft Sentinel and Defender Advanced Hunting, in five files (P01 to P05). Queries are validated against a live Microsoft 365 tenant using the Microsoft Graph Security `runHuntingQuery` API, with the date of the last validation listed per file (P04 targets Sentinel tables and has no validation date).
+42 production-ready queries for Microsoft Sentinel and Defender Advanced Hunting, in five files (P01 to P05). Queries are validated against a live Microsoft 365 tenant using the Microsoft Graph Security `runHuntingQuery` API, with the date of the last validation listed per file (P04 targets Sentinel tables and has no validation date).
 
 Index, usage and per-file validation status: [KQL-Library/README.md](./KQL-Library/README.md#schema-validation-status).
 

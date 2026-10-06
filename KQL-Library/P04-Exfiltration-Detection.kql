@@ -2,7 +2,7 @@
 // P04 — PROTECT DATA
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: CloudAppEvents, MicrosoftPurviewInformationProtection, OfficeActivity
+// Tables: CloudAppEvents, MicrosoftPurviewInformationProtection, OfficeActivity, CopilotActivity
 // =============================================================================
 
 
@@ -74,7 +74,8 @@ MicrosoftPurviewInformationProtection
 //      validation workspace, Oct 2026): it holds label events (Operation, LabelName, SensitivityLabelId, ObjectId, UserId, Workload). File access
 //      is in OfficeActivity (Operation, OfficeObjectId, Site_Url, UserAgent).
 //      Same logic and limits as P01-Q4: agent traffic is guessed from UserAgent, and label events record changes, not
-//      the current label. It returned no rows on the validation tenant (no agent user agents).
+//      the current label. It returned no rows on the validation tenant (no agent user agents). For Copilot
+//      interactions, Q6 reads Copilot's own audit record instead of guessing from UserAgent.
 // -----------------------------------------------------------------------------
 let AgentUserAgents = dynamic(["agent", "copilot", "assistant", "bot", "power-automate"]);
 let LabelLookback = 90d;
@@ -255,7 +256,8 @@ CloudAppEvents
 //       live events (0 agent ActionTypes in the validation tenant, Oct 2026). It runs without errors in Advanced Hunting.
 //       Learn documents platform flags instead of prompt text: Messages[].JailbreakDetected and
 //       AccessedResources[].XPIADetected (cross prompt injection attack) in the Copilot audit record, available in the
-//       CopilotActivity table (see P05-Q1). Both keys exist on the validation workspace, none is true.
+//       CopilotActivity table (see P05-Q1, and P05-Q10 for the XPIA flag). Both keys exist on the validation workspace,
+//       none is true.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
@@ -283,3 +285,48 @@ CloudAppEvents
     by AccountDisplayName, IPAddress
 | sort by InjectionAttempts desc
 | project AccountDisplayName, IPAddress, InjectionAttempts, FirstAttempt, LastAttempt, PromptSamples
+
+
+// -----------------------------------------------------------------------------
+// Q6: Copilot Reads of Unlabeled or Sensitive Files — From Copilot's Own Audit Record
+// Use: List the SharePoint and OneDrive files that Copilot accessed to answer a prompt, split by sensitivity
+//      label state: files with no label (oversharing candidates: content Copilot can ground on that nobody
+//      classified) and files that carry one of your sensitive labels. Unlike P01-Q4, P04-Q3 and P05-Q3, which
+//      guess agent traffic from UserAgent in OfficeActivity, this reads the Copilot audit record itself:
+//      AccessedResources lists each resource with its SensitivityLabelId, the action, the status and, when a
+//      policy blocked or restricted the access, PolicyDetails (Blocked and Failures below).
+// Source: CopilotActivity (Sentinel "Microsoft Copilot" connector), LLMEventData.AccessedResources (Microsoft
+//      Learn, "Audit logs for Copilot and AI applications"). It covers Copilot interactions, including those of
+//      custom agents built in Copilot Studio (AppIdentity Copilot.Studio.<AppId>); not agents that do not write
+//      to this audit record.
+// Recommended: Hunting query (daily) | Analytics Rule only after you list your sensitive label ids
+// NOT VERIFIED (live tenant, Oct 2026): runs without errors on the validation workspace and returns no rows. The 3
+//      interaction records there that list AccessedResources contain 2 resources, both web citations (no
+//      SensitivityLabelId, Name or Status), so no file read has been seen yet. The grouping and the label logic
+//      were run on a datatable shaped like Learn's AccessedResources example. It is not confirmed that a file with
+//      no label omits SensitivityLabelId (rather than the record not reporting it): check it against a file you
+//      know is unlabeled before treating "Unlabeled" as a finding.
+// -----------------------------------------------------------------------------
+let SensitiveLabelIds = dynamic([]);   // add the GUIDs of your sensitive labels
+CopilotActivity
+| where TimeGenerated > ago(1d)
+| where RecordType == "CopilotInteraction"
+| mv-expand Resource = LLMEventData.AccessedResources
+| extend ResourceUrl = tostring(Resource.SiteUrl), LabelId = tostring(Resource.SensitivityLabelId)
+| where ResourceUrl has ".sharepoint.com"
+| extend LabelState = case(
+    isempty(LabelId), "Unlabeled",
+    LabelId in (SensitiveLabelIds), "Sensitive",
+    "Labeled")
+| where LabelState in ("Unlabeled", "Sensitive")
+| summarize
+    Accesses = count(),
+    Users = dcount(ActorUserId),
+    FirstAccess = min(TimeGenerated),
+    LastAccess = max(TimeGenerated),
+    Actions = make_set(tostring(Resource.Action), 5),
+    Blocked = countif(isnotempty(tostring(Resource.PolicyDetails))),
+    Failures = countif(tostring(Resource.Status) =~ "failure"),
+    Apps = make_set(AppIdentity, 5)
+    by LabelState, ResourceUrl, LabelId
+| sort by LabelState asc, Accesses desc
