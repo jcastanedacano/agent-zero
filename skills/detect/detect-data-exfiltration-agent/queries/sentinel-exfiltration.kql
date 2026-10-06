@@ -1,102 +1,125 @@
 // skill: detect-data-exfiltration-agent
-// workspace: {workspace-name} | conectores: PurviewAuditLog, CopilotStudio_CL, MicrosoftDataLossPrevention
+// workspace: {workspace-name} | conectores: Microsoft 365 (OfficeActivity), diagnosticos de Foundry (AzureDiagnostics), Application Insights (AppDependencies, opcional)
+// Validado en un workspace Sentinel (oct 2026): la version anterior leia PurviewAuditLog, MicrosoftDataLossPrevention y FoundryAgents_CL, tablas que no
+// existen en ese workspace. Los eventos de SharePoint, OneDrive y Exchange estan en OfficeActivity (conector Microsoft 365): una aplicacion o agente con
+// permisos de aplicacion aparece con UserType Application (UserId app@sharepoint y ApplicationId en SharePoint y OneDrive; ClientAppId en Exchange), y las
+// coincidencias de DLP de Exchange y SharePoint son operaciones DLPRuleMatch o DlpRuleMatch. Q1, Q2 y Q4 compilan y devolvieron filas, Q5 devolvio filas con un
+// umbral bajo, y Q3 compila y no tiene filas (AppDependencies esta vacia): NO VERIFICADO.
+// OfficeActivity no distingue lo que Copilot lee en nombre del usuario: eso esta en CopilotActivity (KQL Library P04-Q6).
 
-// ── Query 1: Acceso masivo a archivos via agente en ventana corta ─────────────
+// ── Query 1: Acceso masivo a archivos por una aplicacion o un usuario en ventana corta ───────────────────────────
+// Validado: devolvio acceso masivo de una aplicacion de terceros (cliente Java) con cientos de archivos en 30 minutos. Las aplicaciones de Microsoft de
+// sincronizacion y cache tambien pueden cruzar el umbral: llena allowed_apps con los ApplicationId que ya conoces.
+// Para vigilar solo agentes, filtra por UserType == "Application".
 let detection_window = 2h;
 let bulk_threshold   = 50;
-PurviewAuditLog
+let allowed_apps     = dynamic([]);
+OfficeActivity
 | where TimeGenerated > ago(detection_window)
-| where Workload has_any ("SharePoint", "OneDrive")
-| where OperationName has_any ("FileAccessed", "FileDownloaded")
-// Filtrar operaciones iniciadas en contexto de agente (ajustar según naming del tenant)
-| extend
-    InitiatedByAgent = tostring(parse_json(AuditData).UserAgent) has_any
-        ("CopilotStudio", "PowerVirtualAgents", "bot", "agent"),
-    UserId           = tostring(parse_json(AuditData).UserId),
-    FileName         = tostring(parse_json(AuditData).SourceFileName),
-    SiteUrl          = tostring(parse_json(AuditData).SiteUrl)
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where Operation in ("FileAccessed", "FileDownloaded")
+| where isempty(ApplicationId) or ApplicationId !in (allowed_apps)
+| extend Initiator = iff(UserType == "Application", "Aplicacion o agente", "Usuario")
+| extend Actor = iff(UserType == "Application", strcat("app:", ApplicationId), UserId)
 | summarize
-    FileCount    = dcount(FileName),
-    SitesAccessed = dcount(SiteUrl),
-    TimeSpanMin  = datetime_diff("minute", max(TimeGenerated), min(TimeGenerated)),
-    SampleFiles  = make_set(FileName, 5)
-  by UserId, bin(TimeGenerated, 30m)
+    FileCount     = dcount(OfficeObjectId),
+    SitesAccessed = dcount(Site_Url),
+    Events        = count(),
+    FirstSeen     = min(TimeGenerated),
+    LastSeen      = max(TimeGenerated),
+    SampleFiles   = make_set(SourceFileName, 5),
+    UserAgents    = make_set(UserAgent, 3)
+  by Actor, Initiator, Window = bin(TimeGenerated, 30m)
 | where FileCount > bulk_threshold
-| extend Alert = strcat("Acceso masivo: ", FileCount, " archivos únicos en ", TimeSpanMin, " minutos")
+| extend TimeSpanMin = datetime_diff("minute", LastSeen, FirstSeen)
+| extend Alert = strcat("Acceso masivo: ", FileCount, " archivos unicos en ", TimeSpanMin, " minutos")
 | extend Severity = case(FileCount > 200, "High", FileCount > 100, "Medium", "Low")
 | order by FileCount desc
 
-// ── Query 2: Agente enviando email a dominios externos ────────────────────────
-let lookback = 24h;
-let internal_domain = "contoso.com";  // ajustar al tenant
-PurviewAuditLog
+// ── Query 2: Correo enviado por una aplicacion o agente a dominios externos ──────────────────────────────────────
+// Los destinatarios estan en Item.Recipients del evento Send de Exchange (Address y Name). El correo lo envia una aplicacion con permiso Mail.Send
+// por la REST de Graph: UserId es el buzon, UserType es Application y ClientAppId identifica la aplicacion.
+let lookback         = 24h;
+let internal_domains = dynamic(["contoso.com"]);   // ajustar al tenant
+OfficeActivity
 | where TimeGenerated > ago(lookback)
-| where Workload == "Exchange"
-| where OperationName has_any ("Send", "SendAs", "SendOnBehalf")
-| extend
-    Recipients  = tostring(parse_json(AuditData).RecipientAddress),
-    Subject     = tostring(parse_json(AuditData).Subject),
-    SentAs      = tostring(parse_json(AuditData).SendAsUPN)
-| where Recipients !has internal_domain  // email externo
-| where SentAs has_any ("agent", "bot", "sp-") or
-    tostring(parse_json(AuditData).ClientInfoString) has_any ("CopilotStudio", "PowerAutomate")
-| project TimeGenerated, SentAs, Recipients, Subject
-| extend Alert = "Agente envió email a dominio externo — posible exfiltración"
+| where OfficeWorkload == "Exchange"
+| where Operation in ("Send", "SendAs", "SendOnBehalf")
+| where UserType == "Application"
+| extend ItemJson = parse_json(Item)
+| mv-expand Recipient = ItemJson.Recipients
+| extend RecipientAddress = tolower(tostring(Recipient.Address))
+| extend RecipientDomain = tostring(split(RecipientAddress, "@")[1])
+| where RecipientDomain !in (internal_domains)
+| summarize ExternalRecipients = make_set(RecipientAddress, 10)
+    by TimeGenerated, Mailbox = UserId, ClientAppId, Subject = tostring(ItemJson.Subject), MessageId = tostring(ItemJson.InternetMessageId)
+| extend Alert = "Una aplicacion o agente envio correo a un dominio externo: posible exfiltracion"
 | order by TimeGenerated desc
 
-// ── Query 3: Llamadas HTTP salientes desde Foundry a URLs no Azure ─────────────
-FoundryAgents_CL
+// ── Query 3: Llamadas HTTP salientes de agentes instrumentados hacia dominios que no son de Microsoft ─────────────
+// NO VERIFICADO: AppDependencies (Application Insights basado en workspace) esta vacia en el workspace de validacion. Que herramientas del agente
+// emiten una dependencia HTTP depende de la instrumentacion: si el agente no emite spans de sus llamadas HTTP, esta consulta no ve nada.
+AppDependencies
 | where TimeGenerated > ago(24h)
-| where isnotempty(TargetUrl_s)
-| extend Domain = tostring(parse_url(TargetUrl_s).Host)
-| where Domain !has_any ("azure.com", "microsoft.com", "windows.net",
-    "azurewebsites.net", "openai.com")
+| where DependencyType has "HTTP"
+| extend Domain = tolower(tostring(split(Target, ":")[0]))
+| where isnotempty(Domain)
+| where not(Domain endswith ".azure.com" or Domain endswith ".microsoft.com" or Domain endswith ".windows.net"
+    or Domain endswith ".azurewebsites.net" or Domain endswith ".openai.azure.com")
 | summarize
-    CallCount    = count(),
-    LastCall     = max(TimeGenerated),
-    UniqueAgents = dcount(AgentId_s)
+    CallCount  = count(),
+    LastCall   = max(TimeGenerated),
+    Agents     = dcount(AppRoleName),
+    AgentNames = make_set(AppRoleName, 5)
   by Domain
 | where CallCount > 5
 | extend Risk = case(
-    Domain has_any ("pastebin", "ngrok", "webhook.site", "requestbin"), "Alto — destino sospechoso",
-    "Revisar — destino externo no catalogado"
-)
+    Domain has_any ("pastebin", "ngrok", "webhook.site", "requestbin"), "Alto: destino sospechoso",
+    "Revisar: destino externo no catalogado")
 | order by CallCount desc
 
-// ── Query 4: Correlación agente + DLP match (exfiltración con datos sensibles) ─
-let agent_activity = PurviewAuditLog
-| where TimeGenerated > ago(24h)
-| where Workload has_any ("SharePoint", "OneDrive", "Exchange")
-| where OperationName has_any ("FileAccessed", "FileDownloaded", "Send")
-| extend UserId = tostring(parse_json(AuditData).UserId)
-| project TimeGenerated, UserId, OperationName, ObjectId = tostring(parse_json(AuditData).ObjectId);
-let dlp_matches = MicrosoftDataLossPrevention
-| where TimeGenerated > ago(24h)
-| extend UserId = UserId
-| project TimeGenerated, UserId, PolicyName = tostring(parse_json(PolicyDetails)[0].PolicyName),
-    SITs = tostring(SensitiveInfoTypeData);
-agent_activity
-| join kind=inner dlp_matches on UserId
-| where abs(datetime_diff("minute", TimeGenerated, TimeGenerated1)) < 5  // misma ventana
-| project
-    TimeGenerated,
-    UserId,
-    Operation     = OperationName,
-    PolicyMatched = PolicyName,
-    SensitiveData = SITs,
-    Object        = ObjectId
-| extend Alert = "Actividad de agente coincide con DLP match — posible exfiltración de datos sensibles"
-| order by TimeGenerated desc
+// ── Query 4: Correo enviado por una aplicacion o agente que coincidio con una regla de DLP ───────────────────────
+// Une el evento Send de una aplicacion con el evento DlpRuleMatch de Exchange por el identificador del mensaje (Item.InternetMessageId en Send y
+// OfficeObjectId en DlpRuleMatch). Validado: la clave coincide, 41 coincidencias en 90 dias de correos enviados por usuarios y por aplicaciones, y la
+// consulta devolvio correos enviados por una aplicacion. El evento de DLP trae el usuario y el tipo de registro, no el nombre de la politica.
+let lookback = 24h;
+let app_sent = OfficeActivity
+    | where TimeGenerated > ago(lookback)
+    | where OfficeWorkload == "Exchange"
+    | where Operation in ("Send", "SendAs", "SendOnBehalf")
+    | where UserType == "Application"
+    | extend ItemJson = parse_json(Item)
+    | project SentTime = TimeGenerated, Mailbox = UserId, ClientAppId, Subject = tostring(ItemJson.Subject), MessageId = tostring(ItemJson.InternetMessageId);
+OfficeActivity
+| where TimeGenerated > ago(lookback)
+| where OfficeWorkload == "Exchange"
+| where Operation in ("DlpRuleMatch", "DLPRuleMatch")
+| project DlpTime = TimeGenerated, DlpUser = UserId, MessageId = OfficeObjectId
+| join kind=inner app_sent on MessageId
+| project SentTime, DlpTime, Mailbox, ClientAppId, Subject, MessageId
+| extend Alert = "Correo de una aplicacion o agente coincide con una regla de DLP: posible exfiltracion de datos sensibles"
+| order by SentTime desc
 
-// ── Query 5: Volumen de datos por agente (KB) — detectar transferencias masivas ─
-FoundryAgents_CL
-| where TimeGenerated > ago(24h)
+// ── Query 5: Volumen de respuesta por llamador en una cuenta de Foundry (diagnosticos de Azure OpenAI) ──────────────
+// Los registros RequestResponse de MICROSOFT.COGNITIVESERVICES (tabla AzureDiagnostics) traen requestLength y responseLength en bytes dentro de
+// properties_s, mas OperationName, CallerIPAddress y callerObjectId. No traen tokens ni contenido. Validado: corre sobre 596 registros de 30 dias; en esa
+// cuenta las llamadas observadas son de administracion (listar almacenes de vectores, proyectos) y el volumen es de KB, asi que el umbral de 10 MB no
+// dispara. Ajusta el umbral a tu uso normal. El estimado por tokens de la version anterior no era una medida de bytes.
+let lookback  = 24h;
+let threshold_mb = 10.0;
+AzureDiagnostics
+| where TimeGenerated > ago(lookback)
+| where ResourceProvider == "MICROSOFT.COGNITIVESERVICES" and Category == "RequestResponse"
+| extend Props = parse_json(properties_s)
+| extend RequestBytes = tolong(Props.requestLength), ResponseBytes = tolong(Props.responseLength), CallerObjectId = tostring(Props.callerObjectId)
 | summarize
-    TotalInputTokens  = sum(InputTokens_d),
-    TotalOutputTokens = sum(OutputTokens_d),
-    RequestCount      = count()
-  by AgentId_s, EndpointName_s
-| extend EstimatedKB = (TotalInputTokens + TotalOutputTokens) * 0.75 / 1024  // aprox 0.75 bytes/token
-| where EstimatedKB > 10000  // > 10 MB procesado hoy
-| extend Alert = strcat("Alto volumen procesado: ", round(EstimatedKB/1024, 1), " MB estimado")
-| order by EstimatedKB desc
+    Requests   = count(),
+    RequestMB  = round(sum(RequestBytes) / 1048576.0, 3),
+    ResponseMB = round(sum(ResponseBytes) / 1048576.0, 3),
+    Operations = make_set(OperationName, 5),
+    FirstSeen  = min(TimeGenerated),
+    LastSeen   = max(TimeGenerated)
+  by Resource, CallerObjectId, CallerIPAddress
+| where ResponseMB > threshold_mb
+| extend Alert = strcat("Alto volumen de respuesta: ", ResponseMB, " MB en la ventana")
+| order by ResponseMB desc

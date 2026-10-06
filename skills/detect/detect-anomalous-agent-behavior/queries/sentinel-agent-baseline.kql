@@ -1,84 +1,123 @@
 // skill: detect-anomalous-agent-behavior
-// workspace: {workspace-name} | conectores: CopilotStudio_CL, FoundryAgents_CL, BehaviorAnalytics
+// workspace: {workspace-name} | conectores: Microsoft Entra ID (ServicePrincipalSignInLogs, MicrosoftGraphActivityLogs, RiskyAgents, AgentRiskEvents), Sentinel UEBA (BehaviorAnalytics)
+// Validado en un workspace Sentinel (oct 2026): la version anterior leia CopilotStudio_CL (tabla personalizada que no existe en ese workspace)
+// para las consultas de volumen y horario, y buscaba agentes en BehaviorAnalytics por texto en el nombre (agent, sp-, bot) y por la palabra
+// "Anomalous" en ActivityInsights, que no es una clave: ActivityInsights guarda indicadores True o False como FirstTimeUserAccessedResource.
+// Ahora la linea base sale de las identidades de agente de Entra: AADServicePrincipalSignInLogs trae la columna Agent (JSON con agentType:
+// agenticAppInstance, agentIdentityBlueprintPrincipal o notAgentic) y MicrosoftGraphActivityLogs trae cada llamada a Graph por ServicePrincipalId.
+// Q1 a Q4 compilan y se ejecutaron. En el tenant de validacion solo 2 identidades de agente iniciaron sesion en 30 dias y casi sin llamadas a
+// Graph, asi que con el filtro de agentes devuelven 0 filas: la logica se ejercito con todos los service principals (Q2 devolvio un servicio a
+// 3.03x de su linea base, Q4 dos con actividad fuera de horario). Q5 y Q6 no tienen filas en ese workspace (NO VERIFICADO).
 
-// ── Query 1: Calcular baseline diario por agente (últimos 14 días) ────────────
-let baseline_window = 14d;
-let alert_window    = 1d;
-CopilotStudio_CL
-| where TimeGenerated between (ago(baseline_window) .. ago(alert_window))
-| summarize DailyCount = count() by AgentName_s, bin(TimeGenerated, 1d)
+// ── Query 1: Linea base diaria de llamadas a Graph por identidad de agente (14 dias) ─────────────────────────────
+// Requiere diagnosticos de Entra: ServicePrincipalSignInLogs y MicrosoftGraphActivityLogs hacia el workspace.
+let agent_ids = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | extend AgentType = tostring(parse_json(Agent).agentType)
+    | where isnotempty(AgentType) and AgentType != "notAgentic"
+    | distinct ServicePrincipalId;
+MicrosoftGraphActivityLogs
+| where TimeGenerated between (ago(14d) .. ago(1d))
+| where ServicePrincipalId in (agent_ids)
+| summarize DailyCalls = count() by ServicePrincipalId, bin(TimeGenerated, 1d)
 | summarize
-    AvgDailyRequests = avg(DailyCount),
-    StdDev           = stdev(DailyCount),
-    MaxDaily         = max(DailyCount),
-    DataDays         = dcount(bin(TimeGenerated, 1d))
-  by AgentName_s
-| where DataDays >= 7  // solo agentes con historial suficiente
-| extend Threshold3x = AvgDailyRequests * 3
+    AvgDailyCalls = avg(DailyCalls),
+    StdDev        = stdev(DailyCalls),
+    MaxDaily      = max(DailyCalls),
+    DataDays      = dcount(TimeGenerated)
+  by ServicePrincipalId
+| where DataDays >= 7   // solo agentes con historial suficiente
+| extend Threshold3x = AvgDailyCalls * 3
 
-// ── Query 2: Volumen anómalo — agentes sobre 3x baseline hoy ─────────────────
-let baseline_window = 14d;
-let alert_window    = 1d;
-let baseline = CopilotStudio_CL
-| where TimeGenerated between (ago(baseline_window) .. ago(alert_window))
-| summarize DailyCount = count() by AgentName_s, bin(TimeGenerated, 1d)
-| summarize AvgDailyRequests = avg(DailyCount) by AgentName_s;
-CopilotStudio_CL
-| where TimeGenerated > ago(alert_window)
-| summarize TodayRequests = count() by AgentName_s
-| join kind=inner baseline on AgentName_s
-| extend
-    Ratio     = round(TodayRequests / AvgDailyRequests, 2),
-    Threshold = AvgDailyRequests * 3
-| where TodayRequests > Threshold
-| extend Alert = strcat("Volumen anómalo: ", Ratio, "x sobre baseline (", round(AvgDailyRequests,0), " avg)")
-| project-reorder Alert, AgentName_s, TodayRequests, AvgDailyRequests, Ratio
+// ── Query 2: Volumen anomalo: agentes por encima de 3x su linea base en las ultimas 24 h ───────────────────────
+let agent_ids = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | extend AgentType = tostring(parse_json(Agent).agentType)
+    | where isnotempty(AgentType) and AgentType != "notAgentic"
+    | distinct ServicePrincipalId;
+let names = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | summarize ServicePrincipalName = any(ServicePrincipalName) by ServicePrincipalId;
+let baseline = MicrosoftGraphActivityLogs
+    | where TimeGenerated between (ago(14d) .. ago(1d))
+    | where ServicePrincipalId in (agent_ids)
+    | summarize DailyCalls = count() by ServicePrincipalId, bin(TimeGenerated, 1d)
+    | summarize AvgDailyCalls = avg(DailyCalls), DataDays = dcount(TimeGenerated) by ServicePrincipalId
+    | where DataDays >= 7;
+MicrosoftGraphActivityLogs
+| where TimeGenerated > ago(1d)
+| where ServicePrincipalId in (agent_ids)
+| summarize TodayCalls = count() by ServicePrincipalId
+| join kind=inner baseline on ServicePrincipalId
+| join kind=leftouter names on ServicePrincipalId
+| extend Ratio = round(TodayCalls / AvgDailyCalls, 2), Threshold = AvgDailyCalls * 3
+| where TodayCalls > Threshold
+| extend Alert = strcat("Volumen anomalo de llamadas a Graph: ", Ratio, "x sobre la linea base (", round(AvgDailyCalls, 0), " por dia)")
+| project Alert, ServicePrincipalName, ServicePrincipalId, TodayCalls, AvgDailyCalls, Ratio, Threshold
 
-// ── Query 3: Acceso a recursos nunca vistos antes (primeras ocurrencias) ──────
-let history_window = 30d;
-let detection_window = 1d;
+// ── Query 3: Acceso a un recurso que la identidad nunca habia usado ─────────────────────────────────────────────
+// Un recurso es el servicio al que se pide el token (ResourceDisplayName en el inicio de sesion del service principal).
+let agent_ids = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | extend AgentType = tostring(parse_json(Agent).agentType)
+    | where isnotempty(AgentType) and AgentType != "notAgentic"
+    | distinct ServicePrincipalId;
 let known_resources = AADServicePrincipalSignInLogs
-| where TimeGenerated between (ago(history_window) .. ago(detection_window))
-| summarize by ServicePrincipalName, ResourceDisplayName;
+    | where TimeGenerated between (ago(30d) .. ago(1d))
+    | where ServicePrincipalId in (agent_ids)
+    | summarize by ServicePrincipalId, ResourceDisplayName;
 AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(detection_window)
-| where ResultType == 0
-| join kind=leftanti known_resources
-    on ServicePrincipalName, ResourceDisplayName
-| project TimeGenerated, ServicePrincipalName, ResourceDisplayName, IPAddress
-| extend Alert = "Primer acceso a este recurso — sin precedente en 30 días"
-| order by TimeGenerated desc
+| where TimeGenerated > ago(1d)
+| where ServicePrincipalId in (agent_ids)
+| where ResultType == "0"
+| join kind=leftanti known_resources on ServicePrincipalId, ResourceDisplayName
+| summarize FirstSeen = min(TimeGenerated), SignIns = count(), IPs = make_set(IPAddress, 5)
+    by ServicePrincipalId, ServicePrincipalName, ResourceDisplayName
+| extend Alert = "Primer acceso a este recurso sin precedente en 30 dias"
+| order by FirstSeen desc
 
-// ── Query 4: Operación fuera de horario habitual por agente ──────────────────
-let baseline_window = 14d;
-let detection_window = 1d;
-let agent_hours = CopilotStudio_CL
-| where TimeGenerated between (ago(baseline_window) .. ago(detection_window))
-| extend HourUTC = datetime_part("Hour", TimeGenerated)
-| summarize
-    MinHour = min(HourUTC),
-    MaxHour = max(HourUTC),
-    TypicalHours = make_set(HourUTC, 24)
-  by AgentName_s;
-CopilotStudio_CL
-| where TimeGenerated > ago(detection_window)
-| extend HourUTC = datetime_part("Hour", TimeGenerated)
-| join kind=inner agent_hours on AgentName_s
+// ── Query 4: Inicios de sesion fuera del horario habitual de la identidad ───────────────────────────────────────
+// Solo evalua identidades con al menos 20 inicios de sesion en la linea base.
+let agent_ids = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | extend AgentType = tostring(parse_json(Agent).agentType)
+    | where isnotempty(AgentType) and AgentType != "notAgentic"
+    | distinct ServicePrincipalId;
+let typical_hours = AADServicePrincipalSignInLogs
+    | where TimeGenerated between (ago(14d) .. ago(1d))
+    | where ServicePrincipalId in (agent_ids)
+    | extend HourUTC = datetime_part("hour", TimeGenerated)
+    | summarize TypicalHours = make_set(HourUTC, 24), BaselineSignIns = count() by ServicePrincipalId;
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(1d)
+| where ServicePrincipalId in (agent_ids)
+| extend HourUTC = datetime_part("hour", TimeGenerated)
+| join kind=inner typical_hours on ServicePrincipalId
+| where BaselineSignIns >= 20
 | where not(set_has_element(TypicalHours, HourUTC))
-| summarize OffHoursCount = count(), Hours = make_set(HourUTC) by AgentName_s
-| extend Alert = strcat("Actividad fuera de horario habitual: horas ", tostring(Hours))
-| order by OffHoursCount desc
+| summarize OffHoursSignIns = count(), Hours = make_set(HourUTC) by ServicePrincipalId, ServicePrincipalName
+| extend Alert = strcat("Actividad fuera del horario habitual: horas UTC ", tostring(Hours))
+| order by OffHoursSignIns desc
 
-// ── Query 5: UEBA scores para service principals de agentes ──────────────────
+// ── Query 5: Riesgo de agentes que Entra ID Protection ya calculo (deteccion de la plataforma) ──────────────────
+// NO VERIFICADO: AADAgentRiskEvents existe en el workspace con las columnas que documenta Learn, pero esta vacia. Requiere el diagnostico de Entra
+// AgentRiskEvents (y RiskyAgents para el estado del agente) y que ID Protection para agentes este activa (Entra ID P2 en preview; Learn dice
+// que pasara a requerir una licencia de Microsoft Agent 365). Las detecciones son offline: unfamiliarResourceAccess, signInSpike, failedAccessAttempt,
+// entraDirectoryReconnaissance, earlyLifeMaliciousActivity, suspiciousCredentialUsage, threatIntelligenceAccount y adminConfirmedAgentCompromised.
+AADAgentRiskEvents
+| where TimeGenerated > ago(1d)
+| where RiskState == "atRisk"
+| summarize arg_max(DetectedDateTime, *) by Id
+| project DetectedDateTime, AgentId, AgentDisplayName, IdentityType, RiskEventType, RiskLevel, RiskState, DetectionTimingType, RiskEvidence
+| order by DetectedDateTime desc
+
+// ── Query 6: Anomalias de UEBA sobre inicios de sesion de service principals ────────────────────────────────────
+// NO VERIFICADO: Learn lista AADServicePrincipalSignInLogs y AADManagedIdentitySignInLogs como fuentes de UEBA (preview), pero BehaviorAnalytics
+// en el workspace de validacion no tiene filas con ese NativeTableName (compila y devuelve 0). InvestigationPriority va de 0 a 10. ActivityInsights
+// guarda indicadores True o False (por ejemplo FirstTimeUserAccessedResource), no texto.
 BehaviorAnalytics
 | where TimeGenerated > ago(1d)
-| where UserPrincipalName has_any ("agent", "sp-", "bot", "copilot")
-    or AccountDisplayName has_any ("agent", "bot")
-| where ActivityInsights has "Anomalous"
-| project TimeGenerated,
-    AgentIdentity    = UserPrincipalName,
-    InvestigationPriority,
-    ActivityType,
-    ActivityInsights,
-    AnomalyDetails = tostring(ExtendedProperties)
+| where NativeTableName == "AADServicePrincipalSignInLogs"
+| where InvestigationPriority >= 5
+| project TimeGenerated, ServicePrincipal = UserPrincipalName, ActivityType, ActionType, InvestigationPriority, ActivityInsights, SourceIPAddress
 | order by InvestigationPriority desc

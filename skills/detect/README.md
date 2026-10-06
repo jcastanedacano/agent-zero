@@ -8,7 +8,7 @@ compromised agents before the damage becomes irreversible.
 ```
 INPUT: Protected data with active visibility (Pillar 4 output)
         ↓
-[1] detect-alert-prompt-injection-sentinel   ← signature rule, highest immediate ROI
+[1] detect-alert-prompt-injection-sentinel   ← platform flags and alerts, no prompt text needed
         ↓
 [2] detect-agent-identity-abuse              ← agent spawning = critical vector
         ↓
@@ -25,9 +25,9 @@ OUTPUT: Operational AISOC → feeds back into Pillar 1 (Discover) with newly det
 
 | Skill | Detection type | Sentinel rules | KQL |
 |---|---|---|---|
-| `detect-alert-prompt-injection-sentinel` | Signature | 1 scheduled rule | sentinel-prompt-injection.kql |
-| `detect-anomalous-agent-behavior` | Behavioral/baseline | 3 rules + UEBA | sentinel-agent-baseline.kql |
-| `detect-data-exfiltration-agent` | Volumetric correlation | 3 rules | sentinel-exfiltration.kql |
+| `detect-alert-prompt-injection-sentinel` | Platform signals | 3 scheduled rules | sentinel-prompt-injection.kql |
+| `detect-anomalous-agent-behavior` | Behavioral/baseline | 3 rules + ID Protection + UEBA | sentinel-agent-baseline.kql |
+| `detect-data-exfiltration-agent` | Volumetric correlation | 5 rules | sentinel-exfiltration.kql |
 | `detect-agent-identity-abuse` | Signature + identity anomaly | 4 rules | sentinel-identity-abuse.kql |
 | `detect-respond-playbook-agent-containment` | Response (Logic App) | 1 playbook | sentinel-ir-hunting.kql |
 
@@ -48,11 +48,12 @@ OUTPUT: Operational AISOC → feeds back into Pillar 1 (Discover) with newly det
 
 | Constraint | Impact |
 |---|---|
-| Sentinel validates _CL tables at rule creation time | Fails if there is no data — verify BEFORE |
+| Sentinel validates the tables a rule references at creation time | Fails if the table does not exist — verify BEFORE. `CopilotStudio_CL` and `FoundryAgents_CL` do not exist in the validation workspace: use `CopilotActivity`, `OfficeActivity`, `AADServicePrincipalSignInLogs` and `MicrosoftGraphActivityLogs` |
 | UEBA requires explicit activation | `BehaviorAnalytics` is not available by default |
 | `InitiatedBy.app` in AuditLogs is not always populated | Agent spawning may have false negatives |
 | Baseline requires a minimum of 7 days of data | Anomaly rules are not effective before that |
-| Power Platform API to disable an agent requires a PP Admin token | Not available via Lokka-Microsoft MCP |
+| The Power Platform quarantine API takes a user access token (Global, AI or Power Platform administrator) | A Logic App managed identity cannot call it; not available via Lokka-Microsoft MCP |
+| `revokeSignInSessions` exists for users only | No session-revocation call for service principals or agent identities: disable, confirm compromised, remove credentials |
 
 ## Closing the framework cycle
 
