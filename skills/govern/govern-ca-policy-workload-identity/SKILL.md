@@ -40,7 +40,7 @@ An agent registered with Entra Agent ID is a different object with its own polic
 - Target resources: All resources. The policy applies only when the service principal requests a token
 - Conditions: location (Any location, excluding the allowed ones) and service principal risk (from ID Protection)
 
-**Continuous access evaluation.** CAE for workload identities enforces these location and risk policies in near real time for single-tenant service principals, and revokes tokens on revocation events (Learn).
+**Continuous access evaluation.** CAE for workload identities enforces these location and risk policies in near real time, with limits (Learn): only access requests to Microsoft Graph, only clients that declare the `cp1` capability, and only single-tenant service principals. Other resources, multitenant apps and managed identities are not covered, so the policy is still evaluated at token issuance for them.
 
 Always start in `enabledForReportingButNotEnforced`, review the sign-in logs for at least 7 days, then enable.
 
