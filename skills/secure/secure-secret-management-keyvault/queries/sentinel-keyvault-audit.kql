@@ -1,51 +1,87 @@
 // skill: secure-secret-management-keyvault
-// workspace: {workspace-name} | conector: AzureActivity + KeyVaultData (si diagnósticos activos)
+// workspace: {workspace-name} | conectores: Azure Activity, diagnosticos de Key Vault (AZKVAuditLogs); Q1 y Q2 corren en Azure Resource Graph
+// Validado en un workspace Sentinel y en Azure Resource Graph (oct 2026): la version anterior leia AzureDiagnostics con columnas que no existen (CallerIdentity, resultCode_d) y calculaba los
+// secretos proximos a expirar a partir del evento SecretSet, que no sirve: la caducidad se avisa con el evento SecretNearExpiry de Event Grid, no con los registros. Q1, Q2 y Q3 se ejecutaron contra
+// datos reales. Q4 a Q6 leen AZKVAuditLogs, que no existe en el workspace de validacion (ningun Key Vault envia diagnosticos): se probaron con un datatable construido con el esquema de Learn y estan
+// marcadas NO VERIFICADAS con datos reales. Requieren el diagnostico en modo de tabla especifica del recurso (az monitor diagnostic-settings create --export-to-resource-specific true).
 
-// ── Query 1: Accesos a secretos de Key Vault en últimas 24h ──────────────────
-AzureDiagnostics
-| where TimeGenerated > ago(24h)
-| where ResourceProvider == "MICROSOFT.KEYVAULT"
-| where OperationName in ("SecretGet", "SecretList", "SecretSet", "SecretDelete")
-| extend
-    CallerIP    = tostring(CallerIPAddress),
-    SecretName  = tostring(id_s),
-    ResultCode  = tostring(resultCode_d)
-| project TimeGenerated, Resource, OperationName, CallerIdentity, CallerIP, SecretName, ResultCode
+// ── Query 1 (Azure Resource Graph, no Log Analytics): postura de cada Key Vault ──────────────────────────────────────
+// Resultado en la cuenta de validacion: 3 vaults. Uno usa politicas de acceso (modelo antiguo), ninguno tiene proteccion contra purga y los tres aceptan trafico publico.
+resources
+| where type =~ "microsoft.keyvault/vaults"
+| extend Rbac = tobool(properties.enableRbacAuthorization), SoftDelete = tobool(properties.enableSoftDelete), PurgeProtection = tobool(properties.enablePurgeProtection), PublicAccess = tostring(properties.publicNetworkAccess), PrivateEndpoints = array_length(properties.privateEndpointConnections), DefaultAction = tostring(properties.networkAcls.defaultAction)
+| project name, resourceGroup, subscriptionId, Rbac, SoftDelete, PurgeProtection, PublicAccess, PrivateEndpoints, DefaultAction
+| extend Gaps = strcat(iff(Rbac != true, "modelo de politicas de acceso; ", ""), iff(PurgeProtection != true, "sin proteccion contra purga; ", ""), iff(PublicAccess =~ "Enabled" and (isnull(PrivateEndpoints) or PrivateEndpoints == 0), "abierto a internet sin private endpoint; ", ""))
+
+// ── Query 2 (Azure Resource Graph): quien tiene un rol de Key Vault, y a que alcance ─────────────────────────────────
+// Key Vault Secrets User lee el valor de los secretos y tambien lista sus nombres y propiedades (readMetadata). Un rol a nivel de grupo de recursos o de suscripcion aplica a todos los vaults de ese alcance.
+// Resultado en la cuenta de validacion: 2 asignaciones, ambas a nivel de vault (un usuario con Key Vault Secrets Officer y una entidad de servicio con Key Vault Secrets User).
+authorizationresources
+| where type =~ "microsoft.authorization/roleassignments"
+| extend Scope = tolower(tostring(properties.scope)), RoleId = tolower(tostring(split(tostring(properties.roleDefinitionId), "/")[-1])), PrincipalType = tostring(properties.principalType), PrincipalId = tostring(properties.principalId)
+| extend Role = case(
+    RoleId == "00482a5a-887f-4fb3-b363-3b7fe8e74483", "Key Vault Administrator",
+    RoleId == "b86a8fe4-44ce-4948-aee5-eccb2c155cd7", "Key Vault Secrets Officer",
+    RoleId == "4633458b-17de-408a-b874-0445c86b69e6", "Key Vault Secrets User",
+    RoleId == "21090545-7ca7-4776-b22c-e363652d74d2", "Key Vault Reader",
+    "")
+| where isnotempty(Role)
+| extend ScopeLevel = case(
+    Scope contains "/secrets/", "Secreto",
+    Scope contains "microsoft.keyvault/vaults", "Key Vault",
+    Scope contains "/resourcegroups/", "Grupo de recursos",
+    "Suscripcion")
+| extend Risk = case(
+    ScopeLevel in ("Grupo de recursos", "Suscripcion"), "Alcance mayor que un vault: aplica a todos los vaults de ese alcance",
+    Role in ("Key Vault Administrator", "Key Vault Secrets Officer") and PrincipalType == "ServicePrincipal", "Una identidad de aplicacion puede escribir secretos: confirmar que lo necesita",
+    "")
+| project Role, ScopeLevel, PrincipalType, PrincipalId, Scope, Risk
+| order by ScopeLevel asc, Role asc
+
+// ── Query 3: Cambios en los vaults: alta o cambio, politicas de acceso, private endpoints, borrado y purga ───────────
+// Un cambio de modelo de permisos, de red o de proteccion contra purga sale como VAULTS/WRITE sin cuerpo: compara con Q1 (estado actual). La purga es la operacion irreversible.
+// Resultado en la cuenta de validacion: 1 fila en 180 dias (una escritura de un vault).
+let lookback = 180d;
+AzureActivity
+| where TimeGenerated > ago(lookback)
+| where ActivityStatusValue == "Success"
+| where OperationNameValue in~ ("MICROSOFT.KEYVAULT/VAULTS/WRITE", "MICROSOFT.KEYVAULT/VAULTS/DELETE", "MICROSOFT.KEYVAULT/VAULTS/ACCESSPOLICIES/WRITE", "MICROSOFT.KEYVAULT/VAULTS/PRIVATEENDPOINTCONNECTIONS/WRITE", "MICROSOFT.KEYVAULT/VAULTS/PRIVATEENDPOINTCONNECTIONS/DELETE", "MICROSOFT.KEYVAULT/LOCATIONS/DELETEDVAULTS/PURGE/ACTION")
+| extend Vault = tostring(split(tolower(tostring(parse_json(Properties).entity)), "/")[8])
+| extend Action = case(OperationNameValue has "PURGE", "Purga", OperationNameValue has "DELETE", "Borrado", OperationNameValue has "ACCESSPOLICIES", "Cambio de politica de acceso", "Alta o cambio")
+| project TimeGenerated, Caller, Action, OperationNameValue, Vault, CallerIpAddress
 | order by TimeGenerated desc
 
-// ── Query 2: Accesos denegados a Key Vault (posible misconfiguration o ataque) ─
-AzureDiagnostics
+// ── Query 4: Quien lee secretos, con que frecuencia y cuantas veces se le denego (NO VERIFICADA con datos reales) ───────
+// AZKVAuditLogs: OperationName SecretGet, Identity (la identidad del token, dinamica: se usa entera como clave), HttpStatusCode e IsRbacAuthorized. La estructura interna de Identity no esta
+// verificada, por eso se agrupa por tostring(Identity). Id es la URI del secreto: el nombre es el cuarto segmento tras separar por barras.
+AZKVAuditLogs
 | where TimeGenerated > ago(7d)
-| where ResourceProvider == "MICROSOFT.KEYVAULT"
-| where resultCode_d == 403 or resultType_s == "Failure"
-| summarize
-    DeniedCount = count(),
-    Operations  = make_set(OperationName, 5),
-    LastDenied  = max(TimeGenerated)
-  by CallerIdentity, Resource
-| order by DeniedCount desc
-
-// ── Query 3: Secretos próximos a expirar (requiere Key Vault Events via Event Grid) ─
-// Si no hay Event Grid configurado, usar como referencia para auditoría manual
-AzureDiagnostics
-| where TimeGenerated > ago(90d)
-| where ResourceProvider == "MICROSOFT.KEYVAULT"
-| where OperationName == "SecretSet"
-| extend ExpiryDate = todatetime(parse_json(tostring(properties_s)).attributes.exp)
-| where isnotempty(ExpiryDate)
-| extend DaysUntilExpiry = datetime_diff("day", ExpiryDate, now())
-| where DaysUntilExpiry between (0 .. 30)
-| project Resource, SecretName = id_s, ExpiryDate, DaysUntilExpiry
-| extend Urgency = case(DaysUntilExpiry <= 7, "Crítico", DaysUntilExpiry <= 15, "Alto", "Medio")
-| order by DaysUntilExpiry asc
-
-// ── Query 4: Accesos fuera de horario (posible uso no autorizado de secreto) ──
-AzureDiagnostics
-| where TimeGenerated > ago(7d)
-| where ResourceProvider == "MICROSOFT.KEYVAULT"
 | where OperationName == "SecretGet"
-| extend HourUTC = datetime_part("Hour", TimeGenerated)
-| where HourUTC < 6 or HourUTC > 22
-| project TimeGenerated, HourUTC, Resource, CallerIdentity, CallerIPAddress
-| extend Alert = "Acceso a secreto fuera de horario — revisar si es acceso automatizado esperado"
-| order by TimeGenerated desc
+| extend Caller = tostring(Identity), SecretName = tostring(split(Id, "/")[4])
+| summarize Reads = count(), Denied = countif(HttpStatusCode in (401, 403) or IsRbacAuthorized == false), Secrets = make_set(SecretName, 10), IPs = make_set(CallerIpAddress, 5), LastRead = max(TimeGenerated) by _ResourceId, Caller
+| order by Reads desc
+
+// ── Query 5: Accesos denegados a un Key Vault (NO VERIFICADA con datos reales) ──────────────────────────────────────
+// Muchos 403 de una identidad concreta son una mala configuracion de RBAC o alguien probando secretos que no le tocan.
+AZKVAuditLogs
+| where TimeGenerated > ago(7d)
+| where HttpStatusCode in (401, 403) or IsRbacAuthorized == false
+| summarize Denied = count(), Operations = make_set(OperationName, 5), LastDenied = max(TimeGenerated) by _ResourceId, Caller = tostring(Identity)
+| order by Denied desc
+
+// ── Query 6: Identidad que lee secretos de un vault por primera vez (NO VERIFICADA con datos reales) ───────────────────
+// Compara el ultimo dia con los 30 anteriores. Mas util que una ventana horaria fija: un agente nuevo, o uno que cambio de identidad, aparece aqui aunque lea a una hora normal.
+let recent = 1d;
+let baseline = 30d;
+let known = AZKVAuditLogs
+    | where TimeGenerated between (ago(baseline) .. ago(recent))
+    | where OperationName == "SecretGet" and ResultType == "Success"
+    | extend Caller = tostring(Identity)
+    | distinct _ResourceId, Caller;
+AZKVAuditLogs
+| where TimeGenerated > ago(recent)
+| where OperationName == "SecretGet"
+| extend Caller = tostring(Identity)
+| summarize Reads = count(), Denied = countif(HttpStatusCode in (401, 403) or IsRbacAuthorized == false), Secrets = make_set(tostring(split(Id, "/")[4]), 5), IPs = make_set(CallerIpAddress, 5), LastRead = max(TimeGenerated) by _ResourceId, Caller
+| join kind=leftanti known on _ResourceId, Caller
+| extend Review = "Identidad que no habia leido secretos de este vault en la linea base"

@@ -45,7 +45,7 @@ flowchart TD
 
 | Constraint | Impact | Workaround |
 |---|---|---|
-| `grantControls: mfa` invalid in CA for workload identities | CA policy fails on creation | Use `block` only |
+| `grantControls: mfa` is not an option for workload identities or agent identities | Learn: Block is the only control; what the API does with another control is not documented | Use `block` only |
 | `continuousAccessEvaluation` + `reportOnly` are incompatible | Error when creating the policy | Use `disabled` or `enabled` |
 | PIM for SPs requires Workload ID Premium | Without the license, unavailable for SPs | Use role assignments with expiration |
 | Purview auto-labeling via API is limited | Some policies cannot be created via ARM | Use the Compliance Portal |

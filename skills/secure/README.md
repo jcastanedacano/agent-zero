@@ -44,8 +44,8 @@ flowchart TD
     Q1 -- "Yes" --> MI["Use a managed identity<br/>secure-managed-identity-foundry"]
     Q1 -- "No" --> KV["Use Key Vault<br/>secure-secret-management-keyvault"]
     KV --> Q2{"Does the external resource support<br/>automatic rotation?"}
-    Q2 -- "Yes" --> R1["Configure a Key Vault rotation policy"]
-    Q2 -- "No" --> R2["Rotate manually every 90 days<br/>and alert on the due date"]
+    Q2 -- "Yes" --> R1["Automate rotation: Event Grid near-expiry event<br/>and a function (secrets have no native rotation policy)"]
+    Q2 -- "No" --> R2["Rotate manually every 90 days<br/>and use the near-expiry event as the reminder"]
 
     classDef good fill:#107C10,stroke:#333,color:#fff
     classDef warn fill:#FF8C00,stroke:#333,color:#24292f

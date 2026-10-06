@@ -1,0 +1,39 @@
+// skill: secure-ca-policy-agents
+// workspace: {workspace-name} | conectores: Microsoft Entra ID (AADServicePrincipalSignInLogs)
+// Validado en un workspace Sentinel (oct 2026): la version anterior del skill traia una consulta dentro del SKILL.md, sin archivo, que leia solo la primera politica
+// (ConditionalAccessPolicies[0]) y no separaba los agentes de las demas entidades de servicio. La columna Agent de AADServicePrincipalSignInLogs trae un JSON con agentType
+// (agenticAppInstance para una identidad de agente, agentIdentityBlueprintPrincipal para el principal del blueprint). Q1 a Q3 compilan y se ejecutaron; el resultado de la
+// cuenta de validacion esta junto a cada consulta.
+
+// ── Query 1: Resultado de Conditional Access en los inicios de sesion de agentes ────────────────────────────────────
+// Resultado en la cuenta de validacion: 2 filas y 9 inicios de sesion en 30 dias, todos con ConditionalAccessStatus notApplied. Son el token del principal del blueprint hacia
+// Microsoft Graph y el intercambio de token de la identidad de agente en "AAD Token Exchange Endpoint: Public": Learn los deja fuera de Conditional Access. No son un fallo de la politica.
+let lookback = 30d;
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(lookback)
+| extend AgentType = tostring(parse_json(Agent).agentType)
+| where AgentType in ("agenticAppInstance", "agentIdentityBlueprintPrincipal")
+| summarize SignIns = count(), CABlocked = countif(ResultType == "53003"), Disabled = countif(ResultType == "7000112") by AgentType, ResourceDisplayName, ConditionalAccessStatus
+| order by SignIns desc
+
+// ── Query 2: Que politicas evaluaron los inicios de sesion de agentes, y con que resultado ──────────────────────────
+// ConditionalAccessPolicies es un arreglo con todas las politicas evaluadas. Una politica en modo solo informe aparece con resultados reportOnly (por ejemplo reportOnlyNotApplied o
+// reportOnlyFailure): es lo que hay que revisar durante la semana de prueba antes de pasarla a enabled.
+// Resultado en la cuenta de validacion: la fila del principal del blueprint hacia Microsoft Graph trae las 4 politicas de agentes (una activa con resultado notApplied y tres en solo informe con reportOnlyNotApplied); las 8 filas de la identidad de agente en el intercambio de token no traen ninguna politica evaluada.
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(lookback)
+| extend AgentType = tostring(parse_json(Agent).agentType)
+| where AgentType in ("agenticAppInstance", "agentIdentityBlueprintPrincipal")
+| mv-expand Pol = parse_json(ConditionalAccessPolicies)
+| summarize Evaluations = count() by Policy = tostring(Pol.displayName), PolicyResult = tostring(Pol.result), AgentType, ResourceDisplayName
+| order by Evaluations desc
+
+// ── Query 3: Bloqueos por Conditional Access y por identidad deshabilitada ───────────────────────────────────────────
+// 53003 es el codigo que Entra devuelve cuando una politica de Conditional Access bloquea el acceso; 7000112 es el de una aplicacion deshabilitada (por ejemplo tras la contencion).
+// Incluye todas las entidades de servicio y marca cuales son agentes. Resultado en la cuenta de validacion: 0 filas en 30 dias (ninguna politica llego a bloquear).
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(lookback)
+| where ResultType in ("53003", "7000112")
+| extend AgentType = tostring(parse_json(Agent).agentType)
+| project TimeGenerated, ServicePrincipalName, AppId, AgentType, ResourceDisplayName, ResultType, ResultDescription, IPAddress
+| order by TimeGenerated desc
