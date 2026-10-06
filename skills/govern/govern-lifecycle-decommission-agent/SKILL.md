@@ -8,7 +8,7 @@ description: >-
   decommission, including detection of orphaned agents with active access,
   permission revocation, and deletion of service principals in Entra ID.
 tags: [govern, copilot-studio, entra, lifecycle, decommission, agent-hygiene]
-atlas_techniques: [AML.T0040]
+atlas_techniques: [AML.T0012]
 d3fend_techniques: [D3-UAP, D3-AM]
 nist_ai_rmf: [GOVERN-1.7, MANAGE-4.1]
 nist_csf: [PR.AA-01, ID.AM-08]

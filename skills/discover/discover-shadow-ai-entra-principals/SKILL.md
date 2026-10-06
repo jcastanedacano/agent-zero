@@ -9,7 +9,7 @@ description: >-
   used, so that shadow AI agents and AI apps can be triaged. Entra cannot tell an
   AI app from any other, so the AI judgment is a manual step.
 tags: [discover, entra, shadow-ai, service-principal, oauth, graph-permissions]
-atlas_techniques: [AML.T0084, AML.T0040, AML.T0103]
+atlas_techniques: [AML.T0103, AML.T0012]
 d3fend_techniques: [D3-AI, D3-UAP]
 nist_ai_rmf: [GOVERN-1.6, GOVERN-2.1]
 nist_csf: [ID.AM-02, PR.AA-01]

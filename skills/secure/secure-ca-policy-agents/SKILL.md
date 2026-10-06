@@ -9,7 +9,7 @@ description: >-
   approved agents, target a blueprint or a custom security attribute, and
   validate in report-only mode. Agent identities support only the Block control.
 tags: [secure, entra, conditional-access, agent-id, agent-risk, report-only]
-atlas_techniques: [AML.T0012, AML.T0040]
+atlas_techniques: [AML.T0012]
 d3fend_techniques: [D3-AMED, D3-UAP]
 nist_ai_rmf: [GOVERN-2.1, MANAGE-2.4]
 nist_csf: [PR.AA-03, PR.AA-05]

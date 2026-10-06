@@ -9,7 +9,7 @@ description: >-
   their usual hours), and reads the agent risk that Entra ID Protection and Sentinel
   UEBA already compute.
 tags: [detect, sentinel, behavioral-analytics, anomaly, baseline, aisoc, ueba]
-atlas_techniques: [AML.T0040, AML.T0084, AML.T0086]
+atlas_techniques: [AML.T0012, AML.T0086]
 d3fend_techniques: [D3-RAPA, D3-UBA, D3-ANET]
 nist_ai_rmf: [MEASURE-2.4, MEASURE-3.1]
 nist_csf: [DE.CM-03, DE.AE-02]

@@ -9,7 +9,7 @@ description: >-
   per agent, and registration in the Agent 365 registry, so the agent has its
   own identity for Conditional Access, audit and lifecycle.
 tags: [govern, entra, agent-id, blueprint, sponsor, identity, audit-trail]
-atlas_techniques: [AML.T0040, AML.T0012]
+atlas_techniques: [AML.T0012, AML.T0103]
 d3fend_techniques: [D3-AI, D3-UAP]
 nist_ai_rmf: [GOVERN-1.6, GOVERN-2.1]
 nist_csf: [PR.AA-01, PR.AA-05, ID.AM-02]

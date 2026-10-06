@@ -10,7 +10,7 @@ description: >-
   permissions with narrower ones (Sites.Selected), and checks in the Graph
   activity logs what the agent actually uses.
 tags: [secure, entra, least-privilege, service-principal, agent-identity, oauth, app-roles]
-atlas_techniques: [AML.T0012, AML.T0040]
+atlas_techniques: [AML.T0012]
 d3fend_techniques: [D3-UAP, D3-AM]
 nist_ai_rmf: [MANAGE-1.3, GOVERN-2.1]
 nist_csf: [PR.AA-05]
