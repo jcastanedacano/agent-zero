@@ -1,54 +1,96 @@
 // skill: secure-network-isolation-agent
-// workspace: {workspace-name} | conectores: AzureActivity, FoundryAgents_CL, AzureNetworkAnalytics_CL
+// workspace: {workspace-name} | conectores: Azure Activity, diagnosticos de la cuenta Foundry, flujos de VNet (NTANetAnalytics), Azure Firewall (AZFWApplicationRule); Q1 corre en Azure Resource Graph
+// Validado en un workspace Sentinel y en Azure Resource Graph (oct 2026): la version anterior leia AzureNetworkAnalytics_CL (analisis de trafico de los flujos de NSG, que se retiran con los NSG flow logs el 30 de
+// septiembre de 2027; los flujos de VNet escriben en NTANetAnalytics) y FoundryAgents_CL (no existe en el workspace). Q1, Q4, Q5 y Q6 se ejecutaron contra datos reales. Q2 y Q3 leen tablas que no existen en el
+// workspace de validacion (NTANetAnalytics y AZFWApplicationRule): se probaron con un datatable construido con el esquema de Learn y estan marcadas NO VERIFICADAS con datos reales.
 
-// ── Query 1: Flujos de red desde subnet de agentes hacia internet ─────────────
-AzureNetworkAnalytics_CL
-| where TimeGenerated > ago(24h)
-| where SubType_s == "FlowLog"
-| where FlowDirection_s == "O"  // Outbound
-| where DestPublicIPs_s != ""   // tiene destino público
-| where SrcIP_s startswith "10."  // desde red interna
+// ── Query 1 (Azure Resource Graph, no Log Analytics): exposicion de red de las cuentas Foundry ─────────────────────
+// Resultado en la cuenta de validacion: acceso publico habilitado, sin private endpoints y sin inyeccion de red de salida.
+resources
+| where type =~ "microsoft.cognitiveservices/accounts" and kind =~ "AIServices"
+| extend PublicNetworkAccess = tostring(properties.publicNetworkAccess), DefaultAction = tostring(properties.networkAcls.defaultAction), PrivateEndpoints = array_length(properties.privateEndpointConnections), OutboundInjection = array_length(properties.networkInjections)
+| project name, resourceGroup, subscriptionId, PublicNetworkAccess, DefaultAction, PrivateEndpoints, OutboundInjection
+| extend Inbound = case(PublicNetworkAccess =~ "Disabled", "Sin acceso publico", DefaultAction =~ "Deny", "Redes seleccionadas", "Abierta a internet")
+| extend Outbound = iff(isnull(OutboundInjection) or OutboundInjection == 0, "Sin inyeccion de red de salida", "Con inyeccion de red de salida")
+
+// ── Query 2: Flujos de la subred de agentes hacia internet (NO VERIFICADA con datos reales) ────────────────────────
+// Requiere flujos de VNet con analisis de trafico hacia un Log Analytics workspace. Con la red administrada de Foundry no hay registro del trafico de salida (Learn: "no logging of outbound traffic support yet"),
+// asi que esta consulta solo sirve con una VNet propia. Columnas y valores de FlowType y SubType segun el esquema de NTANetAnalytics en Learn; Learn muestra FlowDirection como I u O en el esquema y como
+// Inbound u Outbound en sus consultas de ejemplo, por eso se aceptan las dos formas. Reemplaza agent_subnet por ResourceGroup/VirtualNetwork/Subnet de la subred delegada.
+let lookback = 24h;
+let agent_subnet = "rg-foundry/vnet-foundry/snet-agents";
+NTANetAnalytics
+| where TimeGenerated > ago(lookback)
+| where SubType == "FlowLog" and FlowType == "ExternalPublic"
+| where FlowDirection in ("O", "Outbound")
+| where SrcSubnet =~ agent_subnet
 | summarize
-    BytesSent   = sum(OutboundBytes_d),
-    FlowCount   = count(),
-    Destinations = make_set(DestPublicIPs_s, 10)
-  by SrcIP_s, VM_s, NSGList_s
+    BytesSent     = sum(BytesSrcToDest),
+    BytesReceived = sum(BytesDestToSrc),
+    AllowedFlows  = sum(AllowedOutFlows),
+    DeniedFlows   = sum(DeniedOutFlows),
+    Destinations  = make_set(DestPublicIps, 10)
+  by SrcSubnet, DestPort, L7Protocol
 | extend RiskLevel = case(BytesSent > 10000000, "Alto", BytesSent > 1000000, "Medio", "Bajo")
 | order by BytesSent desc
 
-// ── Query 2: Llamadas a endpoints externos desde agentes Foundry ──────────────
+// ── Query 3: Destinos (FQDN) que piden los agentes a traves del Azure Firewall (NO VERIFICADA con datos reales) ────
+// Requiere Azure Firewall con registros de estructura (tabla AZFWApplicationRule) enviados al workspace. Columnas segun el esquema de Learn. Reemplaza agent_subnet_cidr por el CIDR de la subred delegada.
+// Un FQDN permitido que no este en la lista aprobada, o un Deny repetido, es lo que hay que revisar. Los destinos de HTTPS sin inspeccion TLS aparecen solo como FQDN.
 let lookback = 7d;
-FoundryAgents_CL
+let agent_subnet_cidr = "192.168.0.0/24";
+AZFWApplicationRule
 | where TimeGenerated > ago(lookback)
-| where isnotempty(TargetUrl_s)
-| extend Domain = tostring(parse_url(TargetUrl_s).Host)
-| where Domain !has "azure.com"
-    and Domain !has "microsoft.com"
-    and Domain !has "windows.net"
-| summarize CallCount = count(), LastCall = max(TimeGenerated)
-    by AgentId_s, Domain
-| extend Risk = "Llamada externa no Azure — verificar si es destino aprobado"
-| order by CallCount desc
+| where ipv4_is_in_range(SourceIp, agent_subnet_cidr)
+| summarize Requests = count(), LastRequest = max(TimeGenerated), Rules = make_set(Rule, 5) by Fqdn, Action
+| extend Review = case(Action =~ "Deny", "Bloqueado por el firewall: confirmar si era un intento no autorizado", "Permitido: confirmar que el destino esta en la lista aprobada")
+| order by Requests desc
 
-// ── Query 3: Cambios en NSG rules (detectar apertura de reglas) ───────────────
+// ── Query 4: Reglas de NSG que abren la red (entrada desde internet o salida a internet o AzureCloud) ──────────────
+// Lee el cuerpo de la regla del evento Start y lo une con el Success por CorrelationId. La version anterior buscaba "Allow" e "Internet" como texto en todo el cuerpo y marcaba tambien reglas de entrada acotadas.
+// AzureCloud como destino de salida se marca porque cubre las direcciones de todos los clientes de Azure: no limita la exfiltracion (Learn: una etiqueta de servicio no se puede acotar a un tenant ni a un recurso).
+// Resultado en la cuenta de validacion: la regla de entrada que existe en 180 dias tiene un origen concreto, asi que la consulta devuelve 0 filas (quitando el ultimo where se ve la regla con Nsg y Rule bien extraidos).
+let lookback = 30d;
+let succeeded = AzureActivity
+    | where TimeGenerated > ago(lookback)
+    | where OperationNameValue has "NETWORKSECURITYGROUPS/SECURITYRULES/WRITE" and ActivityStatusValue == "Success"
+    | distinct CorrelationId;
 AzureActivity
-| where TimeGenerated > ago(7d)
-| where ResourceProviderValue == "MICROSOFT.NETWORK"
-| where OperationNameValue has "networkSecurityGroups/securityRules"
-| where ActivityStatusValue == "Success"
-| extend
-    RuleName = tostring(parse_json(Properties).resource),
-    Action   = tostring(parse_json(Properties).requestbody)
-| where Action has "Allow" and Action has "Internet"
-| project TimeGenerated, Caller, RuleName, Action
-| extend Alert = "NSG rule Allow Internet creada — verificar si es intencional"
+| where TimeGenerated > ago(lookback)
+| where OperationNameValue has "NETWORKSECURITYGROUPS/SECURITYRULES/WRITE" and ActivityStatusValue == "Start"
+| join kind=leftsemi succeeded on CorrelationId
+| extend Body = parse_json(tostring(parse_json(Properties).requestbody)), Entity = tostring(parse_json(Properties).entity)
+| extend Rule = tostring(Body.name), Access = tostring(Body.properties.access), Direction = tostring(Body.properties.direction),
+         SourcePrefix = tostring(Body.properties.sourceAddressPrefix), DestinationPrefix = tostring(Body.properties.destinationAddressPrefix),
+         DestinationPort = tostring(Body.properties.destinationPortRange), Nsg = tostring(split(Entity, "/")[-3])
+| extend Exposure = case(
+    Access == "Allow" and Direction == "Inbound" and SourcePrefix in ("*", "Internet", "0.0.0.0/0"), "Entrada abierta a internet",
+    Access == "Allow" and Direction == "Outbound" and DestinationPrefix in ("*", "Internet", "AzureCloud"), "Salida abierta (Internet o AzureCloud)",
+    "")
+| where isnotempty(Exposure)
+| project TimeGenerated, Caller, Nsg, Rule, Direction, SourcePrefix, DestinationPrefix, DestinationPort, Exposure
 | order by TimeGenerated desc
 
-// ── Query 4: Private Endpoint — estado de conexiones ─────────────────────────
+// ── Query 5: Cambios en private endpoints de la red y de la cuenta Foundry ─────────────────────────────────────────
+// Crear, borrar o aprobar un private endpoint cambia quien puede llegar a la cuenta. Un cambio de publicNetworkAccess en la cuenta aparece como ACCOUNTS/WRITE (ver Q4 del skill secure-managed-identity-foundry) y
+// el Activity Log no trae la propiedad: comparalo con Q1.
+// Resultado en la cuenta de validacion: 0 filas en 180 dias (coherente con Q1: sin private endpoints).
+let lookback = 180d;
 AzureActivity
+| where TimeGenerated > ago(lookback)
+| where OperationNameValue in~ ("MICROSOFT.NETWORK/PRIVATEENDPOINTS/WRITE", "MICROSOFT.NETWORK/PRIVATEENDPOINTS/DELETE", "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/PRIVATEENDPOINTCONNECTIONS/WRITE", "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/PRIVATEENDPOINTCONNECTIONS/DELETE")
+| where ActivityStatusValue == "Success"
+| extend Target = tostring(parse_json(Properties).entity)
+| project TimeGenerated, Caller, OperationNameValue, Target
+| order by TimeGenerated desc
+
+// ── Query 6: Llamadas a la cuenta desde direcciones que no son privadas ────────────────────────────────────────────
+// Con acceso publico deshabilitado y un private endpoint, lo esperado es 0 filas. La IP del llamador viene con los ultimos octetos enmascarados, asi que se compara solo el prefijo. Que IP registra el
+// diagnostico para el trafico que entra por el private endpoint NO esta verificado: la cuenta de validacion tiene el acceso publico habilitado.
+// Resultado en la cuenta de validacion: 598 llamadas en 30 dias desde 17 prefijos publicos (la cuenta esta abierta a internet).
+AzureDiagnostics
 | where TimeGenerated > ago(30d)
-| where ResourceProviderValue == "MICROSOFT.NETWORK"
-| where OperationNameValue has "privateEndpoints"
-| where ActivityStatusValue == "Success"
-| project TimeGenerated, Caller, ResourceGroup, OperationNameValue, Resource
-| order by TimeGenerated desc
+| where ResourceProvider == "MICROSOFT.COGNITIVESERVICES" and Category == "RequestResponse"
+| where not(CallerIPAddress startswith "10." or CallerIPAddress startswith "192.168." or CallerIPAddress matches regex @"^172\.(1[6-9]|2[0-9]|3[01])\.")
+| summarize Requests = count(), LastCall = max(TimeGenerated), Prefixes = dcount(CallerIPAddress) by Resource
+| order by Requests desc

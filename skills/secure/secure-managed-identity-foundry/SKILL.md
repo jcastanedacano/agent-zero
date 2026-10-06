@@ -4,149 +4,207 @@ version: "1.0"
 pillar: secure
 subdomain: ms-foundry
 description: >-
-  Replaces static credentials (API keys) in Azure AI Foundry agents with
-  managed identities, eliminating secrets in code and configuration, and
-  applying granular RBAC over the Azure resources the agent needs to access.
-tags: [secure, foundry, managed-identity, azure-rbac, no-secrets, workload-identity]
+  Replaces API keys on Microsoft Foundry resources with Microsoft Entra ID
+  authentication: managed and workload identities for the apps that call
+  Foundry, Foundry roles instead of key access, agent identities for the
+  tools an agent calls, and disableLocalAuth to turn key access off.
+tags: [secure, foundry, managed-identity, azure-rbac, no-secrets, workload-identity, agent-identity]
 atlas_techniques: [AML.T0055, AML.T0040]
 d3fend_techniques: [D3-CH, D3-UAP]
 nist_ai_rmf: [MANAGE-1.3, GOVERN-2.2]
 nist_csf: [PR.AA-02, PR.AC-01]
-ms_license: [Azure AI Foundry, Azure Subscription]
-ms_roles: [Owner or User Access Administrator (for role assignments), Azure AI Developer]
+ms_license: [Microsoft Foundry, Azure subscription]
+ms_roles: [Owner or Role Based Access Control Administrator (role assignments), Contributor or Foundry Account Owner (change the Foundry resource), Foundry User (test the calls)]
 effort_hours: 5
 ---
 
 ## When to use
 
-- Pillar 1 detected Foundry endpoints with `auth_mode: key`
-- Agents that access Storage, Key Vault, or Cognitive Services via API key
-- Before moving any Foundry agent to production
+- The inventory (Query 1, or the `discover-enumerate-foundry-agents` skill) shows Foundry resources with `disableLocalAuth` false
+- Query 2 shows people or applications listing the account keys
+- Applications, pipelines or scripts that send an `api-key` header to a Foundry or Azure OpenAI endpoint
+- Agents whose tools use connection strings or keys instead of an agent identity
+- Before moving any Foundry project to production
 
-## Why managed identity over API keys
+## What this skill covers
 
-API keys are static secrets: they do not rotate automatically, they can leak
-into logs, environment variables, or repositories, and they have no granular
-scope. Managed Identity eliminates the secret entirely — Entra ID provides
-ephemeral tokens automatically.
+A Foundry resource is a `Microsoft.CognitiveServices/accounts` resource of kind `AIServices`; projects are child resources. Key access is a property of the
+account (`disableLocalAuth`), not of an endpoint. Azure Machine Learning online endpoints (`az ml online-endpoint`, an `auth_mode` of `key` or `aad_token`) are
+a different product and are not covered here.
 
-## Managed identity types for Foundry agents
+## Why Entra ID instead of keys
 
-- **System-assigned**: tied to the resource lifecycle (deleted with the resource). Recommended for single-purpose agents.
-- **User-assigned**: independent of the resource, reusable. Recommended when multiple agents share the same permission set.
+A key is a static secret shared by everyone who holds it: it does not rotate by itself, it leaks into logs, environment variables and repositories, it says
+nothing about who used it, and it carries the same access for every caller. An Entra token is short lived, belongs to an identity that RBAC can scope and that
+the sign-in logs record.
+
+There is a second reason that is easy to miss. While local authentication is on, role assignments do not limit key use: the built-in role Cognitive Services User
+"lets you read and list keys", and Cognitive Services Contributor can view and regenerate them (the Cognitive Services OpenAI User role cannot). Whoever can list
+the keys can call the account without a token. Only `disableLocalAuth` closes that path.
+
+## Which identity does what
+
+| Caller | Credential | Role it needs |
+|---|---|---|
+| Developer or application calling the project or its agents | Entra token for `https://ai.azure.com/.default` (user, managed identity or workload identity) | **Foundry User** to build; **Foundry Agent Consumer** if it only calls agents (project or agent scope) |
+| The project's managed identity | Managed identity of the Foundry resource and project | **Foundry User** on the Foundry resource (Learn's minimum assignment) |
+| An agent calling a tool or a downstream resource | Agent identity (a service principal), not a key | An RBAC role on the target resource (Storage Blob Data Reader, Key Vault Secrets User, and so on) |
+| An application calling the account-level OpenAI endpoint directly | Entra token | **Foundry User** or **Cognitive Services OpenAI User** on the account |
+
+Role IDs (use the ID in scripts: the Foundry roles were renamed from Azure AI User, Azure AI Owner, Azure AI Account Owner and Azure AI Project Manager, and the name
+can differ while the rename rolls out):
+
+| Role | ID |
+|---|---|
+| Foundry User | `53ca6127-db72-4b80-b1b0-d745d6d5456d` |
+| Foundry Agent Consumer | `eed3b665-ab3a-47b6-8f48-c9382fb1dad6` |
+| Foundry Project Manager | `eadc314b-1a2d-4efa-be10-5d325db5065e` |
+| Foundry Account Owner | `e47c6f54-e4a2-4754-9501-8e0985b135e1` |
+| Foundry Owner | `c883944f-8b7b-4483-af10-35834be79c4a` |
+
+Two roles to keep out of Foundry assignments. Microsoft Learn says not to assign the built-in roles that start with `Cognitive Services` in Foundry scenarios
+(the exception is Cognitive Services Usages Reader, to see quota), and not to use `Azure AI Developer`, which is scoped to Azure Machine Learning workspaces and Foundry
+hubs and not to Foundry projects. One Learn page about keyless access for Foundry Models still names Cognitive Services User for inference callers; this skill follows the
+RBAC article, because that role also lists keys.
 
 ## Workflow
 
-### Step 1 — Identify agents with active API keys
+### Step 1 — Find the Foundry resources that still accept keys
+
+Query 1 in `queries/` (Azure Resource Graph) lists every Foundry resource with its `disableLocalAuth` value. From the CLI (needs the `resource-graph` extension):
 
 ```bash
-az ml online-endpoint list \
-  --workspace-name {foundry-workspace} \
-  --resource-group {resource-group} \
-  --query "[?auth_mode=='key'].{Name:name, AuthMode:auth_mode}" \
-  --output table
+az graph query -q "resources | where type =~ 'microsoft.cognitiveservices/accounts' and kind =~ 'AIServices' | project name, resourceGroup, disableLocalAuth=tostring(properties.disableLocalAuth), identity=tostring(identity.type)" -o table
 ```
 
-### Step 2 — Enable system-assigned managed identity on the endpoint
+Then run Query 2 (who lists the keys) and Query 6 (who still calls the account, and from where) to know what will break when the keys go away.
+
+### Step 2 — Give every caller an Entra identity
+
+**An application on Azure compute**: a system-assigned managed identity on that host, or one user-assigned identity shared by several workloads.
 
 ```bash
-az ml online-endpoint update \
-  --name {endpoint-name} \
-  --workspace-name {foundry-workspace} \
-  --resource-group {resource-group} \
-  --set identity.type=SystemAssigned
+az identity create   --name "mi-{app-name}"   --resource-group {resource-group}   --location {region}
 ```
 
-Or create the user-assigned managed identity first:
+Attach it to the host (App Service, Container Apps, Functions, VM, AKS) as that host's documentation describes.
+
+**A pipeline or a service outside Azure**: a federated identity credential (workload identity federation) on an app registration or on a user-assigned managed
+identity, not a client secret.
+
+**An agent inside Foundry**: nothing to create. When the first agent of a project is created, Foundry provisions a default agent identity blueprint and a default
+agent identity for the project. Publishing an agent creates a dedicated blueprint and agent identity for it.
+
+### Step 3 — Assign Foundry roles at the smallest scope
+
+Minimum for a new project: Foundry User on the Foundry resource for the user principal and for the project's managed identity (both are added automatically when the
+project is created in the Foundry portal by someone who can assign roles). An application that only calls agents gets Foundry Agent Consumer.
 
 ```bash
-# Create the user-assigned identity
-az identity create \
-  --name "mi-agent-{agent-name}" \
-  --resource-group {resource-group} \
-  --location centralus
-
-# Assign it to the endpoint
-az ml online-endpoint update \
-  --name {endpoint-name} \
-  --workspace-name {foundry-workspace} \
-  --resource-group {resource-group} \
-  --set "identity.type=UserAssigned" \
-  --set "identity.user_assigned_identities[0].resource_id={managed-identity-resource-id}"
-```
-
-### Step 3 — Change auth_mode from key to aad_token
-
-```bash
-az ml online-endpoint update \
-  --name {endpoint-name} \
-  --workspace-name {foundry-workspace} \
-  --resource-group {resource-group} \
-  --auth-mode aad_token
-```
-
-### Step 4 — Assign minimal RBAC to the managed identity
-
-Roles by accessed resource:
-
-```bash
-# Storage — read-only if the agent only reads data
+# Foundry User on the Foundry resource
 az role assignment create \
-  --assignee {managed-identity-principal-id} \
+  --assignee-object-id {principal-id} \
+  --assignee-principal-type ServicePrincipal \
+  --role "53ca6127-db72-4b80-b1b0-d745d6d5456d" \
+  --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.CognitiveServices/accounts/{account-name}"
+
+# Foundry Agent Consumer at project scope (the Azure portal only assigns it at account scope; use the CLI for project or agent scope)
+az role assignment create \
+  --assignee-object-id {principal-id} \
+  --assignee-principal-type ServicePrincipal \
+  --role "eed3b665-ab3a-47b6-8f48-c9382fb1dad6" \
+  --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.CognitiveServices/accounts/{account-name}/projects/{project-name}"
+```
+
+Query 3 lists the role assignments that touch Foundry and flags the ones that do not belong (Cognitive Services roles that can list keys, Azure AI Developer).
+
+### Step 4 — Let agents reach tools and data through the agent identity
+
+Unpublished agents of a project share the project's agent identity; a published agent has its own. Find the identity in the Azure portal: project (or agent application)
+> Overview > JSON View, field `agentIdentityId`. Assign the role on the target resource to that identity:
+
+```bash
+az role assignment create \
+  --assignee-object-id "{agentIdentityId}" \
+  --assignee-principal-type ServicePrincipal \
   --role "Storage Blob Data Reader" \
   --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.Storage/storageAccounts/{storage-account}"
-
-# Key Vault — secrets-get only if it needs to read secrets
-az role assignment create \
-  --assignee {managed-identity-principal-id} \
-  --role "Key Vault Secrets User" \
-  --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.KeyVault/vaults/{kv-name}"
-
-# Cognitive Services — user role only if calling OpenAI / Azure AI
-az role assignment create \
-  --assignee {managed-identity-principal-id} \
-  --role "Cognitive Services User" \
-  --scope "/subscriptions/{subscription-id}/resourceGroups/{resource-group}"
 ```
 
-### Step 5 — Update the agent's code to use DefaultAzureCredential
+For Key Vault use Key Vault Secrets User and the audience `https://vault.azure.net`; for Storage the audience is `https://storage.azure.com`, for Microsoft Graph
+`https://graph.microsoft.com`. A wrong audience fails authentication even when the role is right. Only some tools support agent identity authentication, so check the tool.
+When you publish an agent, its tools switch to the new identity: assign the roles again.
+
+### Step 5 — Change the client code to tokens
 
 ```python
-from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
+from openai import OpenAI
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
-# No secrets — DefaultAzureCredential uses the managed identity automatically
-credential = DefaultAzureCredential()
-blob_client = BlobServiceClient(
-    account_url="https://{storage}.blob.core.windows.net",
-    credential=credential
+token_provider = get_bearer_token_provider(
+    DefaultAzureCredential(),
+    "https://ai.azure.com/.default"
+)
+
+client = OpenAI(
+    base_url="https://{resource}.openai.azure.com/openai/v1/",
+    api_key=token_provider,
 )
 ```
 
-### Step 6 — Revoke previous API keys
+`DefaultAzureCredential` uses the managed identity when the code runs on Azure and the developer's sign-in on a workstation: no key in code, environment or Key Vault.
 
-```bash
-# Regenerate keys to invalidate the old ones
-az ml online-endpoint regenerate-keys \
-  --name {endpoint-name} \
-  --workspace-name {foundry-workspace} \
-  --resource-group {resource-group} \
-  --key-type primary
+### Step 6 — Turn key access off
+
+Learn documents three ways: the PowerShell cmdlet, the Azure Policy built-ins and the template property.
+
+```powershell
+Connect-AzAccount
+Set-AzCognitiveServicesAccount -ResourceGroupName "{resource-group}" -Name "{account-name}" -DisableLocalAuth $true
+(Get-AzCognitiveServicesAccount -ResourceGroupName "{resource-group}" -Name "{account-name}").DisableLocalAuth   # True
 ```
 
-Verify no external system is still using the keys before revoking them.
+- Azure Policy, to enforce it by subscription or resource group: "Azure AI Services resources should have key access disabled (disable local authentication)"
+  and the "Configure Azure AI Services resources to disable local key access" variant that applies the change.
+- Bicep or ARM: `disableLocalAuth: true` on the account.
+
+The change is made on the control plane at once, but the gateway can keep accepting a key that was valid until its cache refreshes: Learn says minutes in general and
+up to several hours. Do not treat the control as active until a request with an old key returns HTTP 401 (`Access denied due to invalid subscription key or wrong API endpoint`).
+Anything that still needs a key stops working (the policy description names Azure OpenAI Studio).
+
+### Step 7 — If keys have to stay for a while
+
+Rotate them and keep watching who lists them. Rotate one key at a time so the second one keeps serving until callers move:
+
+```bash
+az cognitiveservices account keys regenerate \
+  --name {account-name} \
+  --resource-group {resource-group} \
+  --key-name Key1
+```
+
+Remove the role assignments that can list keys (Cognitive Services User, Cognitive Services Contributor, Contributor, Owner) from people who do not manage the resource, and
+alert on Query 2. Once `disableLocalAuth` is true, listing and regenerating keys are rejected.
 
 ## Verification
 
-- [ ] The endpoint's `auth_mode` is `aad_token` (not `key`)
-- [ ] Managed identity visible on the endpoint: `az ml online-endpoint show --query identity`
-- [ ] Role assignments assigned to the managed identity (not to the app SP)
-- [ ] Agent code uses `DefaultAzureCredential` with no hardcoded secrets
-- [ ] Previous API keys invalidated
-- [ ] Call test succeeds with the new auth mode
+- [ ] Query 1: every Foundry resource in scope shows `LocalAuthDisabled` true
+- [ ] A request with an old key returns HTTP 401 once the change has propagated
+- [ ] Query 2 returns no new `listKeys` rows after the change
+- [ ] Query 3 shows only Foundry roles at the intended scope, and no Azure AI Developer or Cognitive Services roles on Foundry resources
+- [ ] Callers sign in with Entra: Query 5 shows the managed identities and agent identities that now request tokens
+- [ ] The application code has no key, and no Foundry key is kept in an environment variable or in Key Vault
+- [ ] Each published agent has its role assignments on its own agent identity
+- [ ] Call test succeeds with a token
 
 ## Implementation notes
 
-- Creating managed identities requires Azure CLI or Bicep/ARM — Graph API does not support direct creation of user-assigned managed identities
-- To migrate from client secret to managed identity: create the MI, assign equivalent roles, update the agent configuration, verify function, then revoke the secret
-- `sp-*` (service principals with a secret) should be replaced progressively; prioritize those with write permissions over `Mail`, `Files`, or `Sites`
+- Creating a user-assigned managed identity needs Azure CLI, Bicep or ARM: Microsoft Graph does not create them
+- To migrate a client secret to a managed identity: create the identity, assign the equivalent roles, switch the configuration, verify, then delete the secret. Service principals
+  with a secret (`sp-*`) should be replaced progressively; start with those that write to `Mail`, `Files` or `Sites`
+- Query 6 does not tell key calls from token calls: `callerObjectId` was empty in every diagnostic record of the validation account. `disableLocalAuth` is the control that decides
+- The Activity Log records that the account was written (Query 4) but not which property changed; compare with Query 1. It does record `listKeys` (Query 2)
+- The agent identity steps follow Learn's Agent Application publishing model; Learn notes that the publishing experience and the agent endpoint model are changing, so confirm which identity a
+  published agent uses in your project before assigning roles
+- Removed in this version, because it describes a different product: `az ml online-endpoint list`, `update` and `regenerate-keys`, an `auth_mode` of `key` or `aad_token`, the
+  `FoundryAgents_CL` table (it does not exist in the validation workspace), the `Cognitive Services User` role assignment and the Azure AI Developer role for Foundry access
