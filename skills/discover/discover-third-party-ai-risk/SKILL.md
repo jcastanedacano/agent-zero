@@ -60,15 +60,18 @@ $response.value | Where-Object { $_.publisher -ne "Microsoft" } |
 
 ### Step 2 — Audit third-party application permissions in Entra
 
+> Run on a Sentinel workspace (Oct 2026): the earlier version read `modifiedProperties[0]`, which holds `IsAdminConsent`, so no scope could match. The scopes are in the property `ConsentAction.Permissions`. The query lists every high-privilege consent, not only third-party ones: review the publisher of each app.
+
 ```kql
-// Third-party Entra App registrations with high-privilege permissions
+// Entra consents with high-privilege delegated scopes
 AuditLogs
 | where TimeGenerated > ago(30d)
 | where OperationName == "Consent to application"
 | extend AppName = tostring(TargetResources[0].displayName)
-| extend Publisher = tostring(TargetResources[0].type)
-| extend ScopesGranted = tostring(TargetResources[0].modifiedProperties[0].newValue)
 | extend ConsentedBy = tostring(InitiatedBy.user.userPrincipalName)
+| mv-apply MP = TargetResources[0].modifiedProperties on (
+    where tostring(MP.displayName) == "ConsentAction.Permissions"
+    | summarize ScopesGranted = take_any(tostring(MP.newValue)))
 | extend IsHighPrivilege = ScopesGranted has_any (
     "Files.ReadWrite.All",
     "Mail.ReadWrite",
@@ -82,25 +85,26 @@ AuditLogs
 | sort by TimeGenerated desc
 ```
 
+Application permissions are granted by an app role assignment, which this query does not read: the app role branch of P02 Q4 lists those.
+
 ### Step 3 — Detect external MCP servers connected to agents
 
+> **Not verified (Oct 2026).** The earlier version read `ConnectorActionExecuted`, `ExternalToolInvoked` and `MCPServerConnected` from `CloudAppEvents`; none of them is documented, and the validation tenant has no agent events there. Microsoft Learn documents `ExecuteToolByMCPServer` (alongside `InvokeAgent`, `InferenceCall`, `ExecuteToolBySDK` and `ExecuteToolByGateway`) for Agent 365 observability, but the tool endpoint is not surfaced in Advanced Hunting. The inventory of declared MCP servers does exist: `AgentsInfo.McpServers` is populated for local agents (1 agent on the validation tenant). Start from that, and use the ActionType below only once your tenant emits it.
+
 ```kql
-// CloudAppEvents — agent connections to external endpoints (possible MCP servers)
+// 1. Declared MCP servers per agent (AgentsInfo, Advanced Hunting)
+AgentsInfo
+| where Timestamp > ago(7d)
+| summarize arg_max(Timestamp, *) by AgentId
+| where isnotempty(McpServers) and tostring(McpServers) != "[]"
+| project AgentId, Name, Platform, McpServers
+| sort by Name asc
+
+// 2. MCP tool executions (CloudAppEvents, once the ActionType is emitted in the tenant)
 CloudAppEvents
-| where TimeGenerated > ago(7d)
-| where Application in ("Copilot Studio", "Azure AI Foundry", "Microsoft Power Platform")
-    and ActionType in ("ConnectorActionExecuted", "ExternalToolInvoked", "MCPServerConnected")
-| extend ToolEndpoint = tostring(RawEventData["ToolEndpointUrl"])
-| extend ToolPublisher = tostring(RawEventData["ToolPublisher"])
-| where isnotempty(ToolEndpoint)
-    and ToolEndpoint !has "microsoft.com"
-    and ToolEndpoint !has "azure.com"
-| summarize
-    InvocationCount = count(),
-    AffectedAgents = make_set(tostring(RawEventData["AgentId"]), 10),
-    LastSeen = max(TimeGenerated)
-    by ToolEndpoint, ToolPublisher
-| extend RiskNote = "External MCP server or tool — verify publisher and data access scope"
+| where Timestamp > ago(7d)
+| where ActionType == "ExecuteToolByMCPServer"
+| summarize InvocationCount = count(), LastSeen = max(Timestamp) by AccountDisplayName, Application
 | sort by InvocationCount desc
 ```
 
@@ -145,4 +149,4 @@ For each identified agent, complete the following table:
 - Plugins installed from the Microsoft 365 App Store go through Microsoft's certification process, but they are not immune to post-certification compromise — treat certification as a starting point, not a guarantee
 - External MCP servers are the highest-risk vector: a compromised MCP server can inject malicious instructions into any agent that invokes it, with the agent's own permissions
 - Power Platform DLP can block external connectors at the environment level, which is the most effective control for unauthorized MCP servers.
-- The `CloudAppEvents` table with `ActionType == "ExternalToolInvoked"` may not exist in every tenant depending on Defender configuration — validate availability
+- The `CloudAppEvents` agent ActionTypes (`InvokeAgent`, `ExecuteToolByMCPServer`, ...) depend on the Defender and Agent 365 configuration and were absent on the validation tenant — validate availability first

@@ -6,6 +6,9 @@
 // SCHEMA NOTES (verified live against tenant AgentsInfo via pack_all(), Sep 2026):
 //   AgentsInfo.Name | Owners: dynamic, can be null
 //   EntraAgentID (capital D at the end) | Both Timestamp and TimeGenerated exist
+//   AgentsInfo.Timestamp is the daily snapshot of the inventory, not agent activity. Owners are user object ids.
+// Re-run on 2026-10-05: Q1 and Q3 in Advanced Hunting (real AgentsInfo), Q4 on a Sentinel workspace (real AuditLogs).
+//      Q2, Q5 and Q6 have no source data on the validation tenant and stay NOT VERIFIED.
 // =============================================================================
 
 
@@ -17,6 +20,7 @@
 //      (agents with an EntraAgentID are excluded; they have a dedicated identity)
 //      NoEntraIdentity also covers Copilot Studio agents created before May 2026 (an app registration, not an
 //      agent identity) and Agent Builder agents (no identity properties): confirm before calling it laundering.
+// Validated live (Oct 2026, Advanced Hunting): runs without errors against the real AgentsInfo.
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
@@ -44,6 +48,8 @@ AgentsInfo
 //      Microsoft documents Copilot Studio publish activity in the Purview audit log (for example
 //      BotUpdateOperation-BotPublish, BotCreate, BotUpdateOperation-BotShare), not in Entra AuditLogs.
 //      Treat this as a template: confirm the event source and name before relying on it.
+//      Also: in AuditLogs, AdditionalDetails is an array of {key, value} objects, so AdditionalDetails["AgentSource"]
+//      returns empty even when the event exists. Read it with mv-apply on the key once the event source is confirmed.
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(30d)
@@ -64,24 +70,32 @@ AuditLogs
 
 
 // -----------------------------------------------------------------------------
-// Q3: Agents Without Lifecycle Review — Stale in Production
-// Use: Identify agents in production without activity in the review window
+// Q3: Agents Without Lifecycle Review — Not Changed in Months
+// Use: Identify active agents that nobody has changed or published in the review window
 //      Signals candidates for decommission review
+// Validated live (Oct 2026, Advanced Hunting): the earlier version took max(Timestamp) as "last activity", but
+//      AgentsInfo.Timestamp is the daily snapshot, so every agent reported 0 days and the query returned nothing.
+//      It now uses the agent's own last change (LastUpdatedDateTime, LastPublishedDateTime, CreatedDateTime) on the
+//      latest snapshot: 195 of the active agents were last changed more than 60 days ago, 78 of them more than 180.
+//      This measures the last change, not usage: an unchanged agent can still be in daily use. AgentsInfo has no
+//      activity column, so a usage-based review needs CloudAppEvents (InvokeAgent) once it carries data.
 // -----------------------------------------------------------------------------
 AgentsInfo
-| where Timestamp > ago(90d)
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus == "Active"
 | extend OwnersStr = tostring(Owners)
-| summarize LastActivity = max(Timestamp) by AgentId, Name, Platform, OwnersStr
 | extend OwnerDisplay = iff(OwnersStr == "" or OwnersStr == "[]", "UNASSIGNED", OwnersStr)
-| extend DaysSinceActivity = datetime_diff('day', now(), LastActivity)
-| where DaysSinceActivity > 60
+| extend LastChange = max_of(LastUpdatedDateTime, LastPublishedDateTime, CreatedDateTime)
+| extend DaysSinceChange = datetime_diff('day', now(), LastChange)
+| where DaysSinceChange > 60
 | extend LifecycleRisk = case(
-    DaysSinceActivity > 180, "Critical — exceeds 6-month review window",
-    DaysSinceActivity > 90,  "High — exceeds 3-month review window",
+    DaysSinceChange > 180, "Critical — exceeds 6-month review window",
+    DaysSinceChange > 90,  "High — exceeds 3-month review window",
     "Medium — approaching review threshold"
 )
-| sort by DaysSinceActivity desc
-| project AgentId, Name, Platform, OwnerDisplay, DaysSinceActivity, LifecycleRisk
+| sort by DaysSinceChange desc
+| project AgentId, Name, Platform, OwnerDisplay, LastChange, DaysSinceChange, LifecycleRisk
 
 
 // -----------------------------------------------------------------------------
@@ -91,13 +105,22 @@ AgentsInfo
 // NOT VERIFIED (live tenant, Oct 2026): the grant side uses real Entra operations. The approval side
 //      ("AgentPermissionApproved") is not confirmed to exist, so as written EVERY grant is reported as
 //      "without approval". Use it as an inventory of grants, not as proof of a missing approval.
+// Validated live (Oct 2026, Sentinel workspace, grant side): the earlier version read TargetResources[0] as the
+//      agent and modifiedProperties[0] as the permission. In these events TargetResources[0] is the resource that
+//      receives the grant and TargetResources[1] is the client service principal; the permission is in the property
+//      DelegatedPermissionGrant.Scope (delegated) or AppRole.Value (application), and modifiedProperties[0] is the
+//      app role id or a different property. 28 grants in 30 days now come back with permission, client and
+//      initiator populated (initiator falls back to the app when no user started it).
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(30d)
 | where OperationName in ("Add delegated permission grant", "Add app role assignment to service principal")
-| extend AgentObjectId = tostring(TargetResources[0].id)
-| extend NewPermission = tostring(TargetResources[0].modifiedProperties[0].newValue)
-| extend GrantedBy = tostring(InitiatedBy.user.userPrincipalName)
+| extend ResourceName = tostring(TargetResources[0].displayName)
+| extend AgentObjectId = tostring(TargetResources[1].id)
+| mv-apply MP = TargetResources[0].modifiedProperties on (
+    where tostring(MP.displayName) in ("DelegatedPermissionGrant.Scope", "AppRole.Value")
+    | summarize NewPermission = take_any(tostring(MP.newValue)))
+| extend GrantedBy = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
 | join kind=leftouter (
     AuditLogs
     | where OperationName == "AgentPermissionApproved"
@@ -107,6 +130,7 @@ AuditLogs
 | project
     TimeGenerated,
     AgentObjectId,
+    ResourceName,
     NewPermission,
     GrantedBy,
     RiskNote = "Permission granted without corresponding approval event"
@@ -116,6 +140,10 @@ AuditLogs
 // -----------------------------------------------------------------------------
 // Q5: Maker Activity — Power Platform Agents Without DLP Policy Coverage
 // Use: Detect agents created by makers using connectors outside DLP boundaries
+// NOT VERIFIED (live tenant, Oct 2026): CloudAppEvents has no "Microsoft Power Platform" application events in the
+//      validation tenant, and "AgentConnectorAdded" and the RawEventData fields (ConnectorName, DLPClassification)
+//      are not documented, so the query was not run against live events. Treat it as a template: Power Platform
+//      maker and connector activity is documented in the Purview audit log, not under this ActionType.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where Timestamp > ago(30d)
@@ -144,7 +172,8 @@ CloudAppEvents
 // NOT VERIFIED (live tenant, Oct 2026): none of the approval events (AgentActionApproved,
 //      AgentConsentGranted, AgentStepApproved, UserApprovedAgentAction) is confirmed to exist in
 //      AuditLogs, and the SessionId / AgentId fields read from CloudAppEvents RawEventData are unverified.
-//      As written, every multi-action session would be reported. Treat it as a design sketch.
+//      As written, every multi-action session would be reported. Treat it as a design sketch. AdditionalDetails
+//      is an array of {key, value} objects in AuditLogs, so AdditionalDetails["SessionId"] returns empty (see Q2).
 // -----------------------------------------------------------------------------
 let CompoundActionTypes = dynamic([
     "FileDownloaded", "FileCopied", "FileUploaded",

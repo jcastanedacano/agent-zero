@@ -1,5 +1,9 @@
 // skill: detect-agent-identity-abuse
 // workspace: {workspace-name} | conectores: AADServicePrincipalSignInLogs, AuditLogs-EntraID
+// Validado en un workspace Sentinel (oct 2026): las 5 consultas se ejecutan sin errores (Q1, Q2, Q3, Q4 y Q5 con
+// ventanas más largas que las de la regla, para tener datos). Q2 y Q3 se corrigieron; Q1, Q4 y Q5 no cambiaron.
+// Q4 y Q5 no devolvieron filas (no hay actividad que coincida), por lo que su lógica solo está validada
+// sintácticamente.
 
 // ── Query 1: SP de agente autenticando desde IP desconocida ──────────────────
 let corporate_prefixes = dynamic(["10.", "172.16.", "192.168.", "20.190."]);  // ajustar
@@ -25,16 +29,16 @@ AADServicePrincipalSignInLogs
 // ── Query 2: Agent spawning — SP creando nuevas aplicaciones o SPs ───────────
 AuditLogs
 | where TimeGenerated > ago(24h)
-| where OperationName has_any (
-    "Add application",
-    "Add service principal",
-    "Create application"
-)
+// Validado: la versión anterior devolvía 95 filas en 90 días, porque "or user == vacío" se cumple siempre que
+// inicia una app, así que el filtro por nombre no filtraba nada (servicios de Azure creando service principals).
+// Con el filtro por nombre aplicado quedan 5 filas, de servicios de Microsoft con "agent" en el nombre. Además,
+// "Create application" también coincidía con la operación de credenciales (Certificates and secrets management),
+// que no crea una aplicación.
+| where OperationName in ("Add application", "Add service principal")
 | extend
     InitiatorType = tostring(InitiatedBy.app.displayName)
 | where isnotempty(InitiatorType)  // iniciado por una app (no por un usuario humano)
 | where InitiatorType has_any ("agent", "bot", "copilot", "sp-", "PowerVirtual")
-    or tostring(InitiatedBy.user.userPrincipalName) == ""  // sin usuario humano
 | extend
     NewEntityName = tostring(TargetResources[0].displayName),
     NewEntityType = tostring(TargetResources[0].type),
@@ -52,10 +56,20 @@ AuditLogs
     "Create role assignment",
     "Add eligible member to role"
 )
-| extend
-    AssignedTo   = tostring(TargetResources[0].displayName),
-    RoleAssigned = tostring(TargetResources[1].displayName),
-    AssignedBy   = tostring(InitiatedBy.user.userPrincipalName)
+// Validado: la versión anterior leía el rol en TargetResources[1] y el principal en TargetResources[0]. Hay dos
+// formas de evento: en las operaciones de PIM el rol es un target de tipo Role con displayName; en las asignaciones
+// directas ("Add member to role", 19 de 47 eventos en 90 días) el target Role no trae nombre, el rol viene en la
+// propiedad Role.DisplayName del principal y un usuario trae userPrincipalName en lugar de displayName. Con ambas
+// formas leídas, los 47 eventos salen con rol y principal.
+| mv-apply TR = TargetResources on (
+    summarize
+        RoleElementName = take_anyif(tostring(TR.displayName), tostring(TR.type) == "Role"),
+        AssignedTo      = take_anyif(coalesce(tostring(TR.displayName), tostring(TR.userPrincipalName)), tostring(TR.type) in ("User", "ServicePrincipal", "Group")),
+        PrincipalProps  = take_anyif(TR.modifiedProperties, tostring(TR.type) in ("User", "ServicePrincipal", "Group")))
+| mv-apply MP = iff(array_length(PrincipalProps) > 0, PrincipalProps, dynamic([null])) on (
+    summarize RoleFromProps = take_anyif(tostring(parse_json(tostring(MP.newValue))), tostring(MP.displayName) == "Role.DisplayName"))
+| extend RoleAssigned = coalesce(RoleElementName, RoleFromProps)
+| extend AssignedBy = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
 | where AssignedTo has_any ("agent", "bot", "sp-", "copilot")
 | extend RiskLevel = case(
     RoleAssigned has_any ("Global Administrator", "Privileged Role Administrator",

@@ -1,62 +1,108 @@
 // skill: govern-pim-agent-roles
-// workspace: {workspace-name} | conector requerido: AuditLogs-EntraID
+// workspace: {workspace-name} | conector requerido: AuditLogs-EntraID, AzureActivity
+// Validado en un workspace Sentinel (oct 2026): Q1 a Q4 reescritas.
+//  - En los eventos PIM el rol y el principal llegan en TargetResources en un orden que cambia según la operación:
+//    se eligen por type, no por índice. Las asignaciones directas fuera de PIM ("Add member to role") tienen otra
+//    forma (el rol viene en la propiedad Role.DisplayName y el usuario en userPrincipalName): se leen en la Q3 de
+//    sentinel-identity-abuse.kql, y estas consultas solo usan las operaciones de PIM.
+//  - AdditionalDetails es un arreglo de {key, value} (Justification, StartTime, ExpirationTime): se lee por clave.
+//  - Cada activación genera tres eventos (requested, completed, expired) y el evento completed lo inicia una
+//    aplicación (el servicio PIM), no la persona: el principal es el target de tipo User, ServicePrincipal o Group.
 
-// ── Query 1: Activaciones PIM de service principals (agentes) ────────────────
+// ── Query 1: Activaciones PIM completadas, por principal y rol ────────────────
+// Para ver solo agentes, filtrar PrincipalType == "ServicePrincipal". La versión anterior mezclaba las
+// asignaciones elegibles ("Add eligible member to role") con las activaciones y leía el principal y el rol por
+// índice; la justificación salía como el arreglo completo de AdditionalDetails.
 AuditLogs
 | where TimeGenerated > ago(30d)
-| where OperationName has_any (
-    "Add eligible member to role",
-    "Add member to role completed (PIM activation)",
-    "Activate role assignment request"
-)
-| extend
-    PrincipalName = tostring(InitiatedBy.user.userPrincipalName),
-    TargetSP      = tostring(TargetResources[0].displayName),
-    RoleName      = tostring(TargetResources[1].displayName),
-    Justification = tostring(AdditionalDetails)
-| project TimeGenerated, PrincipalName, TargetSP, RoleName, Justification
+| where OperationName == "Add member to role completed (PIM activation)"
+| mv-apply TR = TargetResources on (
+    summarize
+        RoleName        = take_anyif(tostring(TR.displayName), tostring(TR.type) == "Role"),
+        TargetPrincipal = take_anyif(tostring(TR.displayName), tostring(TR.type) in ("User", "ServicePrincipal", "Group")),
+        PrincipalType   = take_anyif(tostring(TR.type), tostring(TR.type) in ("User", "ServicePrincipal", "Group")))
+| mv-apply AD = AdditionalDetails on (
+    summarize
+        Justification  = take_anyif(tostring(AD.value), tostring(AD.key) == "Justification"),
+        StartTime      = take_anyif(todatetime(AD.value), tostring(AD.key) == "StartTime"),
+        ExpirationTime = take_anyif(todatetime(AD.value), tostring(AD.key) == "ExpirationTime"))
+| project TimeGenerated, TargetPrincipal, PrincipalType, RoleName, Justification, StartTime, ExpirationTime
 | order by TimeGenerated desc
 
 // ── Query 2: Activaciones fuera de horario laboral (posible anomalía) ─────────
 let business_hours_start = 8;
 let business_hours_end   = 20;
+// Solo el evento completed: con "has PIM activation" cada activación se contaba tres veces (requested,
+// completed, expired), y el iniciador del evento completed es el servicio PIM, no la persona.
 AuditLogs
 | where TimeGenerated > ago(30d)
-| where OperationName has "PIM activation"
+| where OperationName == "Add member to role completed (PIM activation)"
 | extend HourUTC = datetime_part("Hour", TimeGenerated)
 | where HourUTC < business_hours_start or HourUTC > business_hours_end
-| extend
-    PrincipalName = tostring(InitiatedBy.user.userPrincipalName),
-    RoleName      = tostring(TargetResources[1].displayName)
-| project TimeGenerated, HourUTC, PrincipalName, RoleName
+| mv-apply TR = TargetResources on (
+    summarize
+        RoleName        = take_anyif(tostring(TR.displayName), tostring(TR.type) == "Role"),
+        TargetPrincipal = take_anyif(tostring(TR.displayName), tostring(TR.type) in ("User", "ServicePrincipal", "Group")),
+        PrincipalType   = take_anyif(tostring(TR.type), tostring(TR.type) in ("User", "ServicePrincipal", "Group")))
+| project TimeGenerated, HourUTC, TargetPrincipal, RoleName
 | extend Alert = "Activación PIM fuera de horario — revisar"
 | order by TimeGenerated desc
 
 // ── Query 3: Service principals con roles Azure RBAC directos (sin PIM) ───────
 // Detectar assignments permanentes que deberían ser elegibles
-AuditLogs
+// Las asignaciones de roles Azure RBAC no están en AuditLogs (Entra): están en AzureActivity. La versión anterior
+// leía una operación "Create role assignment" y un AdditionalDetails que no existen en AuditLogs, así que nunca
+// devolvía filas. El cuerpo de la petición (principalType, roleDefinitionId) solo viene en el evento "Start";
+// el evento "Success" no lo trae. El rol se resuelve por el GUID del rol integrado.
+let HighPrivilegeRoles = datatable(RoleGuid: string, RoleAssigned: string) [
+    "8e3af657-a8ff-443c-a75c-2fe8c4bcb635", "Owner",
+    "b24988ac-6180-42a0-ab88-20f7382dd24c", "Contributor",
+    "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9", "User Access Administrator"
+];
+AzureActivity
 | where TimeGenerated > ago(90d)
-| where OperationName has "Create role assignment"
-| where TargetResources has_any ("ServicePrincipal")
+| where OperationNameValue =~ "MICROSOFT.AUTHORIZATION/ROLEASSIGNMENTS/WRITE"
+| where ActivityStatusValue == "Start"
+| extend Props = parse_json(Properties)
+| extend Body = parse_json(tostring(Props.requestbody))
 | extend
-    AssignedTo   = tostring(TargetResources[0].displayName),
-    RoleAssigned = tostring(parse_json(tostring(AdditionalDetails)).roleDefinitionName),
-    Scope        = tostring(parse_json(tostring(AdditionalDetails)).scope)
-| where RoleAssigned in ("Owner", "Contributor", "User Access Administrator")
-| project TimeGenerated, AssignedTo, RoleAssigned, Scope
-| extend Risk = "Rol de alto privilegio asignado permanentemente — evaluar migración a PIM"
+    AssignedTo    = tostring(Body.properties.principalId),
+    PrincipalType = tostring(Body.properties.principalType),
+    RoleGuid      = tolower(extract(@"roleDefinitions/([0-9a-fA-F-]{36})", 1, tostring(Body.properties.roleDefinitionId)))
+| where PrincipalType == "ServicePrincipal"
+| join kind=inner HighPrivilegeRoles on RoleGuid
+| extend
+    Scope      = extract(@"^(.*)/providers/Microsoft\.Authorization/roleAssignments", 1, tostring(Props.entity)),
+    AssignedBy = Caller
+| project TimeGenerated, AssignedTo, RoleAssigned, Scope, AssignedBy
+| extend Risk = "Rol de alto privilegio asignado directamente: evaluar migración a PIM"
 | order by TimeGenerated desc
 
-// ── Query 4: Duración de activaciones PIM (detectar activaciones largas) ──────
+// ── Query 4: Duración y frecuencia de activaciones PIM (detectar activaciones largas) ──
+// La versión anterior calculaba la duración con toint(tostring(AdditionalDetails)), que no es un número (es un
+// arreglo de {key, value}), y agrupaba por el iniciador, que en el evento completed es el servicio PIM. La duración
+// sale de StartTime y ExpirationTime. En el workspace de validación hay 1 activación en 90 días (1 hora), por lo
+// que ningún umbral se cumple: la lógica de umbrales no se ejercitó con datos.
+let long_activation_hrs = 8;  // ajustar a la duración máxima configurada en la política del rol
 AuditLogs
 | where TimeGenerated > ago(30d)
-| where OperationName has "PIM activation"
-| extend
-    ActivationStart = TimeGenerated,
-    Duration        = toint(tostring(AdditionalDetails))  // horas si disponible
+| where OperationName == "Add member to role completed (PIM activation)"
+| mv-apply TR = TargetResources on (
+    summarize
+        RoleName        = take_anyif(tostring(TR.displayName), tostring(TR.type) == "Role"),
+        TargetPrincipal = take_anyif(tostring(TR.displayName), tostring(TR.type) in ("User", "ServicePrincipal", "Group")),
+        PrincipalType   = take_anyif(tostring(TR.type), tostring(TR.type) in ("User", "ServicePrincipal", "Group")))
+| mv-apply AD = AdditionalDetails on (
+    summarize
+        Justification  = take_anyif(tostring(AD.value), tostring(AD.key) == "Justification"),
+        StartTime      = take_anyif(todatetime(AD.value), tostring(AD.key) == "StartTime"),
+        ExpirationTime = take_anyif(todatetime(AD.value), tostring(AD.key) == "ExpirationTime"))
+| extend DurationHrs = datetime_diff("minute", ExpirationTime, StartTime) / 60.0
 | summarize
     ActivationCount = count(),
-    AvgDurationHrs  = avg(Duration)
-  by tostring(InitiatedBy.user.userPrincipalName)
-| where ActivationCount > 5
+    AvgDurationHrs  = avg(DurationHrs),
+    MaxDurationHrs  = max(DurationHrs),
+    LastActivation  = max(TimeGenerated)
+  by TargetPrincipal, RoleName
+| where ActivationCount > 5 or MaxDurationHrs > long_activation_hrs
 | order by ActivationCount desc

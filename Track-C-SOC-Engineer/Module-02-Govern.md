@@ -170,7 +170,7 @@ AuditLogs
 
 ### Step 6 — KQL: Graph drift — permission grants without approval correlation
 
-> **Not verified (Oct 2026).** The grant side (`Add delegated permission grant`, `Add app role assignment to service principal`) uses real Entra operations. The approval side (`AgentPermissionApproved`) is not confirmed to exist, so as written every grant is reported as "without approval". Use this as an inventory of grants, not as proof of a missing approval.
+> **Not verified (Oct 2026).** The grant side (`Add delegated permission grant`, `Add app role assignment to service principal`) uses real Entra operations. The approval side (`AgentPermissionApproved`) is not confirmed to exist, so as written every grant is reported as "without approval". Use this as an inventory of grants, not as proof of a missing approval. The grant side was run on a Sentinel workspace (Oct 2026): in these events `TargetResources[0]` is the resource that receives the grant and `TargetResources[1]` is the client service principal, and the permission is in the property `DelegatedPermissionGrant.Scope` or `AppRole.Value`, not in `modifiedProperties[0]`.
 
 ```kql
 AuditLogs
@@ -179,9 +179,12 @@ AuditLogs
     "Add delegated permission grant",
     "Add app role assignment to service principal"
 )
-| extend AgentObjectId = tostring(TargetResources[0].id)
-| extend NewPermission = tostring(TargetResources[0].modifiedProperties[0].newValue)
-| extend GrantedBy = tostring(InitiatedBy.user.userPrincipalName)
+| extend ResourceName = tostring(TargetResources[0].displayName)
+| extend AgentObjectId = tostring(TargetResources[1].id)
+| mv-apply MP = TargetResources[0].modifiedProperties on (
+    where tostring(MP.displayName) in ("DelegatedPermissionGrant.Scope", "AppRole.Value")
+    | summarize NewPermission = take_any(tostring(MP.newValue)))
+| extend GrantedBy = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
 | join kind=leftouter (
     AuditLogs
     | where OperationName == "AgentPermissionApproved"
@@ -191,6 +194,7 @@ AuditLogs
 | project
     TimeGenerated,
     AgentObjectId,
+    ResourceName,
     NewPermission,
     GrantedBy,
     RiskNote = "Permission granted without corresponding approval event"
