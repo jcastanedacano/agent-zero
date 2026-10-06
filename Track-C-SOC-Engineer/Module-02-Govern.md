@@ -139,32 +139,36 @@ AgentsInfo
 
 ---
 
-### Step 5 — KQL: Detect agents published without approval
+### Step 5 — KQL: Copilot Studio agents created, published or shared
 
-> **Not verified on a live tenant (Oct 2026).** No `AuditLogs` operation containing "agent", "bot", "copilot" or "publish" appeared in 90 days, so `AgentPublished` is not confirmed to be emitted. Microsoft documents Copilot Studio publish activity in the Purview audit log (for example `BotUpdateOperation-BotPublish`, `BotCreate`, `BotUpdateOperation-BotShare`), not in Entra `AuditLogs`. Confirm the event source and name in your tenant before treating this as a detection.
+> **Not verified on a live tenant (Oct 2026).** `PowerPlatformAdminActivity` exists in the validation workspace, with the columns Learn lists, but has no rows (the Power Platform connectors are not ingesting), so the operation names and the keys inside `Properties` were not seen on live events. The earlier version of this step read `AuditLogs` for `AgentPublished`, an operation that does not exist in Entra audit logs.
+
+> **Where the events are (Microsoft Learn).** Copilot Studio authoring events (`BotCreate`, `BotUpdateOperation-BotPublish`, `BotUpdateOperation-BotShare`) are Power Platform administrator activity in the Purview audit log. In Sentinel they arrive through the **Microsoft Power Platform Admin Activity** connector, table `PowerPlatformAdminActivity`, with the operation in `EventOriginalType`. Learn's sample-queries page for that table still shows the old name `PowerPlatformAdministratorActivity`, which does not resolve.
 
 > **Two paths (Microsoft Learn, July 2026).** An Agent Builder agent reaches other users by sharing, which has no admin review and applies updates at once, or by submission to the organization catalog (Agent Store), which an admin reviews and approves in the Microsoft 365 admin center. Sharing limits set by an admin do not restrict who can add the Agent Store version. The gap in this step is the sharing path.
 
+> **What this step cannot see.** No Copilot Studio event records an approval, so "without approval" cannot be read from these events alone: compare each publish or share with your approval record. An admin approval of an org-catalog submission is `DeployedAgent` in the Microsoft 365 admin center agent management activities (Purview audit log). No audit operation for sharing an Agent Builder agent is documented in the Learn pages reviewed (Oct 2026): after sharing one, search the Purview audit log for the maker and the time, and note the operation name. `CopilotActivity` is not a source for this: its `CopilotAgentManagement` record is Security Copilot agent management (it shares its second with a `CopilotForSecurityTrigger` record) and carries no operation.
+
 ```kql
-AuditLogs
+PowerPlatformAdminActivity
 | where TimeGenerated > ago(30d)
-| where OperationName == "AgentPublished"
-| extend AgentSource = tostring(AdditionalDetails["AgentSource"])
-| extend ApprovalStatus = tostring(AdditionalDetails["ApprovalStatus"])
-| where AgentSource == "AgentBuilder"
-    or ApprovalStatus == "Bypassed"
-    or isempty(ApprovalStatus)
+| where EventOriginalType in (
+    "BotCreate",
+    "BotUpdateOperation-BotPublish",
+    "BotUpdateOperation-BotShare")
+| where EventResult == "Succeeded"
 | project
     TimeGenerated,
-    AgentId = tostring(TargetResources[0].id),
-    AgentName = tostring(TargetResources[0].displayName),
-    PublishedBy = tostring(InitiatedBy.user.userPrincipalName),
-    AgentSource,
-    ApprovalStatus
+    EventOriginalType,
+    ActorName,
+    ActorUserType,
+    EnvironmentId,
+    EventResult,
+    Properties
 | sort by TimeGenerated desc
 ```
 
-**Expected output:** Agents that activated without passing through the approval flow — the Agent Builder bypass in action.
+**Expected output:** one row per Copilot Studio agent creation, publish or share, with the maker (`ActorName`) and the environment: the list to check against your approval process.
 
 ---
 
@@ -222,7 +226,7 @@ AuditLogs
 
 ### Governance KQL Queries (add to Sentinel)
 - [ ] Agents with no Entra identity, and blueprint-only agents reviewed separately (daily)
-- [ ] Agents published without approval (daily)
+- [ ] Copilot Studio agents created, published or shared, checked against approvals (daily)
 - [ ] Permission grants without approval correlation (weekly)
 
 ### Findings

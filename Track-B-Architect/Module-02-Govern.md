@@ -99,7 +99,7 @@ By the end of this module, participants will be able to design an agent governan
   1. In Entra ID → App registrations, create `demo-sales-agent` with `Sites.Read.All` permission and mark it as an Entra Agent ID in the manifest (`"tags": ["agent365", "EntraAgentID"]`)
   2. In Copilot Studio admin center → Settings → Agent publishing, enable the approval flow and configure an approver
   3. In Power Platform admin center, create the DLP policy "Agentic AI — Restrict External Connectors" blocking HTTP and HTTP with Azure AD
-  4. Run the governance queries from the KQL Library (P02-Governance-Gaps.kql): agents without Entra Agent ID, agents published without approval, graph drift
+  4. Run the governance queries from the KQL Library (P02-Governance-Gaps.kql): agents without Entra Agent ID, Copilot Studio agents published or shared, graph drift
   5. **Kill switch drill:** on the `demo-sales-agent` created in step 1, execute the three-level shutdown and time each one: (a) L1 session revocation via Graph Explorer `POST /servicePrincipals/{id}/revokeSignInSessions`; (b) L2 disable the identity in Entra ID → Enterprise applications → Properties → Enabled for users to sign-in = No; (c) L3 unpublish the agent in Copilot Studio. Record the total time from decision to confirmed stop, and who had to intervene at each level
   6. Complete the "Domain 2 — Govern" section of the Gap Assessment Template with real findings from the demo tenant
 - **Required tools:** Entra ID (App registrations + Manifest editor + Enterprise applications), Copilot Studio admin center, Power Platform admin center, Microsoft Graph Explorer, Microsoft Sentinel (Logs), KQL Library P02, Gap Assessment Template
