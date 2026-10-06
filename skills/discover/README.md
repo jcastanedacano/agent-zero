@@ -20,7 +20,7 @@ Objective: know which AI agents exist, who created them, what data they touch, a
 
 | Skill | MS product | Sentinel connectors | KQL |
 |---|---|---|---|
-| `discover-inventory-agents-copilot-studio` | Agent 365, PP Admin, Graph | CopilotStudio_CL | sentinel-inventory.kql |
+| `discover-inventory-agents-copilot-studio` | M365 admin center registry, Power Platform inventory, Graph | PowerPlatformAdminActivity, CopilotActivity | sentinel-inventory.kql |
 | `discover-enumerate-foundry-agents` | Azure AI Foundry, Azure CLI | FoundryAgents_CL | sentinel-foundry.kql |
 | `discover-shadow-ai-entra-principals` | Entra ID, Graph API | AuditLogs, AADServicePrincipalSignInLogs | sentinel-shadow-principals.kql |
 | `discover-classify-agent-connectors` | Power Platform Admin Center | — | — |
