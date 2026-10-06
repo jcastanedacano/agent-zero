@@ -36,6 +36,49 @@ Learn splits Foundry network isolation in three areas, and the choices are diffe
 
 Copilot Studio is a different platform with its own controls (Step 4).
 
+## Architecture of an isolated Foundry resource (your own network)
+
+```mermaid
+flowchart TB
+    NETW(["Client on the internet"])
+    PRIV(["Client inside your network<br/>VNet, VPN, ExpressRoute or Bastion jump host"])
+
+    subgraph VNET["Your virtual network"]
+        direction TB
+        subgraph PES["Private endpoint subnet"]
+            PEF["Private endpoint to the<br/>Foundry resource (group id: account)"]
+            PEX["Private endpoints to<br/>Storage, AI Search, Cosmos DB"]
+        end
+        subgraph AGS["Agent subnet, delegated to Microsoft.App/environments"]
+            DP["Single-tenant data proxy<br/>every tool call goes through it"]
+            MVM["Hosted agent micro VMs"]
+        end
+        FW["Azure Firewall or other egress control<br/>FQDN allow-list"]
+        DNS["Private DNS zones (3) linked to the VNet<br/>cognitiveservices, openai, services.ai"]
+    end
+
+    ACC[("Foundry resource<br/>public network access: Disabled")]
+    DEPS[("Your Storage, AI Search, Cosmos DB<br/>public access disabled")]
+    EXT(("Approved internet<br/>destinations"))
+
+    PRIV --> PEF --> ACC
+    NETW -. "blocked" .-> ACC
+    DNS -.-> PEF
+    ACC -. "agent compute is injected<br/>into your subnet" .-> AGS
+    DP --> PEX --> DEPS
+    DP --> FW
+    MVM --> FW
+    FW -- "allowed FQDNs only" --> EXT
+
+    classDef ok fill:#107C10,stroke:#333,color:#fff
+    classDef ctl fill:#FF8C00,stroke:#333,color:#24292f
+    class ACC,DEPS ok
+    class FW,PEF,PEX ctl
+```
+
+**How to read it.** Two separate boundaries. **Inbound** (top): a client reaches the Foundry resource only through its private endpoint, and the name resolves to the private address only if the three private DNS zones are linked to the network. **Outbound** (bottom): the agent compute sits in a subnet you delegated, its tool calls leave through the data proxy to your own Storage, AI Search and Cosmos DB over private endpoints, and anything bound for the internet has to pass the firewall.
+What the diagram does not cover: tools that use public endpoints (Bing grounding, web search, SharePoint grounding) keep using them and are outside this boundary; block them with Azure Policy if the policy forbids them.
+
 ## Choose the outbound model first
 
 Outbound isolation is decided when the Foundry resource is created: `networkInjections` cannot be added to an existing account, and the outbound settings cannot be
@@ -49,6 +92,24 @@ changed later (redeploy). Hosted agents need the network injection from the firs
 | Limits | Cannot be disabled after it is enabled; the portal cannot create it; limited regions | /24 recommended for production (/27 is the minimum), RFC 1918 ranges only, your own Storage, AI Search and Cosmos DB with private endpoints you create |
 
 Because the managed network has no outbound logging yet, choose BYO when you need to prove what left the agent.
+
+```mermaid
+flowchart TD
+    S(["Foundry resource to isolate"]) --> Q1{"Does the resource already exist<br/>without network injection?"}
+    Q1 -- "Yes" --> R1["Inbound isolation now (private endpoint, public access off).<br/>Outbound needs a redeploy: it cannot be added later"]
+    Q1 -- "No, it is new" --> Q2{"Do you need to log outbound traffic,<br/>bring your own firewall or set<br/>your own routes?"}
+    Q2 -- "Yes" --> BYO["Your own virtual network<br/>delegated subnet, firewall, VNet flow logs"]
+    Q2 -- "No" --> Q3{"Overlapping IP ranges, or do you prefer<br/>Microsoft to handle the subnet<br/>and its delegation?"}
+    Q3 -- "Yes" --> MAN["Managed virtual network<br/>(preview): allow only approved outbound"]
+    Q3 -- "No" --> BYO
+
+    classDef a fill:#0078D4,stroke:#333,color:#fff
+    classDef b fill:#5E2750,stroke:#333,color:#fff
+    class BYO a
+    class MAN b
+```
+
+**How to read it.** The first question is about the past: outbound isolation is decided when the resource is created, so an existing resource can only get the inbound half. For a new one, the deciding factor is evidence: the managed network gives a secure default with no outbound log, your own network gives you the firewall and the flow logs.
 
 ## Workflow
 

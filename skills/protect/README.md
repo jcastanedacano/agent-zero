@@ -5,19 +5,26 @@ is classified, protected, and cannot be exfiltrated to unauthorized destinations
 
 ## Recommended sequence
 
+```mermaid
+flowchart TD
+    IN[/"Agents with a reduced surface (Pillar 3 output)"/] --> A["<b>1</b> protect-purview-ai-hub-monitoring<br/>baseline visibility into interactions"]
+    A --> B["<b>2</b> protect-sensitivity-labels-ai-outputs<br/>classify outputs automatically"]
+    B --> C["<b>3</b> protect-data-loss-prevention-agent-outputs<br/>block exfiltration of outputs"]
+    C --> D["<b>4</b> protect-information-barriers-agents<br/>isolate organizational segments"]
+    D --> OUT[/"Protected data with active visibility"/]
+    OUT --> P5["Pillar 5 Detect"]
+    X1["protect-insider-risk-management-agents<br/>agent activity correlated with user risk"] -.-> OUT
+
+    classDef skill fill:#0078D4,stroke:#333,color:#fff
+    classDef side fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    classDef art fill:#FF8C00,stroke:#333,color:#24292f
+    class A,B,C,D skill
+    class X1 side
+    class IN,OUT art
 ```
-INPUT: Agents with a reduced surface (Pillar 3 output)
-        ↓
-[1] protect-purview-ai-hub-monitoring       ← baseline visibility into interactions
-        ↓
-[2] protect-sensitivity-labels-ai-outputs   ← classify outputs automatically
-        ↓
-[3] protect-data-loss-prevention-agent-outputs ← block exfiltration of outputs
-        ↓
-[4] protect-information-barriers-agents     ← isolate organizational segments
-        ↓
-OUTPUT: Protected data with active visibility and controls → input for Pillar 5 (Detect)
-```
+
+**How to read it.** Visibility first (you cannot protect what you cannot see), then classification, then the controls that act on the classification, then segmentation. Labels come before DLP because the DLP rules in this pillar use the label as their condition.
+
 
 ## Skills
 
@@ -27,6 +34,42 @@ OUTPUT: Protected data with active visibility and controls → input for Pillar 
 | `protect-sensitivity-labels-ai-outputs` | Purview, AIP | Purview E3 + AIP P2 | sentinel-label-coverage.kql |
 | `protect-data-loss-prevention-agent-outputs` | Purview DLP | Purview E3 | sentinel-dlp-outputs.kql |
 | `protect-information-barriers-agents` | Purview IB | M365 E5 Compliance | sentinel-information-barriers.kql |
+| `protect-insider-risk-management-agents` | Purview Insider Risk Management | M365 E5 Insider Risk Management | No |
+
+## Where each control sits in the data path
+
+```mermaid
+flowchart TB
+    U["User prompt"] --> DP1
+    SRC[("Grounding sources<br/>SharePoint, OneDrive, mail")] --> DP1
+    IB["Information Barriers<br/>Teams, SharePoint, OneDrive:<br/>keep segments apart"] -.-> SRC
+
+    subgraph BEFORE["Before the response: govern-dlp-policy-copilot-prompts"]
+        DP1{{"DLP for Microsoft 365 Copilot<br/>sensitive information types in the prompt (preview)<br/>labeled files and mail are not processed"}}
+    end
+
+    DP1 --> AG["Copilot or agent"]
+    AG --> OUT["Generated file or email"]
+
+    subgraph AFTER["After generation: this pillar"]
+        direction TB
+        LBL["Auto-labeling<br/>protect-sensitivity-labels-ai-outputs"]
+        DLP2{{"DLP on SharePoint, OneDrive, Exchange<br/>label as the condition, external sharing blocked<br/>protect-data-loss-prevention-agent-outputs"}}
+        EP["Endpoint DLP<br/>copy off the device"]
+        LBL --> DLP2 --> EP
+    end
+
+    OUT --> LBL
+    VIS["Visibility: protect-purview-ai-hub-monitoring<br/>(DSPM for AI observes, does not block)"] -.-> AG
+    VIS -.-> OUT
+
+    classDef ctl fill:#FF8C00,stroke:#333,color:#24292f
+    classDef vis fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    class DP1,DLP2 ctl
+    class VIS,IB vis
+```
+
+**How to read it.** The two DLP policies do not overlap: the first acts on what Copilot receives and on the files and mail it would use, before any response exists; the second acts on what the agent generates, once it is a file or an email. DLP for Microsoft 365 Copilot does not evaluate the response text, so the output has to be caught afterwards by its label. Information Barriers limit which people and which content can reach each other. DSPM for AI observes the interactions and does not block anything.
 
 ## Distinction: DLP on prompts vs. DLP on outputs
 

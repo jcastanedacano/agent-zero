@@ -31,6 +31,25 @@ effort_hours: 4
 - Graph API to revoke permissions in Entra ID
 - An offboarding process that includes reviewing the departing employee's agents
 
+## Lifecycle at a glance
+
+```mermaid
+stateDiagram-v2
+    [*] --> Requested
+    Requested --> Approved: admin approval
+    Approved --> Active
+    Active --> Candidate: no activity 30 days, owner gone, use case done
+    Candidate --> OwnerNotified: notify owner, manager, business owner
+    OwnerNotified --> Active: still needed, reassign the owner
+    OwnerNotified --> Blocked: no answer in 5 business days
+    Blocked --> Active: unblock, it is reversible
+    Blocked --> Revoked: after 7 days
+    Revoked --> Deleted: consent grants, app roles, then the identity
+    Deleted --> [*]: recoverable for 30 days
+```
+
+**How to read it.** The reversible part ends at `Blocked`: blocking an agent can be undone and is held for 7 days as the rollback window. After that the steps remove access (consent grants, app role assignments) and then the identities, and deleting is soft: the objects can be restored for 30 days. Record the grants and role assignments before deleting an agent that has an Entra Agent ID, because deleting the agent also deletes its agent identity.
+
 ## Workflow
 
 ### Step 1 — Identify decommission candidates

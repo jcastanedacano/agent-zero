@@ -58,6 +58,35 @@ and the **agent** (a single agent, evaluated today only for access to that agent
 The Foundry roles were renamed from Azure AI User, Azure AI Owner, Azure AI Account Owner and Azure AI Project Manager; the IDs and permissions did not change. Use the ID in scripts.
 Azure Owner and Contributor create projects and deploy models, but have no data actions: they cannot build agents or call agent endpoints. Reader only reads.
 
+Where each role is usually assigned, following Learn's sample enterprise mapping:
+
+```mermaid
+flowchart TB
+    SUB["Subscription<br/>Owner: IT administrator<br/>Cognitive Services Usages Reader: quota visibility only"]
+    RG["Resource group"]
+    ACC["Foundry resource<br/>Foundry Account Owner: managers<br/>Foundry Project Manager: team leads<br/>Reader: developers"]
+    PRJ["Project<br/>Foundry User: developers<br/>Foundry Agent Consumer: applications and services"]
+    AGT["Agent<br/>Foundry Agent Consumer: one agent's endpoints only"]
+    DEP["Model deployments<br/>create: Account Owner, Foundry Owner,<br/>Owner, Contributor"]
+    CON["Connections<br/>add: Foundry User, Foundry Owner, Contributor"]
+    WARN["A Foundry role assigned here reaches<br/>every Foundry resource below it"]
+
+    SUB --> RG --> ACC --> PRJ --> AGT
+    ACC --> DEP
+    PRJ --> CON
+    WARN -.-> SUB
+    WARN -.-> RG
+
+    classDef lvl fill:#0078D4,stroke:#333,color:#fff
+    classDef warn fill:#FF8C00,stroke:#333,color:#24292f
+    classDef side fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    class SUB,RG,ACC,PRJ,AGT lvl
+    class WARN warn
+    class DEP,CON side
+```
+
+**How to read it.** The blue column is the inheritance chain: a role assigned at a level applies to everything below it. That is why the audit in Step 1 looks for Foundry roles at the subscription or resource group (orange): one assignment there reaches every Foundry resource underneath. Aim to assign developers at the project and applications at the project or agent, with managers at the Foundry resource.
+
 Four facts that shape every control below (all from Microsoft Learn):
 
 1. RBAC applies when callers authenticate with Entra ID. If key authentication is on, the key gives full access without role restrictions. Turn it off first (`disableLocalAuth`; see the

@@ -56,6 +56,30 @@ By the end of this module, participants will be able to design an agent governan
    | L2 Identity disable | Entra: `accountEnabled = false` on the Entra Agent ID service principal (`PATCH /servicePrincipals/{id}`, or Entra admin center → Agents → Agent identities → Disable) | New token requests fail with AADSTS7000112; configuration and forensic evidence are preserved. A token already issued stays valid until it expires (60 to 90 minutes by default); Continuous Access Evaluation for workload identities rejects it on disable, for Microsoft Graph only, single-tenant apps only, not managed identities | Minutes |
    | L3 Runtime stop | Copilot Studio: quarantine the agent (Power Platform API `SetAsQuarantined`, takes a user token) or unpublish it / Azure AI Foundry: delete the deployment / APIM: block policy on the agent's route | The code stops executing. Quarantine keeps the agent and its configuration, makers can still test it, and it cannot be used in other channels | Minutes to hours depending on platform |
 
+   ```mermaid
+   flowchart LR
+       subgraph INST["One agent instance: you know which one"]
+           direction LR
+           L1["L1 Mark compromised and revoke<br/>what can be revoked<br/>seconds"] --> L2["L2 Disable the identity<br/>minutes<br/>issued tokens live 60 to 90 min"]
+           L2 --> L3["L3 Runtime stop<br/>quarantine, unpublish, delete the deployment,<br/>block the route<br/>minutes to hours"]
+       end
+       subgraph WIDE["Wider scope: you do not know which instance"]
+           direction LR
+           BP["Disable the blueprint<br/>every identity derived from it"] --> VB["Revoke the vendor's blueprint<br/>no further identities can be provisioned"]
+       end
+       L2 -. "scope widens" .-> BP
+       GAP["What a missing level leaves<br/>L1 without L2: the agent returns while the credentials stay valid<br/>L2 without L3: a cached API key keeps working<br/>L3 by deleting: destroys evidence, so prefer quarantine"]
+
+       classDef lvl fill:#0078D4,stroke:#333,color:#fff
+       classDef wide fill:#5E2750,stroke:#333,color:#fff
+       classDef gap fill:#FF8C00,stroke:#333,color:#24292f
+       class L1,L2,L3 lvl
+       class BP,VB wide
+       class GAP gap
+   ```
+
+   **How to read it.** Left to right in the top row is the order to run: fastest first, most definitive last. The bottom row is not another step but another scope: use it when the compromise is in a shared blueprint or a vendor template and you cannot tell which instance is the bad one. The orange box is the argument for running more than one level.
+
    L1 without L2 is a shutdown the attacker can reverse: if the credentials remain valid, the agent returns on the next authentication cycle. L2 is not instant either: an access token already issued to the agent stays valid until it expires, so the drill must measure the real stop time, not the time of the call. L2 without L3 stops the identity but not the process: a self-hosted agent with a cached API key can keep operating against endpoints that do not validate Entra. Full shutdown requires all three levels, and the order matters: L1 first because it is fastest, L3 last because deleting the agent destroys state that may be evidence (quarantining it does not, so prefer quarantine while you collect evidence).
 
    **A fourth level this table omits: blueprint-level shutdown.** All three levels above assume you know which agent instance is compromised. When you do not — a supply-chain compromise of a shared blueprint, or a vendor-provided agent template used across dozens of instances — the correct scope is the blueprint, not the instance: disabling the Entra Agent ID blueprint that generated the compromised agents shuts down every identity derived from it in a single action, without needing to identify which specific instance is the threat. This is a broader-blast-radius L2, positioned between L2 and L3 in scope: faster to execute than hunting for the one bad instance, but it takes down every agent built from that blueprint, including the legitimate ones. For third-party agents specifically, a fifth and final option exists above blueprint-level: revoking the vendor's principal blueprint in your tenant, which removes its ability to provision any further identities at all — the correct response when the vendor relationship itself is the compromise, not just one deployment. Decide the authorization threshold for each of these five levels before an incident, not during one: blueprint-level shutdown stops legitimate business processes, so if that decision requires a committee, it will not happen in time during a real incident.

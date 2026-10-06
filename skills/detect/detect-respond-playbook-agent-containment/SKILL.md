@@ -33,6 +33,43 @@ Detection → Triage → Containment → Preservation → Notification → Remed
 This skill covers the first four phases (automatable).
 Remediation requires human review.
 
+## Playbook flow
+
+```mermaid
+flowchart TD
+    subgraph TRIG["Trigger and enrichment"]
+        direction LR
+        INC["Sentinel incident<br/>from a Pillar 5 rule"] --> AR["Automation rule<br/>rule name or severity"]
+        AR --> LA["Logic App playbook<br/>managed identity"]
+        LA --> EN["Enrich the incident<br/>agent details, sign-ins, Graph activity"]
+    end
+    TRIG --> SEV{"Severity"}
+
+    SEV -- "Low" --> NOTIFY
+    SEV -- "Medium" --> MED["Quarantine or disable the agent"]
+    SEV -- "High" --> HIGH["Disable the agent"]
+    SEV -- "Critical" --> APC{"Human approval<br/>timeout 4 hours"}
+
+    HIGH --> APH{"Approval for the<br/>identity steps"}
+    APH -- "approved" --> HIGH2["Confirm compromised"]
+    APH -- "rejected" --> NOTIFY
+    APC -- "approved" --> CRIT["Block the service principal<br/>confirm compromised, remove credentials"]
+    APC -- "rejected" --> NOTIFY
+
+    MED --> PRES
+    HIGH2 --> PRES
+    CRIT --> PRES
+    PRES["Preserve evidence<br/>export hunting results to storage"] --> NOTIFY
+    NOTIFY["Notify the AISOC channel<br/>open a ticket, escalate when Critical"] --> REM["Human review and remediation"]
+
+    classDef act fill:#0078D4,stroke:#333,color:#fff
+    classDef gate fill:#FF8C00,stroke:#333,color:#24292f
+    class MED,HIGH,HIGH2,CRIT act
+    class APC,APH gate
+```
+
+**How to read it.** Severity decides how far automation goes without a person. Low only notifies, Medium acts at once, High and Critical stop at an approval gate before the identity-level steps (confirm compromised, block the service principal). If the approver rejects, the playbook notifies and does not block. Evidence is preserved after containment and before any deletion, because deleting an agent or its identity removes the objects the evidence points to. Remediation is always human.
+
 ## Containment actions by severity
 
 | Severity | Automatic action | Requires approval |
@@ -50,6 +87,42 @@ Remediation requires human review.
 | Confirm the agent compromised | ID Protection `confirmCompromised`: risk level to High | Blocks only if a Conditional Access policy on Agent risk exists |
 | Disable the service principal or agent identity | `accountEnabled` = false: new token requests fail with AADSTS7000112 | A token already issued stays valid until it expires (60 to 90 minutes by default); Continuous Access Evaluation for workload identities revokes it, for Microsoft Graph only, single-tenant apps only, not managed identities |
 | Revoke sign-in sessions | `POST /users/{id}/revokeSignInSessions` | Exists for users only (agent user accounts included); there is no such call for a service principal or an agent identity |
+
+## Which lever for which agent
+
+```mermaid
+flowchart LR
+    subgraph KIND["What the compromised agent is"]
+        K1["Copilot Studio agent<br/>(not a classic chatbot)"]
+        K2["Entra agent identity<br/>or its blueprint"]
+        K3["Agent with a user account"]
+        K4["Service principal or app registration<br/>with a secret or certificate"]
+    end
+
+    subgraph LEV["What you can pull"]
+        L1["SetAsQuarantined<br/>user token, CopilotStudio.AdminActions.Invoke"]
+        L2["Disable the identity or the blueprint<br/>accountEnabled = false"]
+        L3["revokeSignInSessions<br/>users only"]
+        L4["Remove credentials<br/>removePassword, certificates"]
+        L5["confirmCompromised<br/>risk level High"]
+    end
+
+    K1 --> L1
+    K2 --> L2
+    K2 --> L4
+    K2 --> L5
+    K3 --> L2
+    K3 --> L3
+    K4 --> L2
+    K4 --> L4
+
+    classDef kind fill:#5E2750,stroke:#333,color:#fff
+    classDef lever fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    class K1,K2,K3,K4 kind
+    class L1,L2,L3,L4,L5 lever
+```
+
+**How to read it.** Pick the lever by what the agent is, not by habit. Session revocation reaches only user accounts, so it is the right lever for an agent user and the wrong one for a service principal or an agent identity, which you stop by disabling and by removing what they authenticate with. `confirmCompromised` raises the risk level but blocks only where a Conditional Access policy on agent risk exists. A token already issued stays valid until it expires (60 to 90 minutes by default), so disabling stops new tokens, not the ones in flight.
 
 ## Workflow
 

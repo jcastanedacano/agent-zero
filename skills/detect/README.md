@@ -5,21 +5,71 @@ compromised agents before the damage becomes irreversible.
 
 ## Implementation sequence (by ROI and dependencies)
 
+```mermaid
+flowchart TD
+    IN[/"Protected data with active visibility (Pillar 4 output)"/] --> A["<b>1</b> detect-alert-prompt-injection-sentinel<br/>platform flags and alerts, no prompt text needed"]
+    A --> B["<b>2</b> detect-agent-identity-abuse<br/>agent spawning is a critical vector"]
+    B --> C["<b>3</b> detect-data-exfiltration-agent<br/>needs Pillar 4 DLP for correlation"]
+    C --> D["<b>4</b> detect-anomalous-agent-behavior<br/>needs 7 to 14 days of baseline"]
+    D --> E["<b>5</b> detect-respond-playbook-agent-containment<br/>orchestrates the response to all of the above"]
+    E --> OUT[/"Operational AI security operations"/]
+    OUT --> P1["Feeds Pillar 1 Discover with newly detected agents"]
+    X1["detect-security-copilot-triage<br/>Security Copilot triage of agent incidents"] -.-> E
+    X2["detect-sentinel-mcp-server<br/>Sentinel MCP server for security agents"] -.-> E
+
+    classDef skill fill:#0078D4,stroke:#333,color:#fff
+    classDef side fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    classDef art fill:#FF8C00,stroke:#333,color:#24292f
+    class A,B,C,D,E skill
+    class X1,X2 side
+    class IN,OUT art
 ```
-INPUT: Protected data with active visibility (Pillar 4 output)
-        ↓
-[1] detect-alert-prompt-injection-sentinel   ← platform flags and alerts, no prompt text needed
-        ↓
-[2] detect-agent-identity-abuse              ← agent spawning = critical vector
-        ↓
-[3] detect-data-exfiltration-agent           ← requires Pillar 4 DLP for correlation
-        ↓
-[4] detect-anomalous-agent-behavior          ← requires 7-14 days of baseline
-        ↓
-[5] detect-respond-playbook-agent-containment ← orchestrates response to all of the above
-        ↓
-OUTPUT: Operational AISOC → feeds back into Pillar 1 (Discover) with newly detected agents
+
+**How to read it.** The order follows return on effort and dependencies: platform flags need no baseline, agent identity abuse is the next critical vector, exfiltration needs the Pillar 4 DLP signal to correlate with, and behavioral anomalies need a baseline of 7 to 14 days. The playbook comes last because it responds to everything before it.
+
+## How a detection becomes a response
+
+```mermaid
+flowchart LR
+    subgraph SIG["Signals"]
+        S1["CopilotActivity, SecurityAlert<br/>JailbreakDetected, XPIADetected"]
+        S2["AADServicePrincipalSignInLogs, AuditLogs<br/>agent identity events"]
+        S3["OfficeActivity, DLP matches"]
+        S4["MicrosoftGraphActivityLogs<br/>baselines"]
+    end
+
+    subgraph RUL["Sentinel analytics rules"]
+        R1["Prompt injection<br/>3 rules"]
+        R2["Identity abuse<br/>4 rules"]
+        R3["Exfiltration<br/>5 rules"]
+        R4["Anomalous behavior<br/>3 rules, ID Protection, UEBA"]
+    end
+
+    S1 --> R1
+    S2 --> R2
+    S3 --> R3
+    S4 --> R4
+    S2 --> R4
+
+    R1 --> INC["Sentinel incident"]
+    R2 --> INC
+    R3 --> INC
+    R4 --> INC
+    INC --> AUTO["Automation rule<br/>filter on rule name or severity"]
+    AUTO --> PB["Playbook (Logic App)<br/>detect-respond-playbook-agent-containment"]
+    PB --> ACT["Contain, preserve evidence, notify"]
+    INC --> TRI["Security Copilot triage<br/>detect-security-copilot-triage"]
+
+    classDef sig fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    classDef rule fill:#0078D4,stroke:#333,color:#fff
+    classDef resp fill:#FF8C00,stroke:#333,color:#24292f
+    class S1,S2,S3,S4 sig
+    class R1,R2,R3,R4 rule
+    class INC,AUTO,PB,ACT,TRI resp
 ```
+
+**How to read it.** Left to right is the path of one detection. Rules are built on flags, identities, volumes and sequences, never on prompt text, because the audit record does not carry it. An incident does not trigger a playbook by itself: an automation rule decides which playbook runs, filtering on the analytics rule name or the severity (Sentinel incident tactics are MITRE ATT&CK tactics, so a MITRE ATLAS technique ID cannot be used as the filter).
+
 
 ## Skills
 
@@ -30,6 +80,8 @@ OUTPUT: Operational AISOC → feeds back into Pillar 1 (Discover) with newly det
 | `detect-data-exfiltration-agent` | Volumetric correlation | 5 rules | sentinel-exfiltration.kql |
 | `detect-agent-identity-abuse` | Signature + identity anomaly | 4 rules | sentinel-identity-abuse.kql |
 | `detect-respond-playbook-agent-containment` | Response (Logic App) | 1 playbook | sentinel-ir-hunting.kql |
+| `detect-security-copilot-triage` | Triage (Security Copilot) | none | No |
+| `detect-sentinel-mcp-server` | Platform integration (Sentinel MCP server) | none | No |
 
 ## MITRE ATLAS coverage
 
@@ -57,13 +109,15 @@ OUTPUT: Operational AISOC → feeds back into Pillar 1 (Discover) with newly det
 
 ## Closing the framework cycle
 
-```
-Detect & Respond → feeds back into → Discover & Prioritize
-                                           ↓
-                             New agents detected via IR
-                             are added to the Pillar 1 risk register
-                             and receive Pillar 2-4 controls
+```mermaid
+flowchart LR
+    DET["Detect and respond"] -- "agent found during an incident" --> DIS["Discover<br/>added to the Pillar 1 risk register"]
+    DIS --> CTRL["Receives the controls of<br/>Govern, Secure and Protect"]
+    CTRL --> DET
+
+    classDef n fill:#0078D4,stroke:#333,color:#fff
+    class DET,DIS,CTRL n
 ```
 
-The full cycle:
-Discover → Govern → Secure → Protect → Detect → [back to Discover]
+
+The full cycle across the five pillars is in [`skills/README.md`](../README.md).

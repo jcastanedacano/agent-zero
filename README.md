@@ -56,6 +56,7 @@ A complete framework for securing agentic AI in enterprise Microsoft environment
 - [Skills library](#skills-library)
 - [KQL library](#kql-library)
 - [Domain coverage at a glance](#domain-coverage-at-a-glance)
+- [Reference architecture](./docs/architecture.md): telemetry map, anatomy of a Foundry resource, identity chain of an agent
 
 **How the threat model is built**
 - [The agent attack surface](#the-agent-attack-surface)
@@ -243,6 +244,7 @@ agent-zero/
 │   ├── P04-Exfiltration-Detection.kql           ← Q6 Copilot reads of unlabeled or sensitive files
 │   └── P05-Jailbreak-Detection.kql              ← Q7 LPCI + Q8 agentic ransomware chain + Q10 XPIA flagged by the platform
 ├── skills/                          ← 30 agent skills (agentskills.io format, ATLAS + NIST mapped)
+│   ├── README.md                    ← how the five pillars hand over to each other (flow diagram)
 │   ├── SCHEMA.md                    ← Universal Skill Format security manifest (OWASP AST04/AST10)
 │   ├── discover/   (6 skills)
 │   ├── govern/     (7 skills)
@@ -252,6 +254,7 @@ agent-zero/
 │   └── references/
 │       └── frameworks.md            ← Cross-reference: ATLAS, D3FEND, NIST AI RMF, NIST CSF
 ├── docs/                            ← full reference list, framework mappings, controls and risk vectors
+│   ├── architecture.md              ← reference architecture: telemetry map, Foundry anatomy, agent identity chain
 │   ├── references.md
 │   ├── framework-coverage.md
 │   └── controls-and-risk-vectors.md
@@ -283,7 +286,7 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 | [04 Protect](./skills/protect/) | `protect-data-loss-prevention-agent-outputs` · `protect-sensitivity-labels-ai-outputs` · `protect-purview-ai-hub-monitoring` · `protect-information-barriers-agents` · `protect-insider-risk-management-agents` |
 | [05 Detect](./skills/detect/) | `detect-alert-prompt-injection-sentinel` · `detect-anomalous-agent-behavior` · `detect-data-exfiltration-agent` · `detect-agent-identity-abuse` · `detect-respond-playbook-agent-containment` · `detect-sentinel-mcp-server` · `detect-security-copilot-triage` |
 
-→ [Framework cross-reference](./skills/references/frameworks.md) — the ATLAS table is generated from all 30 skills; every skill also carries its D3FEND, NIST AI RMF, and NIST CSF identifiers in its frontmatter.
+→ [How the pillars hand over](./skills/README.md) · [Reference architecture](./docs/architecture.md) · [Framework cross-reference](./skills/references/frameworks.md) — the ATLAS table is generated from all 30 skills; every skill also carries its D3FEND, NIST AI RMF, and NIST CSF identifiers in its frontmatter.
 
 ---
 

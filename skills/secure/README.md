@@ -5,19 +5,26 @@ eliminating static credentials and restricting connectivity to the minimum neces
 
 ## Recommended sequence
 
+```mermaid
+flowchart TD
+    IN[/"Agents under formal control (Pillar 2 output)"/] --> A["<b>1</b> secure-least-privilege-agent-identity<br/>reduce permissions to the real minimum"]
+    A --> B["<b>2</b> secure-managed-identity-foundry<br/>eliminate API keys (Foundry)"]
+    B --> C["<b>3</b> secure-secret-management-keyvault<br/>centralize residual secrets"]
+    C --> D["<b>4</b> secure-network-isolation-agent<br/>isolate network traffic"]
+    D --> OUT[/"Agents with a reduced attack surface"/]
+    OUT --> P4["Pillar 4 Protect"]
+    X1["secure-ca-policy-agents<br/>Conditional Access for agent identities"] -.-> A
+
+    classDef skill fill:#0078D4,stroke:#333,color:#fff
+    classDef side fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    classDef art fill:#FF8C00,stroke:#333,color:#24292f
+    class A,B,C,D skill
+    class X1 side
+    class IN,OUT art
 ```
-INPUT: Agents under formal control (Pillar 2 output)
-        ↓
-[1] secure-least-privilege-agent-identity   ← reduce permissions to the real minimum
-        ↓
-[2] secure-managed-identity-foundry         ← eliminate API keys (Foundry)
-        ↓
-[3] secure-secret-management-keyvault       ← centralize residual secrets
-        ↓
-[4] secure-network-isolation-agent          ← isolate network traffic
-        ↓
-OUTPUT: Agents with a reduced attack surface → input for Pillar 4 (Protect)
-```
+
+**How to read it.** The order goes from who the agent is (permissions, then credentials) to where it can connect. Least privilege comes first because every later control is easier to reason about once the permissions are small. `secure-ca-policy-agents` sits beside the sequence: the Conditional Access policy for agent identities comes right after an agent is registered with Entra Agent ID.
+
 
 ## Skills
 
@@ -27,18 +34,25 @@ OUTPUT: Agents with a reduced attack surface → input for Pillar 4 (Protect)
 | `secure-managed-identity-foundry` | Microsoft Foundry, Entra ID, Azure CLI | sentinel-managed-identity.kql |
 | `secure-secret-management-keyvault` | Azure Key Vault | sentinel-keyvault-audit.kql |
 | `secure-network-isolation-agent` | Azure Networking, Microsoft Foundry, Power Platform | sentinel-network-isolation.kql |
+| `secure-ca-policy-agents` | Entra ID Conditional Access, Graph API | No |
 
 ## Decision: managed identity vs Key Vault
 
+```mermaid
+flowchart TD
+    Q1{"Is the resource Azure-native<br/>and does it support Entra authentication?"}
+    Q1 -- "Yes" --> MI["Use a managed identity<br/>secure-managed-identity-foundry"]
+    Q1 -- "No" --> KV["Use Key Vault<br/>secure-secret-management-keyvault"]
+    KV --> Q2{"Does the external resource support<br/>automatic rotation?"}
+    Q2 -- "Yes" --> R1["Configure a Key Vault rotation policy"]
+    Q2 -- "No" --> R2["Rotate manually every 90 days<br/>and alert on the due date"]
+
+    classDef good fill:#107C10,stroke:#333,color:#fff
+    classDef warn fill:#FF8C00,stroke:#333,color:#24292f
+    class MI,R1 good
+    class KV,R2 warn
 ```
-Is the resource Azure-native and does it support Entra auth?
-    ├── Yes → use Managed Identity (skill: secure-managed-identity-foundry)
-    └── No → use Key Vault (skill: secure-secret-management-keyvault)
-             ↓
-         Does the external resource support automatic rotation?
-             ├── Yes → configure a Key Vault rotation policy
-             └── No → rotate manually every 90 days with an alert
-```
+
 
 ## API versions validated against a live Sentinel workspace
 

@@ -67,6 +67,33 @@ Two roles to keep out of Foundry assignments. Microsoft Learn says not to assign
 hubs and not to Foundry projects. One Learn page about keyless access for Foundry Models still names Cognitive Services User for inference callers; this skill follows the
 RBAC article, because that role also lists keys.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    APP["App on Azure compute"] -- "managed identity" --> TOK
+    PIPE["Pipeline or service<br/>outside Azure"] -- "workload identity<br/>federation" --> TOK
+    DEV["Developer"] -- "user sign-in" --> TOK
+    AGT["Foundry agent<br/>calling a tool"] -- "agent identity" --> TOK
+    TOK["Entra token<br/>short lived, tied to an identity"] --> RB{"RBAC check<br/>Foundry User, Agent Consumer,<br/>or a role on the target"}
+    RB -- "role present" --> ACC[("Foundry resource<br/>or target resource")]
+    RB -- "no role" --> E403["403"]
+
+    OLD["Legacy client with<br/>an api-key header"] -- "account key" --> LA{"disableLocalAuth"}
+    LA -- "false: no RBAC,<br/>no identity in the log" --> ACC
+    LA -- "true: rejected once the<br/>gateway cache refreshes" --> E401["401"]
+
+    classDef id fill:#0078D4,stroke:#333,color:#fff
+    classDef bad fill:#d13438,stroke:#333,color:#fff
+    classDef ok fill:#107C10,stroke:#333,color:#fff
+    class TOK id
+    class OLD,LA bad
+    class ACC ok
+```
+
+**How to read it.** The top path is the one to keep: every caller proves who it is with an Entra token, and RBAC decides. The bottom path is the one to close: a key carries no identity and no role, so whoever holds it gets full access and the logs cannot say who they were.
+`disableLocalAuth` is the switch between the two, which is why Step 6 comes after the callers have moved to tokens. For what the agent identity is and how its token is issued, see the identity chain in [`docs/architecture.md`](../../../docs/architecture.md#3-the-identity-chain-of-an-agent).
+
 ## Workflow
 
 ### Step 1 — Find the Foundry resources that still accept keys

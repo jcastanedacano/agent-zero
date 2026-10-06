@@ -88,27 +88,28 @@ The letter also references the **ESRB warning on systemic cyber risks stemming f
 
 ### Risk classification decision tree
 
-```
-Is the agent used for biometric surveillance, social scoring,
-or subliminal manipulation?
-  └─ YES → PROHIBITED. Do not deploy.
-  └─ NO ↓
+```mermaid
+flowchart TD
+    Q1{"Biometric surveillance, social scoring<br/>or subliminal manipulation?"}
+    Q1 -- "Yes" --> P["PROHIBITED<br/>Do not deploy"]
+    Q1 -- "No" --> Q2{"Used in an Annex III domain?<br/>critical infrastructure, education admission or grading,<br/>employment decisions, essential public services,<br/>law enforcement and justice, democratic processes"}
+    Q2 -- "Yes" --> H["HIGH RISK (Annex III)<br/>Full compliance obligations"]
+    Q2 -- "No" --> Q3{"Does it interact with humans, and could<br/>users mistake it for a human?"}
+    Q3 -- "Yes" --> L["LIMITED RISK<br/>Transparency disclosure required"]
+    Q3 -- "No" --> M["MINIMAL RISK<br/>No specific AI Act obligations"]
 
-Is the agent used in any of these domains?
-  • Critical infrastructure (energy, water, transport)
-  • Educational institution admission or grading
-  • Employment decisions (CV screening, performance evaluation)
-  • Essential public services (credit scoring, benefits)
-  • Law enforcement, border control, justice
-  • Democratic processes (political targeting)
-  └─ YES → HIGH RISK (Annex III). Full compliance obligations.
-  └─ NO ↓
-
-Does the agent interact with humans and could users mistake it
-for a human?
-  └─ YES → LIMITED RISK. Transparency disclosure required.
-  └─ NO → MINIMAL RISK. No specific AI Act obligations.
+    classDef stop fill:#d13438,stroke:#333,color:#fff
+    classDef high fill:#FF8C00,stroke:#333,color:#24292f
+    classDef mid fill:#e6f2fb,stroke:#0078D4,color:#24292f
+    classDef low fill:#107C10,stroke:#333,color:#fff
+    class P stop
+    class H high
+    class L mid
+    class M low
 ```
+
+Read it top to bottom; the first question that matches decides the tier.
+
 
 ### High-risk obligations (if Annex III applies)
 

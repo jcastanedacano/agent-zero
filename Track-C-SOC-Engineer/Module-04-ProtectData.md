@@ -52,17 +52,20 @@ Agent connectors in Power Platform use legitimate HTTPS — they are indistingui
 
 ### The oversharing timeline
 
+```mermaid
+flowchart TD
+    A["SharePoint site created<br/>no sensitivity labels"] --> B["Agent configured to use the site<br/>as a knowledge source"]
+    B --> C["Agent indexes every document<br/>regardless of sensitivity"]
+    C --> D["Every user who prompts the agent<br/>can retrieve sensitive content"]
+    D --> E["DLP alert fires, but the data has been<br/>in the agent's context for weeks"]
+    FIX["Apply labels and fix permission errors<br/>BEFORE activating retrieval"] -. "the correct order" .-> B
+
+    classDef bad fill:#d13438,stroke:#333,color:#fff
+    classDef ok fill:#107C10,stroke:#333,color:#fff
+    class E bad
+    class FIX ok
 ```
-SharePoint site created (no sensitivity labels)
-        ↓
-Agent configured to use site as knowledge source
-        ↓
-Agent indexes all documents regardless of content sensitivity
-        ↓
-Every user who prompts the agent can retrieve sensitive content
-        ↓
-DLP alert fires — but the data has already been in the agent's context for weeks
-```
+
 
 **The correct order:** apply sensitivity labels and remediate ACL errors **before** activating any agent retrieval on that SharePoint site. After activation, you are remediating a live exposure.
 
