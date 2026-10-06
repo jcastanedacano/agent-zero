@@ -39,13 +39,16 @@ Defensive countermeasures mapped against attack techniques.
 
 | Technique | Name | Skills that cover it |
 |---------|--------|---------------------|
+| D3-ACH | Application Configuration Hardening | discover-third-party-ai-risk |
+| D3-AI | Asset Inventory | govern-entra-agent-id, discover-shadow-ai-entra-principals |
 | D3-DAM | Data Access Monitoring | discover-purview-dspm-ai, protect-insider-risk-management-agents |
-| D3-MAN | Message Authentication | govern-entra-agent-id, secure-ca-policy-agents, govern-foundry-rbac |
+| D3-MAN | Message Authentication | secure-ca-policy-agents, govern-foundry-rbac |
 | D3-NTA | Network Traffic Analysis | detect-sentinel-mcp-server, detect-security-copilot-triage |
 | D3-PA | Platform Allowlisting | detect-alert-prompt-injection-sentinel |
 | D3-SBV | Service Binary Verification | detect-alert-prompt-injection-sentinel, detect-security-copilot-triage, detect-sentinel-mcp-server |
-| D3-SFA | Service Failure Analysis | discover-shadow-ai-entra-principals, discover-purview-dspm-ai, govern-entra-agent-id |
-| D3-UAP | User Account Permissions | secure-ca-policy-agents, govern-foundry-rbac |
+| D3-SFA | System File Analysis | discover-inventory-agents-copilot-studio, discover-purview-dspm-ai, govern-agent365-approval-flow |
+| D3-SWI | Software Inventory | discover-third-party-ai-risk |
+| D3-UAP | User Account Permissions | secure-ca-policy-agents, govern-foundry-rbac, govern-entra-agent-id, discover-shadow-ai-entra-principals |
 | D3-UBA | User Behavior Analysis | protect-insider-risk-management-agents |
 
 Reference: [d3fend.mitre.org](https://d3fend.mitre.org)
@@ -59,12 +62,15 @@ A risk management framework specific to AI systems.
 | Function | Category | Skills that cover it |
 |---------|-----------|---------------------|
 | GOVERN-1.1 | AI policies established | discover-purview-dspm-ai |
-| GOVERN-2.1 | Roles and responsibilities defined | govern-entra-agent-id, secure-ca-policy-agents, govern-foundry-rbac |
+| GOVERN-1.6 | Mechanisms to inventory AI systems | govern-entra-agent-id, discover-shadow-ai-entra-principals |
+| GOVERN-2.1 | Roles and responsibilities defined | govern-entra-agent-id, secure-ca-policy-agents, govern-foundry-rbac, discover-shadow-ai-entra-principals |
 | GOVERN-4.1 | Continuous risk monitoring | detect-sentinel-mcp-server |
 | GOVERN-4.2 | Access controls for AI systems | govern-foundry-rbac |
-| MAP-1.1 | AI risk organizational context | discover-purview-dspm-ai, govern-entra-agent-id |
-| MAP-1.5 | AI system dependencies and impacts | govern-entra-agent-id, govern-foundry-rbac |
+| GOVERN-6.1 | Policies for AI risks from third-party entities | discover-third-party-ai-risk |
+| MAP-1.1 | AI risk organizational context | discover-purview-dspm-ai |
+| MAP-1.5 | AI system dependencies and impacts | govern-foundry-rbac |
 | MAP-2.1 | Stakeholder impacts mapped | discover-purview-dspm-ai |
+| MAP-4.1 | Risk mapping of third-party components | discover-third-party-ai-risk |
 | MANAGE-2.4 | AI incident response | secure-ca-policy-agents |
 | MANAGE-3.2 | Post-deployment monitoring | protect-insider-risk-management-agents, detect-sentinel-mcp-server, detect-security-copilot-triage |
 | MANAGE-4.1 | Continuous improvement of controls | detect-sentinel-mcp-server, detect-security-copilot-triage |
@@ -79,6 +85,9 @@ Reference: [nist.gov/artificial-intelligence/ai-risk-management-framework](https
 | Function | Category | Skills that cover it |
 |---------|-----------|---------------------|
 | GV (Govern) | GV.OC | Organizational context |
+| GV (Govern) | GV.SC-04 | Suppliers identified and ranked | discover-third-party-ai-risk |
+| GV (Govern) | GV.SC-06 | Due diligence before supplier relationships | discover-third-party-ai-risk |
+| GV (Govern) | GV.SC-07 | Supplier risk monitored over the relationship | discover-third-party-ai-risk |
 | ID (Identify) | ID.AM-02 | Software/asset inventory | discover-shadow-ai-entra-principals, govern-entra-agent-id |
 | ID (Identify) | ID.AM-05 | Resources prioritized by risk | discover-purview-dspm-ai |
 | ID (Identify) | ID.RA-01 | Vulnerability identification | discover-purview-dspm-ai |

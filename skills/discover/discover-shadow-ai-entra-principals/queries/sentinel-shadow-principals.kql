@@ -1,56 +1,86 @@
 // skill: discover-shadow-ai-entra-principals
-// workspace: {workspace-name} | conector requerido: AuditLogs-EntraID
+// workspace: {workspace-name} | conectores: Microsoft Entra ID (AuditLogs, AADServicePrincipalSignInLogs)
+// Validado en un workspace Sentinel (oct 2026). La version anterior leia el AppId en modifiedProperties[0] (la posicion cambia: "Add application" trae 14 propiedades distintas y "Add service principal" 11),
+// buscaba los permisos en AdditionalDetails, que no los trae (los alcances delegados estan en DelegatedPermissionGrant.Scope y los roles de aplicacion en AppRole.Value), y el estado "Inactivo" de Q3
+// no podia darse porque la ventana y el umbral eran de 30 dias. Q1 a Q3 compilan y se ejecutaron; el resultado de la cuenta de validacion esta junto a cada consulta.
 
-// ── Query 1: Service principals creados recientemente ────────────────────────
+// ── Query 1: Aplicaciones y service principals creados recientemente ──────────────────────────────────────────────
+// El AppId esta en la propiedad AppId (Add application) o AppPrincipalId (Add service principal). Las identidades administradas se excluyen por la propiedad ManagedIdentityResourceId.
+// Resultado en la cuenta de validacion (90 dias): 70 objetos sin identidades administradas (5 aplicaciones y 8 service principals creados por personas, 12 y 45 creados por una aplicacion), todos con AppId.
 let lookback = 30d;
 AuditLogs
 | where TimeGenerated > ago(lookback)
 | where OperationName in ("Add service principal", "Add application")
+| where Result == "success"
+| extend Target = TargetResources[0]
+| mv-apply MP = Target.modifiedProperties on (
+    summarize
+        AppId = take_anyif(trim('"', tostring(MP.newValue)), tostring(MP.displayName) in ("AppId", "AppPrincipalId")),
+        IsManagedIdentity = max(iff(tostring(MP.displayName) == "ManagedIdentityResourceId", 1, 0)))
+| where IsManagedIdentity == 0
 | extend
-    SPName      = tostring(TargetResources[0].displayName),
-    SPId        = tostring(TargetResources[0].id),
-    InitiatedBy = tostring(InitiatedBy.user.userPrincipalName),
-    AppId       = tostring(TargetResources[0].modifiedProperties[0].newValue)
-| project TimeGenerated, SPName, SPId, InitiatedBy, AppId
+    ObjectName = tostring(Target.displayName),
+    ObjectType = tostring(Target.type),
+    CreatedBy  = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),
+    ActorType  = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), "persona", "aplicacion")
+| project TimeGenerated, OperationName, ObjectName, ObjectType, AppId, CreatedBy, ActorType
 | order by TimeGenerated desc
 
-// ── Query 2: OAuth consent grants con permisos sensibles ─────────────────────
+// ── Query 2: Permisos concedidos con acceso sensible (delegados y de aplicacion) ───────────────────────────────────
+// Delegados: "Add delegated permission grant" trae los alcances en DelegatedPermissionGrant.Scope. De aplicacion: "Add app role assignment to service principal" trae el rol en AppRole.Value y el
+// principal que lo recibe en ServicePrincipal.DisplayName. Una concesion de administrador tambien deja "Consent to application"; no se cuenta aqui para no duplicar.
+// Resultado en la cuenta de validacion (90 dias): 31 concesiones (24 delegadas y 7 de aplicacion), 13 con acceso sensible (delegadas: 9 Alto y 1 Medio; de aplicacion: 1 Alto y 2 Medio), todas en los ultimos 30 dias.
 let sensitive_permissions = dynamic([
     "Mail.ReadWrite", "Mail.Send", "Mail.Read",
-    "Files.ReadWrite.All", "Files.Read.All",
+    "Files.ReadWrite.All", "Files.Read.All", "Sites.ReadWrite.All",
     "Directory.ReadWrite.All", "Directory.Read.All",
     "Calendars.ReadWrite", "Contacts.ReadWrite",
-    "User.ReadWrite.All", "Group.ReadWrite.All"
+    "User.ReadWrite.All", "Group.ReadWrite.All", "Policy.ReadWrite"
 ]);
-AuditLogs
-| where TimeGenerated > ago(lookback)
-| where OperationName has "Consent to application"
-| extend
-    ConsentedApp = tostring(TargetResources[0].displayName),
-    Permissions  = tostring(AdditionalDetails)
-| where Permissions has_any (sensitive_permissions)
+let delegated = AuditLogs
+    | where TimeGenerated > ago(lookback)
+    | where OperationName == "Add delegated permission grant" and Result == "success"
+    | extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)), AppName = tostring(TargetResources[0].displayName)
+    | mv-expand TR = TargetResources
+    | mv-expand MP = TR.modifiedProperties
+    | summarize Permission = take_anyif(trim('" ', tostring(MP.newValue)), tostring(MP.displayName) == "DelegatedPermissionGrant.Scope") by Id, TimeGenerated, Actor, AppName
+    | extend Kind = "delegada";
+let app_roles = AuditLogs
+    | where TimeGenerated > ago(lookback)
+    | where OperationName == "Add app role assignment to service principal" and Result == "success"
+    | extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+    | mv-expand TR = TargetResources
+    | mv-expand MP = TR.modifiedProperties
+    | summarize
+        Permission = take_anyif(trim('" ', tostring(MP.newValue)), tostring(MP.displayName) == "AppRole.Value"),
+        AppName    = take_anyif(trim('" ', tostring(MP.newValue)), tostring(MP.displayName) == "ServicePrincipal.DisplayName")
+      by Id, TimeGenerated, Actor
+    | extend Kind = "aplicacion";
+union delegated, app_roles
+| where Permission has_any (sensitive_permissions)
 | extend RiskLevel = case(
-    Permissions has "ReadWrite.All", "Alto",
-    Permissions has "Mail.Send",     "Alto",
+    Permission has "ReadWrite.All", "Alto",
+    Permission has "Mail.Send",     "Alto",
     "Medio"
 )
-| project TimeGenerated, ConsentedApp, Permissions, RiskLevel,
-    ConsentedBy = tostring(InitiatedBy.user.userPrincipalName)
+| project TimeGenerated, Kind, AppName, Permission, Actor, RiskLevel
 | order by RiskLevel asc, TimeGenerated desc
 
-// ── Query 3: SPs con actividad de sign-in reciente (confirmar uso activo) ────
+// ── Query 3: Service principals con inicio de sesion reciente, y los que dejaron de usarse ────────────────────────
+// La ventana (90 dias) es mayor que el umbral de inactividad (30 dias); si no, el estado Inactivo no puede darse. Un principal que nunca inicio sesion no aparece aqui: usar el informe de
+// actividad de inicio de sesion de Graph (Paso 4 del skill). Resultado en la cuenta de validacion: 10 service principals, 5 activos normales, 4 con mas de 5 IPs de origen y 1 inactivo.
 AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(lookback)
+| where TimeGenerated > ago(90d)
 | summarize
-    LastSignIn    = max(TimeGenerated),
-    SignInCount   = count(),
-    UniqueIPs     = dcount(IPAddress),
-    Resources     = make_set(ResourceDisplayName, 10)
+    LastSignIn  = max(TimeGenerated),
+    SignInCount = count(),
+    UniqueIPs   = dcount(IPAddress),
+    Resources   = make_set(ResourceDisplayName, 10)
   by ServicePrincipalName, ServicePrincipalId
 | extend DaysSinceLastSignIn = datetime_diff("day", now(), LastSignIn)
 | extend Status = case(
-    DaysSinceLastSignIn > 30, "Inactivo — revisar para descomisión",
-    UniqueIPs > 5,            "Activo — múltiples IPs de origen",
-    "Activo — normal"
+    DaysSinceLastSignIn > 30, "Inactivo: candidato a descomision",
+    UniqueIPs > 5,            "Activo: varias IPs de origen",
+    "Activo: normal"
 )
 | order by DaysSinceLastSignIn desc
