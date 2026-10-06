@@ -482,7 +482,7 @@ You have now built all six sections of the **Agentic Incident Response Playbook*
 |---------|--------|---------|
 | 1 — Discover | Module 01 | Agent inventory baseline, shadow AI, oversharing sites |
 | 2 — Govern | Module 02 | Governance gap inventory, Agent Builder bypass documentation |
-| 3 — Secure Access | Module 03 | CA policy configuration, What If validation, OAuth audit |
+| 3 — Secure Access | Module 03 | CA policy configuration, report-only validation, OAuth audit |
 | 4 — Protect Data | Module 04 | DLP configuration, exfiltration detection queries |
 | 5 — Detect & Respond | Module 05 | Analytics rules, enforcement Logic App, false negative audit |
 | 6 — Red Team | Module 06 | Attack execution, detection gap analysis, threshold tuning |

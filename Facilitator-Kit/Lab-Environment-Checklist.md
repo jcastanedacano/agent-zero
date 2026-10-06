@@ -69,7 +69,7 @@ AuditLogs | where TimeGenerated > ago(7d) | take 5
 
 **Module 03 (Secure Access):**
 - [ ] At least one service principal visible in Entra → Enterprise Applications
-- [ ] Entra CA → What If tool accessible
+- [ ] Entra CA policy list and Sign-in logs → Service principal sign-ins (Conditional Access and Report-only tabs) accessible
 
 **Module 04 (Protect Data):**
 - [ ] Microsoft Purview compliance portal accessible: [purview.microsoft.com](https://purview.microsoft.com)

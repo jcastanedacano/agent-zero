@@ -24,7 +24,7 @@
 |--------|--------|-----|----------|
 | [01 — Discover & Prioritize](./Module-01-Discover.md) | Agent inventory architecture | Defender AI Inventory + inventory KQL | 90 min |
 | [02 — Govern & Control](./Module-02-Govern.md) | Governance model and lifecycle | Entra Agent ID + Copilot Studio + DLP | 90 min |
-| [03 — Secure Access](./Module-03-SecureAccess.md) | CA policy for agent identities | CA policy + What If + OAuth audit KQL | 90 min |
+| [03 — Secure Access](./Module-03-SecureAccess.md) | CA policy for agent identities | CA policy in report-only + sign-in log validation + OAuth audit KQL | 90 min |
 | [04 — Protect Data](./Module-04-ProtectData.md) | Data protection and AI DLP | Purview DLP + SharePoint Advanced Management | 90 min |
 | [05 — Detect & Respond](./Module-05-DetectRespond.md) | Detection and response architecture | Sentinel rules + Logic App playbook | 90 min |
 | [06 — Regulatory Frameworks](./Module-06-RegulatoryFrameworks.md) | EU AI Act + NIST AI RMF + ISO 42001 | Agent classification + compliance gap assessment | 90 min |
@@ -42,7 +42,7 @@ Each module contributes one section of the Gap Assessment Template. By end of da
 Gap Assessment — [Organization Name]
 ├── Domain 1 — Agent inventory with documented blind spots
 ├── Domain 2 — Governance model configured with gaps and owners assigned
-├── Domain 3 — Valid CA policy for agents + What If evidence
+├── Domain 3 — CA policy for agents in report-only + sign-in log evidence
 ├── Domain 4 — DLP policy for AI interactions + site inventory
 ├── Domain 5 — Active analytics rules + enforcement Logic App
 ├── Domain 6 — Regulatory framework compliance status (EU AI Act / NIST AI RMF / ISO 42001)

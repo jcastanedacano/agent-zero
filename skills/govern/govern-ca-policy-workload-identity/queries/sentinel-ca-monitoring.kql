@@ -1,45 +1,48 @@
 // skill: govern-ca-policy-workload-identity
-// workspace: {workspace-name} | conector requerido: AuditLogs-EntraID
+// workspace: {workspace-name} | conectores: Microsoft Entra ID (AADServicePrincipalSignInLogs)
+// Validado en un workspace Sentinel (oct 2026). La version anterior: leia solo la primera politica evaluada (ConditionalAccessPolicies[0]) y exigia que fuera la AISEC; buscaba un resultado
+// reportOnlyBlock que no existe (los resultados reales llevan el prefijo reportOnly, por ejemplo reportOnlyFailure y reportOnlyNotApplied); y decidia "fuera de la red corporativa" con
+// prefijos privados (10., 172.16., 192.168.), que nunca aparecen como IP de origen de una solicitud de token. Q1 a Q4 compilan y se ejecutaron; el resultado de la cuenta de validacion esta junto a cada consulta.
 
-// ── Query 1: Sign-ins bloqueados por CA policy de agentes ────────────────────
+// ── Query 1: Que politicas evaluaron los inicios de sesion de entidades de servicio, y con que resultado ───────────────
+// ConditionalAccessPolicies es un arreglo con todas las politicas evaluadas en el inicio de sesion. Filtrar por el nombre de la politica AISEC para ver solo la de este skill.
+// Resultado en la cuenta de validacion: 4 politicas, todas de agentes (una activa con notApplied y tres en solo informe con reportOnlyNotApplied), cada una con 2351 evaluaciones en 8 entidades de servicio en 90 dias.
+let lookback = 90d;
 AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(7d)
-| where ConditionalAccessStatus == "failure"
-    or tostring(ConditionalAccessPolicies) has "block"
-| extend
-    PolicyName = tostring(parse_json(tostring(ConditionalAccessPolicies))[0].displayName),
-    Result     = tostring(parse_json(tostring(ConditionalAccessPolicies))[0].result)
-| where PolicyName has "AISEC"
-| project TimeGenerated, ServicePrincipalName, IPAddress, Location, PolicyName, Result
+| where TimeGenerated > ago(lookback)
+| mv-expand Pol = parse_json(ConditionalAccessPolicies)
+| summarize Evaluations = count(), ServicePrincipals = dcount(ServicePrincipalId) by Policy = tostring(Pol.displayName), PolicyResult = tostring(Pol.result)
+| order by Evaluations desc
+
+// ── Query 2: Solo informe, accesos que la politica habria bloqueado (antes de activarla) ─────────────────────────────
+// reportOnlyFailure es "Report-only: Failure" en el portal: se cumplen las condiciones de la politica y el control es Block. Revisar las IPs y ubicaciones antes de pasar la politica a enabled.
+// Resultado en la cuenta de validacion: 0 filas (ninguna politica de este tipo en solo informe).
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(lookback)
+| mv-expand Pol = parse_json(ConditionalAccessPolicies)
+| where tostring(Pol.result) == "reportOnlyFailure"
+| summarize WouldBeBlocked = count(), IPs = make_set(IPAddress, 10), Locations = make_set(Location, 5), LastSeen = max(TimeGenerated) by ServicePrincipalName, Policy = tostring(Pol.displayName)
+| order by WouldBeBlocked desc
+
+// ── Query 3: Bloqueos aplicados por Conditional Access ───────────────────────────────────────────────────────────────
+// 53003 es el codigo que Entra devuelve cuando una politica de Conditional Access bloquea el acceso.
+// Resultado en la cuenta de validacion: 0 filas en 90 dias (ninguna politica llego a bloquear).
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(lookback)
+| where ResultType == "53003"
+| project TimeGenerated, ServicePrincipalName, AppId, IPAddress, Location, ResourceDisplayName, ResultDescription
 | order by TimeGenerated desc
 
-// ── Query 2: Report-only — accesos que serían bloqueados (pre-enforcement) ───
+// ── Query 4: Accesos exitosos desde fuera de los rangos de confianza (validar la Named Location antes de activar) ─────
+// Sustituir trusted_ranges por los rangos PUBLICOS de salida de los agentes (203.0.113.0/24 es un rango de documentacion). ipv4_is_in_any_range devuelve null para una direccion IPv6;
+// coalesce las deja en la lista en lugar de descartarlas en silencio. Resultado en la cuenta de validacion: con el rango de documentacion todo cae fuera; las filas incluyen dos entidades de
+// servicio propias desde una sola IP publica y trafico IPv6 interno de Microsoft Cloud App Security.
+let trusted_ranges = dynamic(["203.0.113.0/24"]);
 AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(7d)
-| extend Policies = parse_json(tostring(ConditionalAccessPolicies))
-| mv-expand Policy = Policies
-| where tostring(Policy.result) == "reportOnlyBlock"
-| project
-    TimeGenerated,
-    ServicePrincipalName,
-    IPAddress,
-    Location,
-    PolicyName = tostring(Policy.displayName)
-| summarize
-    BlockedAttempts = count(),
-    UniqueIPs       = dcount(IPAddress),
-    Locations       = make_set(Location, 5)
-  by ServicePrincipalName, PolicyName
-| order by BlockedAttempts desc
-
-// ── Query 3: Accesos exitosos desde IPs fuera de rango corporativo ───────────
-// Usar para validar Named Location antes de enforcement
-let corporate_prefixes = dynamic(["10.", "172.16.", "192.168."]);
-AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(7d)
-| where ResultType == 0  // success
-| where not(IPAddress has_any (corporate_prefixes))
-| project TimeGenerated, ServicePrincipalName, IPAddress, Location, ResourceDisplayName
-| summarize Count = count(), Resources = make_set(ResourceDisplayName, 5)
-    by ServicePrincipalName, IPAddress, Location
-| order by Count desc
+| where TimeGenerated > ago(lookback)
+| where ResultType == "0"
+| where isnotempty(IPAddress)
+| extend InTrusted = coalesce(ipv4_is_in_any_range(IPAddress, trusted_ranges), false)
+| where InTrusted == false
+| summarize SignIns = count(), Resources = make_set(ResourceDisplayName, 5), LastSeen = max(TimeGenerated) by ServicePrincipalName, IPAddress, Location
+| order by SignIns desc

@@ -107,7 +107,7 @@ By the end of this module, participants will be able to design a detection and r
 This module closes the Gap Assessment Template. Participants should now have:
 - Agent inventory architecture with documented blind spots (Domain 01)
 - Governance model configured in demo tenant (Domain 02)
-- Valid CA policy for agents validated with What If (Domain 03)
+- CA policy for agents validated in report-only (Domain 03)
 - DLP policy for AI interactions + site inventory (Domain 04)
 - Two active analytics rules + enforcement Logic App (Domain 05)
 

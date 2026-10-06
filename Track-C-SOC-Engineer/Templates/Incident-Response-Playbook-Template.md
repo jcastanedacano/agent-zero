@@ -101,22 +101,21 @@ Complete one section per module during the Track C workshop. Each section maps t
 | Field | Value |
 |-------|-------|
 | Policy name | Agentic AI — Risk-Based Access Control |
-| Targeted identities | [list service principals] |
-| Condition | Service principal risk: Medium+ |
+| Targeted identities | [all agent identities / blueprint / specific agent identities] |
+| Condition | Agent risk (preview): High |
 | Grant control | Block |
 | Status | Report-only / Enforced |
 
 ### Critical Configuration Notes
 
-> **`grantControls: mfa` is INVALID for agent identities.**  
-> Applies to policies targeting `clientApplications.includeAgentIdServicePrincipals`.  
-> For agents: use `block` or `sessionControls` only.  
-> Confirmed invalid in What If test on [DATE]. See screenshot: [ATTACH]
+> **Block is the only access control for agent identities (Microsoft Learn).**
+> MFA policies written for users do not reach agents.
+> Validated in report-only on [DATE]. See screenshot or query output: [ATTACH]
 
-### What If Validation Evidence
+### Report-only Validation Evidence
 
-- [ ] Policy applies to `demo-sales-agent` with Medium risk: [screenshot]
-- [ ] Policy does NOT apply to user accounts: [screenshot]
+- [ ] Policy listed in `ConditionalAccessPolicies` of the agent sign-ins (`reportOnlyNotApplied` or `reportOnlyFailure`): [screenshot]
+- [ ] No user MFA policy among the policies evaluated for the agent: [screenshot]
 
 ### Analytics Rules Deployed
 
@@ -238,7 +237,7 @@ SecurityIncident
 |--------|------------------|-----------------|---------|
 | 01 Discover | Defender AI Agent Inventory, Purview DSPM | 1 | Local agents without endpoint connector |
 | 02 Govern | Entra Agent ID, Copilot Studio approval, Power Platform DLP | 3 | Agent Builder bypass |
-| 03 Secure Access | CA policy (risk-based, block), What If validated | 3 | grantControls: mfa misconfiguration risk |
+| 03 Secure Access | CA policy (agent risk, block), validated in report-only | 3 | User MFA policy assumed to cover agents |
 | 04 Protect Data | Purview DLP for AI interactions, label audit | 4 | Oversharing pre-existing before label remediation |
 | 05 Detect & Respond | 3 analytics rules + Logic App enforcement | 3 | Structural false negatives in detection-only posture |
 | 06 Red Team | 5 ATLAS attack exercises, detection gap analysis | — | [From red team findings] |

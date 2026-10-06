@@ -63,7 +63,7 @@ These aren't attendance metrics. They're leading indicators of behavior change a
 
 **Module 02:** The Agent Builder bypass pattern triggers a "wait, that's already happening" reaction.
 
-**Module 03:** The `grantControls: mfa` invalid-for-agents finding lands as a genuine discovery, not just content consumption.
+**Module 03:** The finding that the tenant's user MFA policies never appear in an agent's sign-in log lands as a genuine discovery, not just content consumption.
 
 **Module 04:** Participants immediately think of a SharePoint site in their environment that is probably misconfigured.
 

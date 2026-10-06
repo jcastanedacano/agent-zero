@@ -18,11 +18,11 @@ By the end of this module, participants will be able to explain why access polic
 
 **Core content (points the facilitator must cover):**
 
-1. **The MFA trap for agents:** Conditional Access policies requiring MFA for human users are **invalid for agents** — an agent cannot complete interactive MFA. If a policy applies MFA as an access control to an agent, the policy exists but executes no action: it neither blocks nor authenticates. The result is a false sense of security.
+1. **The MFA assumption for agents:** Conditional Access policies that require MFA for human users do not cover agents: an agent cannot complete interactive MFA, and Microsoft Learn documents Block as the only access control for agent identities. An organization that relies on its user MFA policy has no policy on its agents. The result is a false sense of security, and the fix is a separate policy for agents.
 
 2. **Verifiable least privilege:** Agents accumulate permissions without a systematic review process. Uncontrolled OAuth consent allows an agent to obtain `Mail.ReadWrite` without any administrator explicitly approving it. The gap is not one of intent — it is one of process.
 
-3. **Applicable Microsoft controls:** Entra CA for Agents enables policies specific to agent identities using `clientApplications.includeAgentIdServicePrincipals`. Entra ID Protection detects anomalous service principal behavior. PIM just-in-time limits the exposure window for elevated permissions. Defender for Cloud Apps audits connected application behavior.
+3. **Applicable Microsoft controls:** Entra CA for Agents enables policies specific to agent identities, through the Agents assignment. Entra ID Protection detects anomalous service principal behavior. PIM just-in-time limits the exposure window for elevated permissions. Defender for Cloud Apps audits connected application behavior.
 
 4. **Identity laundering as a risk vector:** An agent can operate under a human user's delegated identity, executing actions that appear in logs as performed by the person. Without a separate agent identity (Entra Agent ID), forensic traceability is impossible.
 

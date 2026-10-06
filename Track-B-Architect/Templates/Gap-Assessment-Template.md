@@ -91,7 +91,7 @@ This document is the primary deliverable of the Track B workshop. Share it with 
 
 ### Known Misconfiguration Patterns
 
-- [ ] `grantControls: mfa` applied to agent CA policy (invalid for non-human identities — must use `block`)
+- [ ] Agents assumed to be covered by the user MFA policy (agent identities need their own Conditional Access policy, and Block is the only control Learn documents for them)
 - [ ] Service principals with `Directory.ReadWrite.All` or `Mail.ReadWrite` without justification
 - [ ] Client secret expiring within 30 days with no rotation plan
 - [ ] Agent using user-delegated permissions instead of application permissions

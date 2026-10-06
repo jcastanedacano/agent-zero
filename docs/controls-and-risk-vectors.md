@@ -42,7 +42,7 @@ Every domain maps to named, configurable Microsoft controls. Expand a domain to 
 <summary><b>03 — Secure Access</b> · 11 controls</summary>
 
 
-- Entra CA for Agents (`clientApplications.includeAgentIdServicePrincipals`)
+- Entra CA for Agents (Agents assignment, agent risk condition, Block)
 - Named CA templates (On behalf of / Autonomous agent access policy)
 - Entra ID Protection
 - PIM just-in-time

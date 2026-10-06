@@ -9,7 +9,7 @@
 
 ## Learning Objective
 
-At the end of this module, you will be able to configure a Conditional Access policy targeting agent identities using the dedicated **Agents** assignment type in Entra CA, validate it with the What If tool, detect OAuth consent drift via KQL, and document the critical difference between CA for users and CA for agents.
+At the end of this module, you will be able to configure a Conditional Access policy targeting agent identities using the dedicated **Agents** assignment type in Entra CA, validate it in report-only mode with the sign-in logs, detect OAuth consent drift via KQL, and document the critical difference between CA for users and CA for agents.
 
 ---
 
@@ -17,18 +17,18 @@ At the end of this module, you will be able to configure a Conditional Access po
 
 | Time | Activity | Type |
 |------|----------|------|
-| 15 min | Entra CA for Agents: scopes, grant control limitations, Blueprint-level policies | Explanation |
+| 15 min | Entra CA for Agents: scopes, Block as the only control, targeting all agents, a blueprint or an attribute | Explanation |
 | 10 min | OAuth consent without control: how agents accumulate unreviewed permissions | Explanation |
-| 55 min | Lab: CA policy for agents + What If validation + OAuth audit KQL | Lab |
+| 55 min | Lab: CA policy for agents in report-only + sign-in log validation + OAuth audit KQL | Lab |
 | 10 min | Results review + playbook section 3 documentation | Discussion |
 
 ---
 
 ## Core Content
 
-1. **The `grantControls: mfa` trap for agents:** A CA policy with `mfa` as a grant control on agent identities is silently invalid — it neither blocks nor forces authentication. Agents cannot complete interactive MFA and the policy generates no enforcement event in the logs. Only `"block"` is valid to block agent access via CA.
+1. **MFA is not the control for agents:** Agents cannot complete interactive MFA, and Microsoft Learn documents **Block** as the only access control for agent identities. A user policy that requires MFA does not reach an agent that acts as itself, so a tenant that counts on its user MFA policy has no policy on its agents. Agents need their own policy: the Agents assignment, the agent risk condition and `block`. Learn does not document what the Graph API does when it is sent another grant control, so this module does not claim it.
 
-2. **Blueprint-level CA as a scaling pattern:** A CA policy per agent instance does not scale. The correct pattern targets the **agent identity blueprint** under `Assignments → Agents → All agent identities` — this automatically covers all current and future agent identities derived from the same blueprint without per-instance configuration.
+2. **Targeting at scale:** A CA policy per agent instance does not scale. Under `Assignments → Agents`, **All agent identities** covers every agent identity in the tenant, including the ones created later; the object picker also accepts specific agent identities or blueprints (a blueprint target covers the identities created from it, including later ones) and custom security attributes. To allow only approved agents, exclude them from an All-agent-identities Block policy.
 
 3. **OAuth consent drift as a silent accumulation vector:** Without consent flow restrictions, an agent can accumulate additional permissions without explicit approval. The signal: `AuditLogs` → `Add delegated permission grant` without correlation to an `AgentPermissionApproved` event. Caveat: that approval event name is not confirmed to exist on a live tenant (see Module 02, Step 6).
 
@@ -44,21 +44,19 @@ At the end of this module, you will be able to configure a Conditional Access po
 
 ## Background
 
-### The `grantControls: mfa` trap
+### Why MFA is not the control for agents
 
-This is the most common misconfiguration in CA policies for agents:
+Agents cannot complete interactive MFA, and Microsoft Learn documents Block as the only access control for agent identities. A user policy that requires MFA does not reach an agent acting as itself, and a policy written for the agent identity does not apply to its agent user. The shape of an agent policy in Microsoft Graph (beta) is a Block with the agent risk condition:
 
 ```json
-// THIS DOES NOT WORK FOR AGENTS — do not use
-"grantControls": {
-  "builtInControls": ["mfa"]
-}
+"conditions": {
+  "clientApplications": { "includeAgentIdServicePrincipals": ["All"] },
+  "agentIdRiskLevels": "high"
+},
+"grantControls": { "operator": "OR", "builtInControls": ["block"] }
 ```
 
-For agent identities, `mfa` as a grant control is **silently invalid** — it neither enforces MFA (agents cannot complete it) nor blocks access. The policy appears active but creates no enforcement. The correct options are:
-
-- `"builtInControls": ["block"]` — explicitly blocks access
-- No `grantControls` block — use `sessionControls` instead for monitoring
+What the API does with a grant control that the portal does not offer is not documented by Learn, so this module does not teach it as a finding.
 
 Reference: [Conditional Access for agents](https://learn.microsoft.com/en-us/entra/identity/conditional-access/agent-id) | [Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity)
 
@@ -67,9 +65,9 @@ Reference: [Conditional Access for agents](https://learn.microsoft.com/en-us/ent
 
 ## Background
 
-### Blueprint-level CA vs. per-instance policies
+### One policy for many agents, not one per instance
 
-Creating a separate CA policy for each agent instance is an antipattern that fails at scale. The new **Agents** assignment type in Entra CA (`Assignments → Users, agents or workload identities → Agents → All agent identities`) covers all agent identities in the tenant. To scope to a specific blueprint, select individual agent identities under the same blueprint — every new agent identity derived from that blueprint is automatically covered.
+Creating a separate CA policy for each agent instance is an antipattern that fails at scale. The **Agents** assignment type in Entra CA (`Assignments → Users, agents or workload identities → Agents → All agent identities`) covers all agent identities in the tenant. To scope to a blueprint, pick the blueprint in the object picker: it covers every agent identity created from it, including the ones created later, but not the blueprint's agent user accounts. To scope by label, use a custom security attribute on the agents.
 
 ### Identity laundering in the audit log
 
@@ -96,41 +94,40 @@ Microsoft Entra now has a dedicated **Agents** assignment type for CA policies �
 7. **Enable policy:** Set to **Report-only** first
 8. Select **Create**
 
-> **Why Report-only first:** In a demo tenant, blocking agents immediately may break lab workflows. Report-only lets you validate behavior using the What If tool and Sign-in logs before enforcing.
+> **Why Report-only first:** In a demo tenant, blocking agents immediately may break lab workflows. Report-only lets you validate behavior using the sign-in logs before enforcing.
 
-> **License note:** Conditional Access for agents requires Entra ID P1 or P2 and a Microsoft Agent 365 license.
-
----
-
-### Step 2 — Validate with What If tool
-
-1. In **Conditional Access** → **What If**
-2. Under **User or workload identity:** select **Workload identity** → choose `demo-sales-agent`
-3. Under **Cloud app:** select **Microsoft Graph**
-4. Under **Agent risk:** set to **High**
-5. Click **What If**
-
-**Expected result:** The policy `Agentic AI — Risk-Based Access Control` appears in the results as "Will apply" with action "Block."
-
-**Document:** Screenshot the What If result for your playbook. This is your evidence that the policy applies correctly to agent identities and not to user accounts (run a second What If with a user account to confirm the policy does not appear).
+> **License note:** Conditional Access for agents requires Microsoft 365 E7, or a Microsoft Agent 365 license with at least Microsoft Entra ID P1 or Microsoft 365 E3. Workload ID Premium is a different license, for classic workload identities.
 
 ---
 
-### Step 3 — Confirm `grantControls: mfa` behavior for agents
+### Step 2 — Validate in report-only mode
 
-Agents cannot complete interactive MFA. A CA policy with MFA as a grant control on agent identities is silently invalid — it generates no enforcement event and no error.
+Learn's agent articles validate with report-only mode and the sign-in logs; they do not describe the What If tool for agents.
 
-1. Duplicate the policy from Step 1
-2. Under **Assignments**, switch from **Agents** to **Workload identities → Service principals** → select `demo-sales-agent`
-3. Change **Grant** from **Block access** to **Require multifactor authentication**
-4. Save as `TEST — MFA Grant for Agent (invalid)`
-5. Run What If with the same agent identity and High risk
+1. In **Entra ID** → **Monitoring & health** → **Sign-in logs** → **Service principal sign-ins**
+2. Open a sign-in of `demo-sales-agent` that requests a token for a real resource (for example Microsoft Graph)
+3. Read the **Conditional Access** tab and the **Report-only** tab
 
-**Expected result:** The MFA policy appears as "Will apply" — but the grant control cannot be enforced because agents cannot satisfy MFA. Microsoft's official documentation confirms: for agent identities, only `Block` is a valid grant control. This is the silent misconfiguration that creates a false sense of security.
+**Expected result:** `Agentic AI — Risk-Based Access Control` is listed as `reportOnlyNotApplied` while the agent risk is below High (the condition is not met) and as `reportOnlyFailure` when it would have blocked. Query 2 of `skills/secure/secure-ca-policy-agents/queries/sentinel-ca-agents.kql` returns the same information for all agent sign-ins.
 
-6. Delete the test policy after documenting the finding.
+**Boundary:** the sign-ins of an agent identity at the `AAD Token Exchange Endpoint: Public`, and the token a blueprint requests to create an agent identity, are outside Conditional Access (Learn), so they show `notApplied`. Judge the policy on the sign-ins that request a token for a real resource.
 
-> **Reference:** [Microsoft Entra — Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity) — "Can't perform multifactor authentication."
+**Document:** screenshot the tab, or save the Query 2 result, for your playbook.
+
+---
+
+### Step 3 — Check that the user MFA policies do not reach the agent
+
+Agents cannot complete interactive MFA, and Learn documents Block as the only access control for agent identities. The assumption to test is the opposite one: that the tenant's MFA policy for users also protects the agents.
+
+1. In **Conditional Access** → **Policies**, find a policy that requires MFA for all users
+2. In the **Conditional Access** tab of the agent sign-in from Step 2 (or in `ConditionalAccessPolicies` with Query 2), look for that policy
+
+**Expected result:** the user MFA policy is not among the policies evaluated for the agent sign-in: only agent policies are listed. On the validation tenant (October 2026) the 2351 service principal sign-ins of 90 days that carried an evaluation each listed the same four policies, all of them agent policies, while the tenant had enabled Conditional Access policies for all users. An organization that counts on its user MFA policy has no policy on its agents.
+
+This module does not test what the Graph API does when it is sent a grant control that the portal does not offer: Learn does not document it.
+
+> **Reference:** [Conditional Access for agents](https://learn.microsoft.com/en-us/entra/identity/conditional-access/agent-id) and [Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity) ("Can't perform multifactor authentication").
 
 ---
 
@@ -265,18 +262,19 @@ Run `KQL-Library/P03-Access-Anomalies.kql`, Q14. ID Protection for agents evalua
 
 ### CA Policy Deployed
 - Policy name: Agentic AI — Risk-Based Access Control
-- Scope: [list targeted service principals]
-- Condition: Service principal risk Medium+
+- Scope: [all agent identities / blueprint / specific agent identities]
+- Condition: Agent risk (preview) High
 - Grant: Block
 - Status: Report-only / Enforced
 
 ### Critical Configuration Note
-grantControls: mfa is INVALID for agent identities (clientApplications.includeAgentIdServicePrincipals).
-Use block or sessionControls only. Confirmed in What If test on [DATE].
+Block is the only access control for agent identities (Microsoft Learn). MFA policies written for users do not reach agents.
+Validated in report-only on [DATE]: [screenshot or Query 2 output attached].
 
-### What If Validation
-- [ ] Policy applies to demo-sales-agent with Medium risk: [screenshot attached]
-- [ ] Policy does NOT apply to user accounts: [screenshot attached]
+### Report-only Validation
+- [ ] Policy listed in ConditionalAccessPolicies of the agent sign-ins (reportOnlyNotApplied or reportOnlyFailure): [screenshot or query output attached]
+- [ ] No user MFA policy among the policies evaluated for the agent: [screenshot or query output attached]
+- [ ] Days in report-only before enforcing: [N, minimum 7]
 
 ### Access Anomaly KQL Queries (add to Sentinel)
 - [ ] OAuth high-privilege consent without review (weekly)
@@ -296,7 +294,7 @@ Use block or sessionControls only. Confirmed in What If test on [DATE].
 
 ## Closing Questions
 
-- What happened when you set `grantControls: mfa` for the agent identity in the What If test? How would you document this finding in a configuration hardening guide to prevent a colleague from repeating the error?
+- What did the Conditional Access tab of the agent sign-in show about the tenant's user MFA policies? How would you document this finding in a configuration hardening guide so that a colleague does not assume a user MFA policy covers agents?
 - When comparing `EntraIdSpnSignInEvents` for agent identities vs. `SigninLogs` for user identities, what fields are present in one but not the other? What does that mean for correlation queries that need to cover both?
 
 ---

@@ -32,7 +32,7 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 3. **Applicable Microsoft controls:** Entra Agent ID establishes a manageable identity per agent, separate from generic service principals. Publishing a Copilot Studio agent to the organization requires admin approval in the Microsoft 365 admin center (Agents > All agents > Requests). Foundry RBAC restricts operations in Azure AI. Power Platform DLP classifies and blocks connectors by category (Business / Non-business / Blocked).
 
-4. **`grantControls: mfa` is invalid for agents:** Agents cannot complete interactive MFA. A CA policy with this control on agent identities appears active but generates no enforcement. Only `block` or `sessionControls` are valid for policies targeting `clientApplications.includeAgentIdServicePrincipals`.
+4. **MFA policies for users do not cover agents:** Agents cannot complete interactive MFA, and Microsoft Learn documents Block as the only access control for agent identities. A policy for all users does not reach an agent acting as itself, so agents need their own policy (Agents assignment, agent risk condition, Block). Module 03 builds and validates it.
 
 5. **Multi-agent trust boundaries:** In multi-agent architectures, an agent can invoke another (orchestrator → sub-agent). If the orchestrating agent is compromised, it can use its permissions to invoke sub-agents with a larger blast radius. The correct governance principle: every agent-to-agent call must be treated as an untrusted call. Each agent needs its own Entra Agent ID — identities cannot be shared — and permissions are not inherited between agents without explicit user authorization.
 
@@ -46,9 +46,9 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 Agent Builder (available in M365 Copilot) lets any licensed user create an agent and share it with the whole organization **immediately**, without a request to an admin: the **Requests** queue only receives agents submitted for approval, such as Copilot Studio agents published to the organization and Agent Builder submissions to the organization catalog. The shared agent appears in the agent registry as **Shared by creator**, with its creator as owner, but its identity, data sources and connectors get no formal review. An admin can restrict who can share and can block any agent.
 
-### Why `grantControls: mfa` doesn't work for agents
+### Why MFA is not the control for agents
 
-When configuring Conditional Access for agents, `grantControls: {"builtInControls": ["mfa"]}` is **invalid for agent identities** — agents cannot complete interactive MFA. The policy appears to save but creates no enforcement. Only `block` or absence of `grantControls` are valid options. This applies to CA policies targeting `clientApplications.includeAgentIdServicePrincipals`. Documented in [Microsoft Entra CA for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity).
+Agents cannot complete interactive MFA, and Learn documents **Block** as the only access control for agent identities. A user policy that requires MFA does not reach an agent acting as itself, and a policy for the agent identity does not apply to its agent user. Documented in [Microsoft Entra CA for agents](https://learn.microsoft.com/en-us/entra/identity/conditional-access/agent-id).
 
 ### Entra Agent ID vs. Service Principal
 
@@ -57,7 +57,7 @@ When configuring Conditional Access for agents, `grantControls: {"builtInControl
 | `agentType` claim | Not present | Present |
 | Lifecycle management | Manual | Managed via Agent 365 |
 | Appears in Agent 365 Registry | No | Yes |
-| CA policy targeting | `includeServicePrincipals` | `includeAgentIdServicePrincipals` |
+| CA policy targeting | Workload identities assignment (`includeServicePrincipals`) | Agents assignment (`includeAgentIdServicePrincipals` in Graph beta) |
 | Detectable in KQL via | `AppId` | `EntraAgentID` field in `AgentsInfo` |
 
 ---

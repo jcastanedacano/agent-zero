@@ -26,7 +26,7 @@
 |--------|--------|----------|----------|
 | [01 — Discover & Prioritize](./Module-01-Discover.md) | Agent inventory and visibility | KQL queries on AgentsInfo + OfficeActivity | 90 min |
 | [02 — Govern & Control](./Module-02-Govern.md) | Governance gaps and identity orphans | Entra Agent ID + DLP policy + governance KQL | 90 min |
-| [03 — Secure Access](./Module-03-SecureAccess.md) | CA policy for agents + OAuth audit | Entra CA for Agents + What If validation | 90 min |
+| [03 — Secure Access](./Module-03-SecureAccess.md) | CA policy for agents + OAuth audit | Entra CA for Agents + report-only validation | 90 min |
 | [04 — Protect Data](./Module-04-ProtectData.md) | DLP for AI interactions + exfiltration detection | Purview DLP + CloudAppEvents KQL | 90 min |
 | [05 — Detect & Respond](./Module-05-DetectRespond.md) | Jailbreak detection + response playbook | Sentinel analytics rules + Logic App enforcement | 90 min |
 | [06 — Red Team Perspective](./Module-06-RedTeamPerspective.md) | Attacker perspective + detection gap analysis | Execute 5 ATLAS attacks — verify KQL detects each | 90 min |
