@@ -1,9 +1,13 @@
 // skill: detect-agent-identity-abuse
 // workspace: {workspace-name} | conectores: AADServicePrincipalSignInLogs, AuditLogs-EntraID
-// Validado en un workspace Sentinel (oct 2026): las 5 consultas se ejecutan sin errores (Q1, Q2, Q3, Q4 y Q5 con
-// ventanas más largas que las de la regla, para tener datos). Q2 y Q3 se corrigieron; Q1, Q4 y Q5 no cambiaron.
-// Q4 y Q5 no devolvieron filas (no hay actividad que coincida), por lo que su lógica solo está validada
+// Validado en un workspace Sentinel (oct 2026): las 4 consultas se ejecutan sin errores (Q1 a Q4 con
+// ventanas más largas que las de la regla, para tener datos). Q2 y Q3 se corrigieron; Q1 y Q4 no cambiaron.
+// Q4 no devolvió filas (no hay actividad que coincida), por lo que su lógica solo está validada
 // sintácticamente.
+// Se eliminó la Query 5 (bypass de CA): contaba reportOnlyFailure como bypass, pero un resultado de solo informe nunca se
+// aplica, y un resultado failure significa que la política bloquea el inicio de sesión (ResultType 53003), así que no
+// coexiste con ResultType 0. La cobertura de Conditional Access de los inicios de sesión de agentes se lee con la Query 1 de
+// secure-ca-policy-agents (queries/sentinel-ca-agents.kql).
 
 // ── Query 1: SP de agente autenticando desde IP desconocida ──────────────────
 let corporate_prefixes = dynamic(["10.", "172.16.", "192.168.", "20.190."]);  // ajustar
@@ -108,20 +112,3 @@ AADServicePrincipalSignInLogs
 | where MinutesBetween > 0  // eliminar duplicados
 | extend Alert = strcat("Impossible travel: ", Location, " → ", Location2, " en ", MinutesBetween, " min")
 | order by MinutesBetween asc
-
-// ── Query 5: CA policy bypass — autenticación de SP que debería estar bloqueada ─
-AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(24h)
-| where ResultType == 0  // éxito
-| extend Policies = parse_json(tostring(ConditionalAccessPolicies))
-| mv-expand Policy = Policies
-| where tostring(Policy.result) has_any ("failure", "reportOnlyFailure")
-    and ResultType == 0  // CA falló pero el sign-in fue exitoso = bypass
-| project
-    TimeGenerated,
-    ServicePrincipalName,
-    IPAddress,
-    PolicyName = tostring(Policy.displayName),
-    PolicyResult = tostring(Policy.result)
-| extend Alert = strcat("CA policy '", PolicyName, "' falló pero sign-in exitoso — posible bypass")
-| order by TimeGenerated desc
