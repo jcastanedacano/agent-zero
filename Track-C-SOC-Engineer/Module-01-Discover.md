@@ -145,6 +145,8 @@ AgentsInfo
 
 **Note:** `Owners` is a dynamic field that can be null (third-party or external agents) or an empty array. The null check `isnull(Owners) or array_length(Owners) == 0` is required to capture both cases.
 
+**Shadow AI by usage.** This step finds agents that are registered without an owner. An AI app that nobody registered is not in `AgentsInfo` at all: P01-Q7 reads `CopilotActivity` for the AI applications people actually use, including third-party apps seen through network or browser DLP (Google Gemini on the validation workspace: 85 interactions, 1 user). Not verified for Copilot Studio agents and registered custom apps: the validation workspace has none.
+
 ---
 
 ### Step 3 — SharePoint sites accessed by agents without sensitivity labels
@@ -171,6 +173,8 @@ OfficeActivity
 ```
 
 **Expected output:** Sites accessed by agents that have no sensitivity label: oversharing candidates.
+
+For Copilot interactions, P04-Q6 reads Copilot's own audit record (`AccessedResources` with `SensitivityLabelId`) instead of guessing agent traffic from `UserAgent`.
 
 **Column names, validated on a Sentinel workspace (October 2026).** `MicrosoftPurviewInformationProtection` has no `Activity` column: label events are in `Operation` (`FileSensitivityLabelApplied`, `SensitivityLabelApplied`). `OfficeActivity` uses `OfficeObjectId` and `Site_Url`, not `ObjectId` and `SiteUrl`. **Limits:** `OfficeActivity` has no agent identity column, so agent traffic is guessed from `UserAgent`; on the validation tenant no user agent contained any of these terms and the query returned no rows, so replace `AgentUserAgents` with what your agent runtimes send. Label events record changes, not the current label: a file labeled before `LabelLookback` shows as unlabeled.
 

@@ -31,6 +31,9 @@ EntraIdSpnSignInEvents
 // Q2: Identity Laundering — Actions Attributed to User Instead of Agent
 // Use: Find operations where an agent acted under user identity
 //      Audit trail shows user, but request originated from agent process
+// Validated live (Oct 2026, Advanced Hunting): runs without errors and returned no rows: no file event has an
+//      agent-like user agent. The filter guesses agent traffic from UserAgent. For Copilot, the files it read are
+//      listed in its own audit record (CopilotActivity, AccessedResources; see P04-Q6), so that case needs no guess.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
@@ -125,6 +128,8 @@ EntraIdSpnSignInEvents
 //       source on this table. Keep it as a pattern for a source that carries the text.
 //       Not run against live events: the validation tenant has 0 agent ActionTypes in
 //       CloudAppEvents (30 days, Oct 2026).
+//       CopilotActivity does not carry prompt or response text either (Learn: Content Search or DSPM for AI hold
+//       it), so it is not a replacement source for this pattern.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(1h)
@@ -184,6 +189,9 @@ CloudAppEvents
 //       ["ModelId"] have no documented source on this table, and CallerObjectId and
 //       EndpointUrl are not documented either (documented keys: UserKey, UserId,
 //       ServerAddress, ConversationId).
+//       CopilotActivity can supply the volume half only (interaction records per user, without prompt text). On the
+//       validation workspace the busiest user reached 64 interactions in one hour (whole table, 9 active user-hours),
+//       far below the 500 threshold: this threshold targets API traffic, not the Copilot interface.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
@@ -238,6 +246,8 @@ CloudAppEvents
 //       advanced hunting" (gen_ai.input.messages, gen_ai.output.messages): treat it as a
 //       pattern for a source that carries the text, not as a detection that works on this
 //       table today.
+//       CopilotActivity does not carry prompt or response text either (Learn: Content Search or DSPM for AI hold
+//       it), so it is not a replacement source for this pattern.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(4h)
@@ -303,6 +313,8 @@ CloudAppEvents
 //       advanced hunting" (gen_ai.input.messages, gen_ai.output.messages): treat it as a
 //       pattern for a source that carries the text, not as a detection that works on this
 //       table today.
+//       CopilotActivity does not carry prompt or response text either (Learn: Content Search or DSPM for AI hold
+//       it), so it is not a replacement source for this pattern.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(24h)

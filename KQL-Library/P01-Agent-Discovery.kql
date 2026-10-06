@@ -2,7 +2,7 @@
 // P01 — DISCOVER & PRIORITIZE
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: AgentsInfo, CloudAppEvents, OfficeActivity, MicrosoftPurviewInformationProtection
+// Tables: AgentsInfo, CloudAppEvents, OfficeActivity, MicrosoftPurviewInformationProtection, CopilotActivity
 // SCHEMA NOTES (verified live against tenant AgentsInfo via pack_all(), Sep 2026):
 //   AgentsInfo.Name | Owners: dynamic, can be null
 //   EntraAgentID (capital D at the end) | LifecycleStatus: Active/Blocked/Uninstalled/Deleted
@@ -62,6 +62,8 @@ AgentsInfo
 // Note: Owners can be null (third-party/external agents) or empty array
 //       IdentityState uses the same three states as Q1. Blueprint-only agents are listed on
 //       purpose (they still have no agent identity here) but are not called "identity laundering".
+//       Q2 lists registered agents. An AI app that nobody registered, such as a third-party app people use from the
+//       browser, is not in AgentsInfo at all: see Q7.
 // -----------------------------------------------------------------------------
 AgentsInfo
 | where Timestamp > ago(30d)
@@ -126,6 +128,8 @@ AgentsInfo
 //      On the validation tenant no user agent contained any of the terms below, so the query returns no rows:
 //      replace AgentUserAgents with the user agents your agent runtimes send. Label events record changes, not the
 //      current label, so a file labeled before LabelLookback appears as unlabeled; workspace retention caps LabelLookback.
+//      For Copilot interactions, P04-Q6 reads Copilot's own audit record (AccessedResources with SensitivityLabelId)
+//      instead of guessing from UserAgent.
 // -----------------------------------------------------------------------------
 let AgentUserAgents = dynamic(["agent", "copilot", "power-automate", "bot"]);
 let LabelLookback = 90d;
@@ -200,3 +204,43 @@ AgentsInfo
     InstanceCount, RiskSignal,
     LastSeen = Timestamp
 | sort by McpServerCount desc, DeclaredToolCount desc
+
+
+// -----------------------------------------------------------------------------
+// Q7: AI Applications in Use — Microsoft Copilot, Copilot Studio Agents and Third-Party AI Apps
+// Use: Discover which AI applications people actually use, from the Copilot audit record instead of a registry:
+//      Microsoft Copilot apps, Copilot Studio agents (AppIdentity Copilot.Studio.<AppId>), registered custom or
+//      third-party AI apps (Workload ConnectedAIApp) and third-party AI apps seen through network or browser DLP
+//      (Workload AIApp). Q1 and Q2 inventory registered agents: an AI app that nobody registered shows up only here.
+// Source: CopilotActivity (Sentinel "Microsoft Copilot" connector): Workload, RecordType, AppIdentity, AppHost
+//      (Microsoft Learn, "Audit logs for Copilot and AI applications"). Learn: audit logs for non-Microsoft AI apps
+//      use pay-as-you-go billing and must be enabled.
+// Recommended: Hunting query (weekly review)
+// Validated live (Oct 2026, Sentinel workspace): returns 4 rows over 90 days: Security Copilot (148 interactions,
+//      1 user), Microsoft 365 Copilot in the Office web chat (2) and in Word (1), and Google Gemini as a third-party
+//      AI app (85 interactions, 1 user, Workload AIApp). For third-party apps the application name is in AppHost
+//      ("Google Gemini"); AppIdentity is a numeric id there (AIApp.SaaS.51399), not a name as Learn's example suggests.
+//      Not verified: Copilot Studio agents and Workload ConnectedAIApp, because the validation workspace has no such
+//      records (the branches follow Learn's documented values).
+// -----------------------------------------------------------------------------
+CopilotActivity
+| where TimeGenerated > ago(90d)
+| where RecordType in ("CopilotInteraction", "ConnectedAIAppInteraction", "AIAppInteraction")
+| extend AppKind = case(
+    Workload == "AIApp", "Third-party AI app (network or browser DLP)",
+    Workload == "ConnectedAIApp", "Registered custom or third-party AI app",
+    AppIdentity startswith "Copilot.Studio.", "Copilot Studio agent",
+    "Microsoft Copilot")
+| summarize
+    Interactions = count(),
+    Users = dcount(ActorUserId),
+    FirstSeen = min(TimeGenerated),
+    LastSeen = max(TimeGenerated),
+    Agents = make_set_if(AgentName, isnotempty(AgentName), 5)
+    by AppKind, Workload, AppIdentity, AppHost
+| extend RiskNote = case(
+    Workload == "AIApp", "Third-party AI app seen through network or browser DLP: confirm it is approved",
+    Workload == "ConnectedAIApp", "Registered AI app: confirm owner and data access",
+    "")
+| sort by AppKind asc, Interactions desc
+| project AppKind, AppIdentity, AppHost, Interactions, Users, FirstSeen, LastSeen, Agents, RiskNote
