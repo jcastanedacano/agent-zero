@@ -1,23 +1,41 @@
 // skill: detect-agent-identity-abuse
 // workspace: {workspace-name} | conectores: AADServicePrincipalSignInLogs, AuditLogs-EntraID
-// Validado en un workspace Sentinel (oct 2026): las 4 consultas se ejecutan sin errores (Q1 a Q4 con
-// ventanas más largas que las de la regla, para tener datos). Q2 y Q3 se corrigieron; Q1 y Q4 no cambiaron.
-// Q4 no devolvió filas (no hay actividad que coincida), por lo que su lógica solo está validada
-// sintácticamente.
+// Validado en un workspace Sentinel (oct 2026). La versión anterior identificaba a los agentes por el nombre (has_any "agent", "bot",
+// "copilot", "sp-") en las cuatro consultas, y Q1 comparaba la IP con prefijos privados (10., 172.16., 192.168.), que nunca aparecen
+// como origen de un inicio de sesión de service principal. Ahora los agentes salen de la columna Agent de AADServicePrincipalSignInLogs
+// (agentType: agenticAppInstance o agentIdentityBlueprintPrincipal, últimos 30 días) más la lista known_agent_sps para los agentes que son
+// service principals comunes (poblarla desde el watchlist del Paso 5), y Q1 compara cada inicio de sesión con las IP que ese service
+// principal usó antes. Q2 solo cuenta identidades de agente: crear identidades de agente es la función documentada del principal del blueprint.
+// Resultado en la cuenta de validación (90 días): 1 identidad de agente y 1 principal de blueprint con 9 inicios de sesión. Q1, con una ventana de 20 días en lugar de
+// 1 hora para tener datos, devuelve ambos como "sin linea base" (el agente tiene 8 inicios de sesión en 90 días); Q2 devuelve 0 de 82 creaciones iniciadas por una aplicación (la versión
+// por nombre devolvía 5 filas de servicios de Microsoft); Q3 lee 47 eventos de rol con rol y principal y ninguno es de un agente; Q4 devuelve 0 filas
+// (un solo país). La rama "IP nueva" de Q1 y la lógica de Q4 se comprobaron con una tabla de datos de prueba.
 // Se eliminó la Query 5 (bypass de CA): contaba reportOnlyFailure como bypass, pero un resultado de solo informe nunca se
 // aplica, y un resultado failure significa que la política bloquea el inicio de sesión (ResultType 53003), así que no
 // coexiste con ResultType 0. La cobertura de Conditional Access de los inicios de sesión de agentes se lee con la Query 1 de
 // secure-ca-policy-agents (queries/sentinel-ca-agents.kql).
 
-// ── Query 1: SP de agente autenticando desde IP desconocida ──────────────────
-let corporate_prefixes = dynamic(["10.", "172.16.", "192.168.", "20.190."]);  // ajustar
-let known_agent_sps = dynamic([]);  // poblar desde watchlist o hardcodear
+// ── Query 1: Agente que inicia sesión desde una IP que no había usado ────────────────────────────────────────────
+let lookback = 1h;
+let baseline_window = 14d;
+let known_agent_sps = dynamic([]);  // service principals de agentes sin Entra Agent ID: poblar desde el watchlist del Paso 5
+let agent_principals = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | where tostring(parse_json(Agent).agentType) in ("agenticAppInstance", "agentIdentityBlueprintPrincipal")
+    | summarize by ServicePrincipalId;
+let agent_sp_ids = set_union(coalesce(toscalar(agent_principals | summarize make_set(ServicePrincipalId)), dynamic([])), known_agent_sps);
+let baseline = AADServicePrincipalSignInLogs
+    | where TimeGenerated between (ago(baseline_window) .. ago(lookback))
+    | where ResultType == "0"
+    | summarize KnownIPs = make_set(IPAddress, 200) by ServicePrincipalId;
 AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(1h)
-| where ResultType == 0  // solo exitosas — las fallidas son menos preocupantes
-| where not(IPAddress has_any (corporate_prefixes))
-| where ServicePrincipalName has_any ("agent", "bot", "copilot", "sp-agent")
-    or ServicePrincipalId in (known_agent_sps)
+| where TimeGenerated > ago(lookback)
+| where ResultType == "0"  // solo exitosas: las fallidas son menos preocupantes
+| where ServicePrincipalId in (agent_sp_ids)
+| join kind=leftouter baseline on ServicePrincipalId
+| where isnull(KnownIPs) or not(set_has_element(KnownIPs, IPAddress))
+| extend Baseline = iff(isnull(KnownIPs), "sin linea base", "IP nueva")
+| extend Severity = iff(Baseline == "IP nueva", "High", "Medium")
 | project
     TimeGenerated,
     ServicePrincipalName,
@@ -25,34 +43,49 @@ AADServicePrincipalSignInLogs
     IPAddress,
     Location,
     ResourceDisplayName,
-    ConditionalAccessStatus
-| extend Alert = strcat("SP de agente autenticó desde IP externa: ", IPAddress, " (", Location, ")")
-| extend Severity = iff(ConditionalAccessStatus == "success", "High", "Medium")
+    ConditionalAccessStatus,
+    Baseline,
+    Severity
+| extend Alert = iff(Baseline == "IP nueva",
+    strcat("Agente inició sesión desde una IP que no había usado: ", IPAddress, " (", Location, ")"),
+    strcat("Agente sin línea base de IP inició sesión desde ", IPAddress, " (", Location, ")"))
 | order by TimeGenerated desc
 
-// ── Query 2: Agent spawning — SP creando nuevas aplicaciones o SPs ───────────
+// ── Query 2: Agent spawning, una identidad de agente crea aplicaciones o service principals ──────────────────────
+let lookback = 24h;
+let known_agent_sps = dynamic([]);  // service principals de agentes sin Entra Agent ID: poblar desde el watchlist del Paso 5
+let agent_instances = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | where tostring(parse_json(Agent).agentType) == "agenticAppInstance"
+    | summarize by ServicePrincipalId, AppId;
+let agent_sp_ids = set_union(coalesce(toscalar(agent_instances | summarize make_set(ServicePrincipalId)), dynamic([])), known_agent_sps);
+let agent_app_ids = coalesce(toscalar(agent_instances | summarize make_set(AppId)), dynamic([]));
+// En AuditLogs el iniciador trae servicePrincipalId en unos eventos y appId en otros (624 y 692 de 1.534 eventos iniciados por una
+// aplicación en 90 días), por eso se compara con las dos listas. "Create application" no existe: la operación de credenciales
+// (Certificates and secrets management) no crea una aplicación.
 AuditLogs
-| where TimeGenerated > ago(24h)
-// Validado: la versión anterior devolvía 95 filas en 90 días, porque "or user == vacío" se cumple siempre que
-// inicia una app, así que el filtro por nombre no filtraba nada (servicios de Azure creando service principals).
-// Con el filtro por nombre aplicado quedan 5 filas, de servicios de Microsoft con "agent" en el nombre. Además,
-// "Create application" también coincidía con la operación de credenciales (Certificates and secrets management),
-// que no crea una aplicación.
+| where TimeGenerated > ago(lookback)
 | where OperationName in ("Add application", "Add service principal")
 | extend
-    InitiatorType = tostring(InitiatedBy.app.displayName)
-| where isnotempty(InitiatorType)  // iniciado por una app (no por un usuario humano)
-| where InitiatorType has_any ("agent", "bot", "copilot", "sp-", "PowerVirtual")
+    InitiatorSpId = tostring(InitiatedBy.app.servicePrincipalId),
+    InitiatorAppId = tostring(InitiatedBy.app.appId),
+    InitiatedByApp = tostring(InitiatedBy.app.displayName)
+| where InitiatorSpId in (agent_sp_ids) or InitiatorAppId in (agent_app_ids)
 | extend
     NewEntityName = tostring(TargetResources[0].displayName),
-    NewEntityType = tostring(TargetResources[0].type),
-    InitiatedByApp = tostring(InitiatedBy.app.displayName)
-| project TimeGenerated, InitiatedByApp, NewEntityName, NewEntityType
+    NewEntityType = tostring(TargetResources[0].type)
+| project TimeGenerated, InitiatedByApp, NewEntityName, NewEntityType, Result
 | extend Alert = strcat("AGENT SPAWNING: '", InitiatedByApp, "' creó nuevo SP/App '", NewEntityName, "'")
 | extend Severity = "Critical"
 | order by TimeGenerated desc
 
-// ── Query 3: Escalada de privilegios — rol asignado a SP de agente ────────────
+// ── Query 3: Escalada de privilegios, rol asignado a un agente ───────────────────────────────────────────────────
+let known_agent_sps = dynamic([]);  // service principals de agentes sin Entra Agent ID: poblar desde el watchlist del Paso 5
+let agent_principals = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | where tostring(parse_json(Agent).agentType) in ("agenticAppInstance", "agentIdentityBlueprintPrincipal")
+    | summarize by ServicePrincipalId;
+let agent_sp_ids = set_union(coalesce(toscalar(agent_principals | summarize make_set(ServicePrincipalId)), dynamic([])), known_agent_sps);
 AuditLogs
 | where TimeGenerated > ago(24h)
 | where OperationName has_any (
@@ -64,17 +97,18 @@ AuditLogs
 // formas de evento: en las operaciones de PIM el rol es un target de tipo Role con displayName; en las asignaciones
 // directas ("Add member to role", 19 de 47 eventos en 90 días) el target Role no trae nombre, el rol viene en la
 // propiedad Role.DisplayName del principal y un usuario trae userPrincipalName en lugar de displayName. Con ambas
-// formas leídas, los 47 eventos salen con rol y principal.
+// formas leídas, los 47 eventos salen con rol y principal. El principal se compara por su id (TR.id), no por el nombre.
 | mv-apply TR = TargetResources on (
     summarize
         RoleElementName = take_anyif(tostring(TR.displayName), tostring(TR.type) == "Role"),
         AssignedTo      = take_anyif(coalesce(tostring(TR.displayName), tostring(TR.userPrincipalName)), tostring(TR.type) in ("User", "ServicePrincipal", "Group")),
+        AssignedToId    = take_anyif(tostring(TR.id), tostring(TR.type) in ("User", "ServicePrincipal", "Group")),
         PrincipalProps  = take_anyif(TR.modifiedProperties, tostring(TR.type) in ("User", "ServicePrincipal", "Group")))
 | mv-apply MP = iff(array_length(PrincipalProps) > 0, PrincipalProps, dynamic([null])) on (
     summarize RoleFromProps = take_anyif(tostring(parse_json(tostring(MP.newValue))), tostring(MP.displayName) == "Role.DisplayName"))
 | extend RoleAssigned = coalesce(RoleElementName, RoleFromProps)
 | extend AssignedBy = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
-| where AssignedTo has_any ("agent", "bot", "sp-", "copilot")
+| where AssignedToId in (agent_sp_ids)
 | extend RiskLevel = case(
     RoleAssigned has_any ("Global Administrator", "Privileged Role Administrator",
         "Application Administrator", "Owner", "Contributor"), "Critical",
@@ -86,29 +120,33 @@ AuditLogs
 | extend Alert = strcat("Rol '", RoleAssigned, "' asignado al agente '", AssignedTo, "'")
 | order by RiskLevel asc, TimeGenerated desc
 
-// ── Query 4: Impossible travel para service principals de agentes ─────────────
+// ── Query 4: Impossible travel para agentes ──────────────────────────────────────────────────────────────────────
 let detection_window = 2h;
 let travel_minutes   = 60;
-AADServicePrincipalSignInLogs
-| where TimeGenerated > ago(detection_window)
-| where ResultType == 0
-| where ServicePrincipalName has_any ("agent", "bot", "sp-", "copilot")
-| project TimeGenerated, ServicePrincipalName, IPAddress, Location
-| join kind=inner (
-    AADServicePrincipalSignInLogs
+let known_agent_sps = dynamic([]);  // service principals de agentes sin Entra Agent ID: poblar desde el watchlist del Paso 5
+let agent_principals = AADServicePrincipalSignInLogs
+    | where TimeGenerated > ago(30d)
+    | where tostring(parse_json(Agent).agentType) in ("agenticAppInstance", "agentIdentityBlueprintPrincipal")
+    | summarize by ServicePrincipalId;
+let agent_sp_ids = set_union(coalesce(toscalar(agent_principals | summarize make_set(ServicePrincipalId)), dynamic([])), known_agent_sps);
+let agent_signins = AADServicePrincipalSignInLogs
     | where TimeGenerated > ago(detection_window)
-    | where ResultType == 0
-    | project TimeGenerated2 = TimeGenerated, ServicePrincipalName,
-        IPAddress2 = IPAddress, Location2 = Location
-) on ServicePrincipalName
+    | where ResultType == "0"
+    | where ServicePrincipalId in (agent_sp_ids)
+    | where isnotempty(Location)
+    | project TimeGenerated, ServicePrincipalName, ServicePrincipalId, IPAddress, Location;
+agent_signins
+| join kind=inner (
+    agent_signins
+    | project TimeGenerated2 = TimeGenerated, ServicePrincipalId, IPAddress2 = IPAddress, Location2 = Location
+) on ServicePrincipalId
 | where Location != Location2
-| where abs(datetime_diff("minute", TimeGenerated, TimeGenerated2)) < travel_minutes
-| where IPAddress != IPAddress2
+| where TimeGenerated < TimeGenerated2  // cada par una sola vez
+| where datetime_diff("minute", TimeGenerated2, TimeGenerated) < travel_minutes
 | project
     ServicePrincipalName,
     FirstAuth  = TimeGenerated,  Location1 = Location,  IP1 = IPAddress,
     SecondAuth = TimeGenerated2, Location2, IP2 = IPAddress2,
-    MinutesBetween = abs(datetime_diff("minute", TimeGenerated, TimeGenerated2))
-| where MinutesBetween > 0  // eliminar duplicados
-| extend Alert = strcat("Impossible travel: ", Location, " → ", Location2, " en ", MinutesBetween, " min")
+    MinutesBetween = datetime_diff("minute", TimeGenerated2, TimeGenerated)
+| extend Alert = strcat("Impossible travel: ", Location1, " → ", Location2, " en ", MinutesBetween, " min")
 | order by MinutesBetween asc

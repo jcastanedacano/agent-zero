@@ -26,7 +26,7 @@ effort_hours: 5
 
 ## Abuse vectors
 
-1. **Token theft**: an agent SP authenticating from an unknown IP (stolen token)
+1. **Token theft**: an agent SP authenticating from an IP it has not used before (stolen token)
 2. **Privilege escalation**: an SP acquiring roles it was not originally assigned
 3. **Agent spawning**: an agent creating new SPs or applications (sub-agents)
 4. **Impossible travel**: the same SP authenticating from two countries in < 1 hour
@@ -67,23 +67,24 @@ flowchart LR
 
 ## Workflow
 
-### Step 1 — Create rule: SP sign-in from a non-corporate IP
+### Step 1 — Create rule: agent sign-in from an IP it has not used before
 
 ```kql
 // See queries/sentinel-identity-abuse.kql — Query 1
-// Correlates AADServicePrincipalSignInLogs with CA Named Locations
+// Compares each agent sign-in in the last hour with the IPs that service principal used in the previous 14 days
 ```
 
 Configuration:
 - **Name**: `AISEC-Agent-SignIn-Unknown-IP`
 - **Frequency**: every 5 minutes
-- **Severity**: High
+- **Severity**: High (`Baseline` = `IP nueva`, the agent has a baseline and this IP is not in it). Medium when the agent has no baseline in the previous 14 days (`sin linea base`)
+- **Alert grouping**: group by `ServicePrincipalId` and `IPAddress`. A sign-in stays in the 1-hour window, so without grouping it alerts at every run
 
 ### Step 2 — Create rule: agent spawning (agent creates new apps/SPs)
 
 ```kql
 // See queries/sentinel-identity-abuse.kql — Query 2
-// Detects when the principal initiating an SP creation is another SP (not a human)
+// Detects when an agent identity creates an application or a service principal (AuditLogs initiator is an agent)
 ```
 
 Configuration:
@@ -131,12 +132,29 @@ context from the Pillar 1 risk register.
 - [ ] `AADServicePrincipalSignInLogs` has data in the workspace
 - [ ] The 4 analytics rules created and in Enabled state
 - [ ] Agent SP watchlist loaded
-- [ ] Test incident: authenticate an SP from an external IP and verify the alert
-- [ ] Agent spawning: manually create an SP from an SP context and verify detection
+- [ ] Test incident: authenticate an agent SP from an IP outside its 14-day baseline and verify the alert
+- [ ] Agent spawning: manually create an app or SP from an agent identity (or from an SP listed in `known_agent_sps`) and verify detection
 
 ## Implementation notes
 
 - `AADServicePrincipalSignInLogs` requires Entra ID P2 or the Entra ID data connector active in Sentinel
+- **How the queries identify agents**: the `Agent` column of `AADServicePrincipalSignInLogs` (`agentType` of `agenticAppInstance` or `agentIdentityBlueprintPrincipal`, last 30 days), plus the `known_agent_sps` list at the top of each query for agents that are ordinary service principals. Fill `known_agent_sps` from the Step 5 watchlist. An agent that has not signed in for 30 days, and is not in `known_agent_sps`, is not covered
+- Query 2 counts only agent identities (`agenticAppInstance`) as initiators: creating agent identities is the documented function of a blueprint principal, so it is not spawning
+- Query 3 reads Entra directory roles from `AuditLogs`. Azure RBAC assignments (Owner, Contributor) are written to `AzureActivity` and are not read by this query
 - For impossible travel on service principals: agent SPs in Azure rarely have variable IPs — any IP geolocation change is suspicious
 - Agent spawning is the highest-risk vector in multi-agent architectures: a compromised agent can create persistent sub-agents with inherited permissions
 - Correlate with `AuditLogs` in Sentinel to detect new SP creation in the same interval as the compromised agent
+
+### Validation and changes in this version
+
+The queries were run against a Sentinel workspace in October 2026 (90 days of data: 1 agent identity and 1 blueprint principal, 9 sign-ins in total):
+
+- Query 1, run with a 20-day window instead of 1 hour so there was data, returned 9 rows labeled `sin linea base`. The `IP nueva` branch and Query 4 were checked with a test datatable (a new IP, and a US to DE move in 20 minutes)
+- Query 2 returned 0 of 82 application-initiated creations from an agent identity. The earlier name-based filter returned 5 rows, all Microsoft services
+- Query 3 read 47 role events with role and principal, none to an agent. Query 4 returned 0 rows (a single country)
+
+Removed in this version:
+
+- **Matching agents by name** (`has_any "agent", "bot", "copilot", "sp-"`) in the four queries: it flags Microsoft services and misses agents with other names
+- **Private IP prefixes in Query 1** (10., 172.16., 192.168.): Entra records the public address it sees, so the exclusion list never matched and the rule alerted on every sign-in of a name-matching service principal. It now compares against the IPs the same service principal used before
+- **Severity from `ConditionalAccessStatus`**: dropped with the CA bypass query, see the note in the `.kql` header
