@@ -55,6 +55,41 @@ At the end of this module, you will be able to execute the five attack technique
 
    **ATLAS check:** every `AML.T####` ID cited in this module resolves to the technique name used here in the ATLAS data release 2026.09 (checked October 2026).
 
+   ```mermaid
+   flowchart TB
+       subgraph IDP["Identity plane"]
+           I1["Tokens, consent, ownership, credentials:<br/>the attacker abuses a token, a consent,<br/>an owner or a credential<br/>persistence and privilege escalation"]
+           I2["Leaves sign-in, audit and ID Protection signals<br/>Module 03 point 5, P03-Q12 to Q14"]
+       end
+       subgraph INP["Input plane"]
+           P1["What the agent reads and is asked:<br/>direct and indirect prompt injection,<br/>capability elicitation, goal hijacking<br/>Attacks 1, 4 and 5"]
+           P2["Never touches the token pipeline:<br/>no identity signal at the moment of injection<br/>detect on the agent's runtime and telemetry"]
+       end
+       subgraph GOV["Governance route"]
+           G1["An unreviewed agent is simply deployed<br/>Attack 2, the Agent Builder bypass"]
+       end
+       IN["Once inside: the agent's own tools,<br/>permissions and connectors do the work"]
+       DET["The actions look like normal agent operations<br/>detect sequences of legitimate actions against a baseline<br/>P05-Q6 objective drift, P05-Q8 the JadePuffer chain"]
+       I1 --> I2
+       P1 --> P2
+       I1 --> IN
+       P1 --> IN
+       G1 --> IN
+       IN --> DET
+
+       classDef blue fill:#0078D4,stroke:#333,color:#fff
+       classDef purple fill:#5E2750,stroke:#333,color:#fff
+       classDef green fill:#107C10,stroke:#333,color:#fff
+       classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+       class I1,I2 blue
+       class P1,P2 purple
+       class G1 orange
+       class IN orange
+       class DET green
+   ```
+
+   **How to read it.** A control on one plane does nothing for the other. The identity plane leaves identity signals. The input plane never touches the token pipeline, so it has to be detected on the agent's runtime and telemetry. A third route is simply deploying an unreviewed agent. Once an attacker is inside, the agent's own tools and permissions do the work, so detection follows sequences of legitimate actions against a baseline.
+
 ---
 
 ## Background

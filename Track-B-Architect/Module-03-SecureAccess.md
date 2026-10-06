@@ -74,7 +74,79 @@ By the end of this module, participants will be able to design a Conditional Acc
 
 14. **Inheritable permissions: one consent on a blueprint principal can reach every agent identity, and the agent identities will not show it.** A blueprint declares two separate lists that grant nothing by themselves: *required resource access* (the up-front list an administrator reviews at consent) and *inheritable permissions* (the resource apps whose granted permissions flow to every current and future agent identity from that blueprint). Only consent authorizes. Microsoft Learn's own cheat sheet shows the gap: with dynamic consent, a permission that is inheritable but was never declared in required resource access is inherited without having been visible up front. Inherited permissions are not shown on agent identities in the admin center or Microsoft Graph; they appear only in the token's `scp` and `roles` claims at runtime, while the grants themselves stay visible on the blueprint principal. In a multi-tenant scenario the inheritance configuration lives in the publisher's tenant, so the consuming tenant cannot verify it. Controls: restrict who can consent on blueprint principals (the admin consent workflow and permission grant policies apply as to any service principal), treat every grant on a third-party blueprint principal as potentially inherited by all of its agent identities, alert on `Consent to application` and `Add app role assignment to service principal` where the target is a blueprint principal (P03-Q13), and decode a token to confirm what a specific agent identity actually received. Reference: [Inheritable permissions](https://learn.microsoft.com/entra/agent-id/concept-inheritable-permissions).
 
+    ```mermaid
+    flowchart TB
+        subgraph DECL["The blueprint declares two lists, and neither grants anything"]
+            L1["Required resource access<br/>the up-front list an administrator reviews at consent"]
+            L2["Inheritable permissions<br/>resource apps whose granted permissions<br/>flow to every agent identity"]
+        end
+        C["Consent on the blueprint principal<br/>only consent authorizes"]
+        subgraph AGT["Every current and future agent identity of the blueprint"]
+            A1["Agent identity 1"]
+            A2["Agent identity 2"]
+            A3["Agent identity n"]
+        end
+        V1["Visible: the grants on the blueprint principal<br/>the audit event is the earliest signal (P03-Q13)"]
+        V2["Not visible: inherited permissions on the agent identity<br/>not in the admin center or Microsoft Graph<br/>only in the token's scp and roles claims at runtime"]
+        MT["Multi-tenant blueprint: the inheritance configuration lives<br/>in the publisher's tenant and cannot be verified locally"]
+        L1 --> C
+        L2 --> C
+        C -->|"inherited when the resource app is inheritable"| A1
+        C --> A2
+        C --> A3
+        C -.-> V1
+        A2 -.-> V2
+        L2 -.-> MT
+
+        classDef blue fill:#0078D4,stroke:#333,color:#fff
+        classDef purple fill:#5E2750,stroke:#333,color:#fff
+        classDef green fill:#107C10,stroke:#333,color:#fff
+        classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+        class L1,L2 blue
+        class C purple
+        class A1,A2,A3 blue
+        class V1 green
+        class V2,MT orange
+    ```
+
+    **How to read it.** Read it from the top. The two lists on the blueprint grant nothing: consent on the blueprint principal does, and when a resource app is inheritable the grant reaches every current and future agent identity. The evidence stays on the blueprint principal, not on the agent identities, which is why P03-Q13 watches the principal and why a decoded token is the only way to confirm what one agent identity actually received.
+
 15. **Credential hardening, and where Conditional Access stops:** credentials live on the blueprint, not on agent identities (Microsoft Learn: you create credentials on the blueprint, not on individual agent identities; the one attempt seen on the validation tenant was refused, see Track C Module 03, point 5). Per Microsoft Learn, the Agent ID Developer role can configure federated identity credentials on a blueprint, the create-blueprint page names Agent ID Administrator for adding a secret or certificate, and the permissions reference also lists `agentIdentityBlueprints/credentials/update` under AI Administrator, so treat both as able to add credentials. Application management policies can still harden the blueprint application: the `passwordAddition` restriction blocks new client secrets and the `keyCredentials` restrictions cap certificate lifetime (Learn, application management policies tutorial), Learn's `appManagementConfiguration` reference (Microsoft Graph v1.0) has only password and key credential restrictions, so no policy restriction exists for federated identity credentials today; review which identity providers your blueprints trust instead. Conditional Access for agents has documented boundaries (Microsoft Learn): policies do not apply when a blueprint acquires a token to create agent identities or agents' user accounts, nor to the intermediate token exchange at `AAD Token Exchange Endpoint: Public`; policies that target all users do not include agents' user accounts; a policy that targets an agent identity, or a blueprint, does not cover the agent's user account; and a resource that accepts an API key bypasses Entra token issuance entirely. In on-behalf-of flows Conditional Access is evaluated against the user, so user policies, not agent policies, govern them. Reference: [Conditional Access for agents, boundaries and limitations](https://learn.microsoft.com/entra/identity/conditional-access/agent-id#boundaries-and-limitations).
+
+    ```mermaid
+    flowchart LR
+        subgraph REQ["Token request"]
+            K1["A blueprint requests a token to create<br/>an agent identity or an agent user"]
+            K2["Intermediate token exchange at<br/>AAD Token Exchange Endpoint: Public"]
+            K6["A resource that accepts an API key"]
+            K3["The agent identity requests a token<br/>for a resource"]
+            K4["The agent acts on behalf of a user"]
+            K5["The agent user account requests a token"]
+        end
+        subgraph CA["What Conditional Access does"]
+            N1["Does not apply"]
+            P1["The agent policy applies<br/>agent identity or blueprint target"]
+            P2["The user's own policies apply<br/>evaluated against the user"]
+            P3["A separate agent user policy applies<br/>an identity or blueprint policy does not cover it"]
+        end
+        K1 --> N1
+        K2 --> N1
+        K6 -->|"bypasses Entra token issuance"| N1
+        K3 --> P1
+        K4 --> P2
+        K5 --> P3
+
+        classDef blue fill:#0078D4,stroke:#333,color:#fff
+        classDef purple fill:#5E2750,stroke:#333,color:#fff
+        classDef green fill:#107C10,stroke:#333,color:#fff
+        classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+        class K1,K2,K6 orange
+        class K3,K4,K5 blue
+        class N1 orange
+        class P1,P2,P3 green
+    ```
+
+    **How to read it.** The left column is how an agent platform asks for tokens, the right column is what Conditional Access does with each request. Three requests end in "Does not apply": a blueprint token that creates an agent identity or user, the intermediate token exchange, and a resource that takes an API key. The others meet different policies, and a policy written for one subject never covers another. Source: Microsoft Learn, Conditional Access for agents, boundaries and limitations.
 
 ---
 

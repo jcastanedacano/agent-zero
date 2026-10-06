@@ -210,6 +210,43 @@ EntraIdSpnSignInEvents
 
 ---
 
+### Steps 7 to 9: where each signal lands
+
+```mermaid
+flowchart LR
+    subgraph OPS["What happens"]
+        E1["Credential, owner or sponsor change<br/>on a blueprint or an agent identity"]
+        E2["Consent or app-role grant<br/>on a blueprint principal"]
+        E3["ID Protection raises a risk event<br/>on an agent"]
+    end
+    subgraph SRC["Where it is logged"]
+        S1["AuditLogs<br/>generic operation names<br/>ResType Application or ServicePrincipal"]
+        S2["AuditLogs<br/>Consent to application<br/>Add app role assignment to service principal"]
+        S3["AADAgentRiskEvents<br/>needs the diagnostic settings export"]
+    end
+    subgraph QRY["Query and how it matches an agent"]
+        Q1["Q12, Step 7<br/>joins AgentsInfo on EntraAgentID and EntraBlueprintID"]
+        Q2["Q13, Step 8<br/>app roles by blueprint id in the principal names<br/>consent only if agentType is populated (NOT VERIFIED)"]
+        Q3["Q14, Step 9<br/>AgentId joined to EntraAgentID (assumption)"]
+    end
+    LIM["Outside the Q12 join<br/>changes on the blueprint principal<br/>agents with both ids empty in AgentsInfo"]
+    E1 --> S1 --> Q1
+    E2 --> S2 --> Q2
+    E3 --> S3 --> Q3
+    Q1 -.-> LIM
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class E1,E2,E3 purple
+    class S1,S2,S3 blue
+    class Q1,Q2,Q3 green
+    class LIM orange
+```
+
+**How to read it.** Each row is one signal path from Steps 7 to 9. The rows differ in where the event is logged and in how it is matched to an agent, and the orange box lists what the Q12 join cannot see. An empty result is not proof of safety for any of the three.
+
 ### Step 7 — KQL: credential, owner, and sponsor changes on Agent ID objects
 
 Run `KQL-Library/P03-Access-Anomalies.kql`, Q12. It correlates `AuditLogs` with `AgentsInfo` by object id, so it finds blueprints and agent identities whatever they are named.

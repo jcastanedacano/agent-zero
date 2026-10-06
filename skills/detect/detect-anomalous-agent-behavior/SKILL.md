@@ -35,6 +35,41 @@ A compromised or misconfigured agent identity manifests as:
 How to tell agent identities from other service principals: `AADServicePrincipalSignInLogs` has an `Agent` column, a JSON string with
 `agentType` (`agenticAppInstance`, `agentIdentityBlueprintPrincipal`, or `notAgentic` for everything else). Queries 1 to 4 filter on it.
 
+```mermaid
+flowchart LR
+    subgraph SIG["Signal and its source"]
+        S1["Graph call volume at 3x or more of its baseline<br/>MicrosoftGraphActivityLogs<br/>baseline from Query 1: 14 days of daily calls"]
+        S2["A resource it never requested a token for<br/>AADServicePrincipalSignInLogs"]
+        S3["Sign-ins outside its usual hours<br/>AADServicePrincipalSignInLogs"]
+        S4["A risk detection raised by ID Protection<br/>AADAgentRiskEvents"]
+        S5["A behavioral anomaly on service principal sign-ins<br/>BehaviorAnalytics, UEBA (preview)"]
+    end
+    subgraph OUT["What turns it into an alert"]
+        R1["Analytics rule, Step 2<br/>Query 2"]
+        R2["Analytics rule, Step 3<br/>Query 3"]
+        R3["Analytics rule, Step 4<br/>Query 4"]
+        R4["Step 5, Query 5<br/>reads the platform's own detection"]
+        R5["Step 6, Query 6<br/>reads the UEBA scores"]
+    end
+    BL["Blocks the agent only if a Conditional Access<br/>policy on Agent risk exists"]
+    S1 --> R1
+    S2 --> R2
+    S3 --> R3
+    S4 --> R4
+    S5 --> R5
+    R4 -.-> BL
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class S1,S2,S3,S4,S5 blue
+    class R1,R2,R3,R4,R5 green
+    class BL orange
+```
+
+**How to read it.** Each row is one signal, where it is read, and the step that turns it into a rule or a query. Only Query 5 reads a detection the platform already computed, and a risk level blocks the agent only if a Conditional Access policy on Agent risk exists.
+
 ## Prerequisites
 
 Microsoft Entra diagnostic settings sending these categories to the Sentinel workspace: `ServicePrincipalSignInLogs`,

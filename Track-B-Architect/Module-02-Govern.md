@@ -32,6 +32,34 @@ By the end of this module, participants will be able to design an agent governan
 
 7. **Sponsorship model and Lifecycle Workflows — automating the ownership guarantee:** Microsoft Entra Agent ID formalizes the "agent without owner" problem as a first-class governance object. Every agent identity and blueprint requires at least one assigned **sponsor** (users, or select groups, up to 100 per object): a human accountable for the agent's lifecycle decisions, access reviews, and decommission. Critically, if a sponsor leaves the organization, Entra automatically transfers sponsorship to the sponsor's manager via **Lifecycle Workflows** — ensuring there is always a human accountable for every agent identity, without manual intervention. The transfer task needs a populated manager attribute on the departing sponsor (Microsoft Learn), so check that first. Sponsors operate through two portals: My Account (enable/disable the agent, view activity and access) and My Access (request access packages on behalf of the agent). Without this automation, sponsorship gaps accumulate silently — the `Owners` field in `AgentsInfo` will show the original owner even after they've left. KQL P02 governance gap queries surface agents with empty or unresolvable owners; Lifecycle Workflow tasks address the root cause structurally.
 
+   ```mermaid
+   flowchart TB
+       A["Agent identity or blueprint<br/>requires at least one sponsor<br/>(users or groups, up to 100 per object)"]
+       I["Sponsor tools<br/>My Account: enable or disable the agent, view activity<br/>My Access: request access packages for the agent"]
+       B["A sponsor leaves the organization"]
+       C{"Manager attribute populated<br/>on the departing sponsor?"}
+       D["Lifecycle Workflows task transfers<br/>sponsorship to the sponsor's manager"]
+       F["A human is accountable again for<br/>lifecycle decisions, access reviews, decommission"]
+       E["The task cannot run:<br/>nothing moves"]
+       G["The gap grows silently<br/>AgentsInfo Owners still shows the original owner"]
+       H["KQL P02 governance gap queries find<br/>empty or unresolvable owners"]
+       A --> I
+       A --> B --> C
+       C -->|"yes"| D --> F
+       C -->|"no"| E --> G --> H
+
+       classDef blue fill:#0078D4,stroke:#333,color:#fff
+       classDef purple fill:#5E2750,stroke:#333,color:#fff
+       classDef green fill:#107C10,stroke:#333,color:#fff
+       classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+       class A,I blue
+       class B,C purple
+       class D,F green
+       class E,G,H orange
+   ```
+
+   **How to read it.** Read it top to bottom. The only branch is the manager attribute: Lifecycle Workflows can move sponsorship to the departing sponsor's manager only when that attribute is populated (Microsoft Learn), so check it before relying on the automation. The orange path is what you see when it is not: nothing moves, and `AgentsInfo` keeps listing the original owner, which is why the P02 governance gap queries exist.
+
    > **The blueprint is where the credentials live, not the instance.** Every agent identity is instantiated from an identity blueprint, and the blueprint — not any individual agent — holds the credentials, declared permissions, and publisher verification. This has a governance consequence worth stating explicitly: compromising the blueprint compromises every agent derived from it, and disabling the blueprint shuts all of them down in one action. That is exactly why the fourth kill-switch level in point 10 targets the blueprint rather than the instance when you cannot yet tell which instance is the threat. For third-party agents specifically, verify the vendor publishes a **multitenant blueprint to the Microsoft catalog** rather than distributing standalone credentials — that is what lets you revoke the vendor's ability to provision new identities in your tenant without depending on their cooperation. One licensing detail worth confirming against current Microsoft documentation before quoting it in a governance review: a principal blueprint is commonly cited with a cap on how many agent identities it can provision (reported at 250 at the time of writing) — treat that number as a planning input to verify, not a fact to repeat unchecked, since Microsoft ships changes to Agent 365 limits frequently.
 
 8. **Multi-owner in Copilot Studio and Agent Builder — the exception to single accountability (MC1438569, GA August 2026):** Microsoft introduced support for multiple owners on Microsoft 365 Copilot declarative agents. Before this change an agent had exactly one owner, the creator. Now it can have several, and the official documentation is explicit: *"An owner is anyone with Can edit access. All owners have equal rights, including the ability to add or remove people, switch roles, and turn on org-wide sharing."* There is no primary or secondary owner designation, and this is not a temporary rollout limitation — it is the final design.
@@ -111,7 +139,79 @@ By the end of this module, participants will be able to design an agent governan
 
     **Programmatic access for SOC integration:** the Microsoft Graph `identityProtection` resource exposes two collections — `riskyAgents` (three subtypes: `riskyAgentIdentity`, `riskyAgentIdentityBlueprintPrincipal`, `riskyAgentUser`) and `agentRiskDetections`, both queryable and actionable (`dismiss`, `confirmCompromised`, `confirmSafe`) via the Graph beta API. Export risk data continuously to your SIEM via Entra ID diagnostic settings, routed to the same Log Analytics workspace or Sentinel instance the KQL Library already queries — this is how "Confirm compromise" clicked in the Entra admin center becomes a queryable, correlatable event next to the P02 governance-gap findings, instead of living only in a separate portal. The exported tables are `AADRiskyAgents` and `AADAgentRiskEvents` (Azure Monitor reference); P03-Q14 queries the second. Microsoft Learn does not say whether these detections raise an incident or alert in Defender XDR: check in your tenant, and plan a custom rule if they do not. Reference: [Identity Protection for agents](https://learn.microsoft.com/entra/id-protection/concept-risky-agents); [Manage agent identities — detect and remediate agent risk](https://learn.microsoft.com/entra/agent-id/manage-agent-identities-admin#detect-and-remediate-agent-risk); [riskyAgent resource type](https://learn.microsoft.com/graph/api/resources/riskyagent?view=graph-rest-beta) (Microsoft Graph beta).
 
+    ```mermaid
+    flowchart TB
+        subgraph DET["Detect"]
+            D1["ID Protection evaluates eight offline detection types on agent identities<br/>learning mode suppresses behavioral alerts for agents with little history"]
+            D2["Risky Agents report<br/>detections kept 90 days"]
+        end
+        subgraph RESP["Respond"]
+            R1["Confirm compromise<br/>sets the risk to High and logs the event"]
+            R2["Disable<br/>blocks all sign-in immediately"]
+        end
+        Q{"Conditional Access policy exists:<br/>Agent risk High, grant Block?"}
+        N["New token requests are blocked"]
+        X["Nothing is blocked<br/>the record says compromised,<br/>the resource still says yes"]
+        T["Tokens already issued stay valid until they expire<br/>60 to 90 minutes by default<br/>CAE rejects them for Microsoft Graph only"]
+        S["Export to the SIEM: AADRiskyAgents and AADAgentRiskEvents<br/>queried by P03-Q14"]
+        D1 --> D2
+        D2 --> R1
+        D2 --> R2
+        R1 --> Q
+        Q -->|"yes"| N --> T
+        Q -->|"no"| X
+        R2 --> T
+        D1 -.-> S
+
+        classDef blue fill:#0078D4,stroke:#333,color:#fff
+        classDef purple fill:#5E2750,stroke:#333,color:#fff
+        classDef green fill:#107C10,stroke:#333,color:#fff
+        classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+        class D1,D2 blue
+        class R1,R2,Q purple
+        class N green
+        class X,T orange
+        class S blue
+    ```
+
+    **How to read it.** Detection and response are separate steps, and the decision in the middle is the one teams miss. Confirm compromise only sets the risk to High: it blocks new token requests only when a Conditional Access policy with the Agent risk condition and the Block control exists. Even then, a token already issued stays valid until it expires, so state that residual window in the registry (point 10).
+
 13. **Roles and default ownership on Agent ID objects: the people who can manage them are part of the control plane.** Three Entra roles carry most of the lifecycle (Microsoft Learn). **Agent ID Administrator** manages agent identities, blueprints, blueprint principals, and agents' user accounts; Learn's create-blueprint page names it as the role needed to add a secret or certificate credential to a blueprint, and the permissions reference also lists the privileged action `agentIdentityBlueprints/credentials/update` under AI Administrator, so treat both roles as able to add credentials. **Agent ID Developer** creates blueprints and configures federated identity credentials on them, and the creator is automatically set as owner of both the blueprint and its principal. **AI Administrator** can also create agent identities, and Learn's permissions reference lists the agent identity, blueprint, blueprint principal, and agent user actions under it; Learn labels it a privileged role, so protect it like the others: PIM activation, phishing-resistant authentication, and secure admin workstations. **Ownership is the quiet path:** by default any member can manage the properties, assignments, and credentials of the blueprints, blueprint principals, and agent identities they own, can create agent identities when they own the blueprint principal, and can create blueprint principals when they own the blueprint (Learn, default user permissions). Because creators become owners automatically and owners act without holding an Agent ID role, ownership outlasts the role assignment or PIM activation used to create the object (our reading of those two Learn statements). Prefer sponsors for accountability, PIM-governed roles for technical management, and audit owners the way you audit role assignments (P03-Q12 shows owner and sponsor changes). **Scoping is thin today:** agent identities, blueprints, and blueprint principals cannot be added to administrative units (Learn FAQ). **What agents themselves can hold:** Microsoft blocks Global Administrator, Privileged Role Administrator, and User Administrator for agent identities and keeps them out of role-assignable groups (Learn FAQ), but a role that is not labeled privileged can still be assigned, so read the actions of any role before giving it to an agent. Reference: [Create an agent identity blueprint](https://learn.microsoft.com/entra/agent-id/create-blueprint); [Administrative relationships](https://learn.microsoft.com/entra/agent-id/agent-owners-sponsors-managers); [Default user permissions](https://learn.microsoft.com/entra/fundamentals/users-default-permissions).
+
+    ```mermaid
+    flowchart TB
+        subgraph ROLE["Path 1: an Entra role"]
+            R1["Agent ID Administrator and AI Administrator<br/>both can add credentials<br/>privileged: PIM, phishing-resistant authentication, secure workstation"]
+            R2["Agent ID Developer<br/>creates blueprints and configures<br/>federated identity credentials on them"]
+        end
+        subgraph OBJ["Agent ID objects"]
+            BP["Blueprint and blueprint principal<br/>credentials live here"]
+            AI["Agent identity"]
+            AU["Agent user account"]
+        end
+        subgraph OWNP["Path 2: ownership, the quiet path"]
+            OW["Owner<br/>acts without holding an Agent ID role"]
+        end
+        KEEP["Ownership outlasts the role assignment<br/>or the PIM activation used to create the object"]
+        CTRL["Controls: sponsors for accountability,<br/>PIM-governed roles for technical management,<br/>audit owners like role assignments (P03-Q12)"]
+        R1 -->|"manage agent identities, blueprints,<br/>blueprint principals and agent users"| OBJ
+        R2 -->|"creates blueprints"| OBJ
+        R2 -->|"the creator becomes owner<br/>of the blueprint and its principal"| OW
+        OW -->|"manages properties, assignments and credentials of what it owns<br/>creates agent identities and blueprint principals"| OBJ
+        OW -.-> KEEP
+        KEEP -.-> CTRL
+
+        classDef blue fill:#0078D4,stroke:#333,color:#fff
+        classDef purple fill:#5E2750,stroke:#333,color:#fff
+        classDef green fill:#107C10,stroke:#333,color:#fff
+        classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+        class R1,R2 purple
+        class BP,AI,AU blue
+        class OW,KEEP orange
+        class CTRL green
+    ```
+
+    **How to read it.** Two paths reach the same objects. The role path shows up in PIM and role assignment reviews. The ownership path does not: the creator becomes owner automatically, and an owner acts without holding any Agent ID role, so ownership outlasts the role assignment or PIM activation used to create the object (our reading of two Learn statements). Audit owners the way you audit role assignments.
 
 ---
 
