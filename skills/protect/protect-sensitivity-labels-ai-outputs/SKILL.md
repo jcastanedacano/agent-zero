@@ -10,8 +10,8 @@ description: >-
   protected with encryption and access restrictions.
 tags: [protect, purview, sensitivity-labels, auto-labeling, classification, ai-outputs]
 atlas_techniques: [AML.T0086, AML.T0057]
-d3fend_techniques: [D3-DLP, D3-EAC]
-nist_ai_rmf: [MANAGE-2.2, GOVERN-6.1]
+d3fend_techniques: [D3-DI, D3-FE]
+nist_ai_rmf: [MEASURE-2.10, MANAGE-1.3]
 nist_csf: [PR.DS-01, PR.DS-02]
 ms_license: [Microsoft Purview E3, Azure Information Protection P2]
 ms_roles: [Compliance Administrator, Information Protection Administrator]

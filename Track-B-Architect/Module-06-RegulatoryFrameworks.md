@@ -37,13 +37,13 @@ By the end of this module, participants will be able to map Microsoft AI agent d
 
    | Obligation | EU AI Act | DORA | NIST AI RMF | ISO 42001 |
    |-----------|-----------|------|-------------|-----------|
-   | AI / ICT inventory | Article 9 | Art. 8 | MAP-1.1 | Clause 4.3 |
-   | Risk assessment | Article 9 | Art. 6 | MAP-2.1 / MEASURE-2.5 | Clause 6.1 |
-   | Human oversight | Article 14 | Art. 5 (governance) | GOVERN-6.1 | Clause 8.4 |
-   | Transparency to users | Article 13 | — | MAP-1.6 | Clause 8.3 |
-   | Incident logging | Article 12 | Art. 10 / Art. 19 | MANAGE-2.4 | Clause 9.1 |
-   | Third-party risk | Article 25 | Art. 28-30 | GOVERN-5.1 | Clause 8.6 |
-   | Resilience testing | — | Art. 24-25 (TLPT) | MANAGE-4.1 | Clause 9.2 |
+   | AI / ICT inventory | Art. 49 (registration of high-risk systems) | Art. 8 | GOVERN-1.6 | Annex A.4 |
+   | Risk assessment | Article 9 (high-risk systems) | Art. 6 | MAP-5.1 / MEASURE-3.1 | Clause 6.1 / 8.2 |
+   | Human oversight | Article 14 | Art. 5 (governance) | GOVERN-3.2 / MAP-3.5 | Annex A.9 |
+   | Transparency to users | Article 50 | — | MEASURE-2.8 | Annex A.8 |
+   | Incident logging | Article 12 | Art. 10 / Art. 19 | MANAGE-4.3 | Clause 9.1 |
+   | Third-party risk | Article 25 | Art. 28-30 | GOVERN-6.1 | Clause 8.1 / Annex A.10 |
+   | Resilience testing | — | Art. 24-26 (TLPT in Art. 26) | MEASURE-2.7 | Clause 9.1 |
 
 6. **Microsoft controls that satisfy regulatory obligations directly:**
 
@@ -51,8 +51,8 @@ By the end of this module, participants will be able to map Microsoft AI agent d
    |-----------|-----------------|------------------|
    | AI / ICT inventory (all frameworks) | Defender AI Agent Inventory + Agent 365 Registry | Defender XDR → AI Agents |
    | Compliance assessment (EU AI Act, ISO 42001, NIST AI RMF) | **Microsoft Purview Compliance Manager** — premium templates for all 3 frameworks | Purview compliance portal → Compliance Manager |
-   | Human oversight (EU Act Art. 14, DORA Art. 5, NIST GOVERN-6.1) | Copilot Studio approval flow + Tiered Autonomy | Module 02 of this track |
-   | Transparency to users (EU Act Art. 13) | Copilot Studio — agent identity disclosure | Agent Builder settings |
+   | Human oversight (EU Act Art. 14, DORA Art. 5, NIST MAP-3.5) | Copilot Studio approval flow + Tiered Autonomy | Module 02 of this track |
+   | Transparency to users (EU Act Art. 50) | Copilot Studio — agent identity disclosure | Agent Builder settings |
    | Incident logging (EU Act Art. 12, DORA Art. 10/19, ISO 9.1) | Microsoft Purview Audit (immutable) | Purview compliance portal |
    | Risk assessment documentation (ISO 6.1, DORA Art. 6) | Gap Assessment Template (this repo) — doubles as ECB action plan foundation | Track B Templates |
    | Third-party risk (EU Act Art. 25, DORA Art. 28-30) | Power Platform DLP + MCP server audit (AgentsInfo.McpServers) | Module 07 of this track |
@@ -131,11 +131,11 @@ The OWASP AI Exchange (owaspai.org) is the most comprehensive open-source techni
 
 | GUARD Step | What it means | Agent Zero implementation | NIST AI RMF mapping |
 |-----------|--------------|--------------------------|---------------------|
-| **Govern** | Establish AI program oversight, policies, roles, compliance checking, security education | Track B Module 02 (governance model, Entra Agent ID ownership, lifecycle policy) + Track A all modules (executive decision framework) | GOVERN-1.1, GOVERN-6.1 |
-| **Understand** | Threat model per use case, identify applicable threats via decision tree, distinguish organizational vs. supplier responsibilities | Track B Module 01 (agent discovery) + Gap Assessment Template (Domain risk scores) + MAESTRO 7-layer analysis | MAP-1.1, MAP-2.1 |
-| **Adapt** | Extend existing security programs to include AI-specific threats, integrate AI security testing, enhance supply chain management | Track B Modules 03-07 (CA for agents, DLP, detection, vendor risk) extending existing IAM/DLP/SOC programs | MAP-1.6, GOVERN-5.1 |
-| **Reduce** | Minimize sensitive data exposure, limit unwanted model behavior impact, manage privileges, apply human oversight | Purview DLP + SharePoint AM (data) + Tiered Autonomy + Logic App revocation (behavior) + APIM allow-list (channels) | MANAGE-2.4, MANAGE-4.1 |
-| **Demonstrate** | Provide transparency through testing, document risk assessments, show compliance evidence, communicate control effectiveness | Gap Assessment Template (evidence base) + KQL P01-P05 (measurable detection coverage) + Purview Compliance Manager templates | MEASURE-2.5, MANAGE-2.4 |
+| **Govern** | Establish AI program oversight, policies, roles, compliance checking, security education | Track B Module 02 (governance model, Entra Agent ID ownership, lifecycle policy) + Track A all modules (executive decision framework) | GOVERN-1.4, GOVERN-2.1 |
+| **Understand** | Threat model per use case, identify applicable threats via decision tree, distinguish organizational vs. supplier responsibilities | Track B Module 01 (agent discovery) + Gap Assessment Template (Domain risk scores) + MAESTRO 7-layer analysis | MAP-1.1, MAP-4.2 |
+| **Adapt** | Extend existing security programs to include AI-specific threats, integrate AI security testing, enhance supply chain management | Track B Modules 03-07 (CA for agents, DLP, detection, vendor risk) extending existing IAM/DLP/SOC programs | MEASURE-2.7, GOVERN-6.1 |
+| **Reduce** | Minimize sensitive data exposure, limit unwanted model behavior impact, manage privileges, apply human oversight | Purview DLP + SharePoint AM (data) + Tiered Autonomy + Logic App revocation (behavior) + APIM allow-list (channels) | MANAGE-1.3, MANAGE-2.4 |
+| **Demonstrate** | Provide transparency through testing, document risk assessments, show compliance evidence, communicate control effectiveness | Gap Assessment Template (evidence base) + KQL P01-P05 (measurable detection coverage) + Purview Compliance Manager templates | MEASURE-1.2, MEASURE-2.8 |
 
 **Key OWASP AI Exchange concepts adopted in this repo:**
 
@@ -182,17 +182,18 @@ Reference: HACCA report (2026), Section 6 (Guardrails for HACCA Development and 
 
 **Specific NIST AI RMF subcategories covered by this repo:**
 
-- `GOVERN-1.1` — Policies for AI risk management established ← Module 02 governance model
-- `GOVERN-6.1` — Human oversight and override capability ← Tiered Autonomy + Module 05 Logic App
-- `MAP-1.1` — AI system inventory maintained ← Module 01 AgentsInfo KQL
-- `MAP-2.1` — Potential impacts and risks identified ← Gap Assessment Template Domain risk scores
-- `MEASURE-2.5` — AI system performance monitored ← P05 analytics rules + behavioral baselines
-- `MANAGE-2.4` — AI incidents documented and reviewed ← Module 05 playbook + Purview Audit
+- `GOVERN-1.4` — The risk management process is established through transparent policies, procedures and controls ← Module 02 governance model
+- `MAP-3.5` — Processes for human oversight are defined, assessed and documented ← Tiered Autonomy + Module 05 Logic App
+- `MANAGE-2.4` — Mechanisms to supersede, disengage or deactivate an AI system ← Module 02 kill switch + Module 05 Logic App
+- `GOVERN-1.6` — Mechanisms are in place to inventory AI systems ← Module 01 AgentsInfo KQL
+- `MAP-5.1` — Likelihood and magnitude of each identified impact ← Gap Assessment Template Domain risk scores
+- `MEASURE-2.4` — Functionality and behavior of the AI system are monitored in production ← P05 analytics rules + behavioral baselines
+- `MANAGE-4.3` — Incidents and errors are tracked, responded to and documented ← Module 05 playbook + Purview Audit
 
 **Gaps not yet covered by this repo:**
-- `MAP-1.6` — AI impact assessments for high-risk deployments (AIIA)
-- `GOVERN-5.1` — Third-party AI risk documented (→ Module 07 of this track)
-- `MEASURE-2.2` — Bias and fairness measurement (outside scope of security focus)
+- AI impact assessments for high-risk deployments (AIIA): the AI RMF has no single subcategory for it, and EU AI Act Article 27 (fundamental rights impact assessment) is the closest obligation
+- `GOVERN-6.1` — Policies for third-party AI risk (→ Module 07 of this track)
+- `MEASURE-2.11` — Fairness and bias evaluation (outside scope of security focus)
 
 ---
 
@@ -269,6 +270,6 @@ MANAGE gap: ________________
 
 ## Connection to Module 07
 
-Regulatory frameworks require third-party AI risk management (EU AI Act Art. 25, NIST GOVERN-5.1, ISO 42001 Clause 8.6). The next module covers how to evaluate vendors and MCP server providers before connecting them to your agent environment.
+Regulatory frameworks require third-party AI risk management (EU AI Act Art. 25, NIST GOVERN-6.1, ISO 42001 Clause 8.1 and Annex A.10). The next module covers how to evaluate vendors and MCP server providers before connecting them to your agent environment.
 
 → [Module 07 — Vendor & Third-Party AI Risk](./Module-07-VendorRisk.md)

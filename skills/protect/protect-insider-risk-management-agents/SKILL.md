@@ -9,9 +9,9 @@ description: >-
   user risk indicators and agent identity.
 tags: [protect, purview, insider-risk, exfiltration, behavioral-analytics, agent-activity]
 atlas_techniques: [AML.T0057, AML.T0025]
-d3fend_techniques: [D3-DAM, D3-UBA]
-nist_ai_rmf: [MEASURE-2.6, MANAGE-3.2]
-nist_csf: [DE.CM-03, PR.DS-05]
+d3fend_techniques: [D3-UBA, D3-UDTA]
+nist_ai_rmf: [MEASURE-2.4, MEASURE-2.10]
+nist_csf: [DE.CM-03, PR.DS-10]
 ms_license: [Microsoft 365 E5, Microsoft 365 E5 Insider Risk Management]
 ms_roles: [Insider Risk Management, Compliance Administrator]
 effort_hours: 4

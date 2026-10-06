@@ -10,8 +10,8 @@ description: >-
   existing agents (agent spawning).
 tags: [detect, sentinel, entra, identity-abuse, token-theft, privilege-escalation, agent-spawning]
 atlas_techniques: [AML.T0091.000, AML.T0040, AML.T0084, AML.T0103]
-d3fend_techniques: [D3-UAP, D3-ANET, D3-JCA]
-nist_ai_rmf: [MEASURE-2.6, MANAGE-3.2]
+d3fend_techniques: [D3-UAP, D3-ANET, D3-UGLPA]
+nist_ai_rmf: [MEASURE-2.4, MANAGE-4.1]
 nist_csf: [DE.CM-03, DE.AE-02, RS.AN-03]
 ms_license: [Microsoft Sentinel, Microsoft Entra ID P2]
 ms_roles: [Microsoft Sentinel Contributor, Security Reader]

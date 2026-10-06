@@ -9,8 +9,8 @@ description: >-
   matrix as input for govern and protect controls.
 tags: [discover, copilot-studio, connectors, data-classification, power-platform]
 atlas_techniques: [AML.T0057, AML.T0086]
-d3fend_techniques: [D3-AM, D3-NTA]
-nist_ai_rmf: [MAP-2.2, MAP-5.1]
+d3fend_techniques: [D3-AM, D3-DI]
+nist_ai_rmf: [MAP-4.2, MAP-5.1]
 nist_csf: [ID.AM-05, ID.RA-01]
 ms_license: [Power Platform, M365 E3]
 ms_roles: [Power Platform Administrator]

@@ -10,9 +10,9 @@ description: >-
   their creator, without owner, or unmanaged.
 tags: [discover, copilot-studio, shadow-ai, agent-inventory, m365-admin]
 atlas_techniques: [AML.T0103]
-d3fend_techniques: [D3-AM, D3-SFA]
-nist_ai_rmf: [MAP-1.1, GOVERN-1.2]
-nist_csf: [ID.AM-01, GV-OC-01]
+d3fend_techniques: [D3-AI, D3-AM]
+nist_ai_rmf: [GOVERN-1.6, MAP-1.1]
+nist_csf: [ID.AM-02, ID.AM-05]
 ms_license: [M365 Copilot, M365 E3]
 ms_roles: [AI Administrator, Power Platform Administrator]
 effort_hours: 4

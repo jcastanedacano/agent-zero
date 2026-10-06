@@ -10,9 +10,9 @@ description: >-
   validate in report-only mode. Agent identities support only the Block control.
 tags: [secure, entra, conditional-access, agent-id, agent-risk, report-only]
 atlas_techniques: [AML.T0012, AML.T0040]
-d3fend_techniques: [D3-MAN, D3-UAP]
+d3fend_techniques: [D3-AMED, D3-UAP]
 nist_ai_rmf: [GOVERN-2.1, MANAGE-2.4]
-nist_csf: [PR.AA-05, PR.AC-04]
+nist_csf: [PR.AA-03, PR.AA-05]
 ms_license: [Microsoft 365 E7, or Microsoft Agent 365 with Microsoft Entra ID P1 or Microsoft 365 E3]
 ms_roles: [Conditional Access Administrator]
 effort_hours: 3

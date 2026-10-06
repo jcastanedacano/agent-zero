@@ -10,9 +10,9 @@ description: >-
   orchestrated via a Logic App linked to Sentinel analytics rules.
 tags: [detect, respond, sentinel, playbook, logic-app, containment, incident-response, aisoc]
 atlas_techniques: [AML.T0051, AML.T0086, AML.T0091.000]
-d3fend_techniques: [D3-OTA, D3-RTA, D3-ANET]
-nist_ai_rmf: [MANAGE-3.2, MANAGE-4.1]
-nist_csf: [RS.RP-01, RS.CO-02, RS.MI-01]
+d3fend_techniques: [D3-AL, D3-ANCI]
+nist_ai_rmf: [MANAGE-2.4, MANAGE-4.1, MANAGE-4.3]
+nist_csf: [RS.MA-01, RS.CO-02, RS.MI-01]
 ms_license: [Microsoft Sentinel, Azure Logic Apps]
 ms_roles: [Microsoft Sentinel Contributor, Logic Apps Contributor]
 effort_hours: 8

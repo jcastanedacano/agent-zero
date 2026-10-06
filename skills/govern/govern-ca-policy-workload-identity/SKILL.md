@@ -11,9 +11,9 @@ description: >-
   registered with Entra Agent ID use a separate policy type.
 tags: [govern, entra, conditional-access, workload-identity, agent-identity]
 atlas_techniques: [AML.T0012, AML.T0091.000]
-d3fend_techniques: [D3-UAP, D3-NTF]
-nist_ai_rmf: [GOVERN-2.2, MANAGE-1.3]
-nist_csf: [PR.AA-05, PR.AC-01]
+d3fend_techniques: [D3-AMED, D3-NAM]
+nist_ai_rmf: [MANAGE-1.3, MEASURE-2.7]
+nist_csf: [PR.AA-03, PR.AA-05]
 ms_license: [Microsoft Entra ID P1, Microsoft Entra Workload ID Premium]
 ms_roles: [Conditional Access Administrator, Security Administrator]
 effort_hours: 8

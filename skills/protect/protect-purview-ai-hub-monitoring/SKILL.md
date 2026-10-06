@@ -10,9 +10,9 @@ description: >-
   does reach the workspace.
 tags: [protect, purview, dspm-for-ai, monitoring, audit, copilot-studio, m365-copilot]
 atlas_techniques: [AML.T0057, AML.T0086]
-d3fend_techniques: [D3-PA, D3-NTA]
-nist_ai_rmf: [MEASURE-2.5, MEASURE-2.6]
-nist_csf: [DE.CM-01, ID.RA-01]
+d3fend_techniques: [D3-DI, D3-UDTA]
+nist_ai_rmf: [MEASURE-2.4, MEASURE-2.10]
+nist_csf: [DE.CM-09, ID.RA-01]
 ms_license: [Microsoft Purview E3, M365 E5 Compliance]
 ms_roles: [Compliance Administrator, Security Reader]
 effort_hours: 3

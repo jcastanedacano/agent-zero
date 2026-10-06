@@ -10,9 +10,9 @@ description: >-
   who can access agents.
 tags: [govern, copilot-studio, agent365, approval-flow, shadow-ai-prevention]
 atlas_techniques: [AML.T0103]
-d3fend_techniques: [D3-UAP, D3-SFA]
-nist_ai_rmf: [GOVERN-1.2, GOVERN-2.1]
-nist_csf: [GV-PO-01, PR.AA-05]
+d3fend_techniques: [D3-UAP, D3-APA]
+nist_ai_rmf: [GOVERN-1.4, GOVERN-2.1]
+nist_csf: [GV.PO-01, PR.AA-05]
 ms_license: [M365 Copilot, M365 E3]
 ms_roles: [AI Administrator, Global Administrator]
 effort_hours: 6

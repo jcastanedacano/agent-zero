@@ -9,9 +9,9 @@ description: >-
   labels out of Copilot responses, and states what Learn documents for Copilot Studio agents.
 tags: [govern, purview, dlp, copilot-studio, data-protection, prompt-security]
 atlas_techniques: [AML.T0057, AML.T0086]
-d3fend_techniques: [D3-DLP, D3-PA]
-nist_ai_rmf: [MANAGE-2.2, GOVERN-6.1]
-nist_csf: [PR.DS-01, PR.DS-05]
+d3fend_techniques: [D3-CF, D3-FCR]
+nist_ai_rmf: [MEASURE-2.10, MANAGE-1.3]
+nist_csf: [PR.DS-01, PR.DS-10]
 ms_license: [Microsoft Purview, M365 E5 (restriction of files and emails by label)]
 ms_roles: [Compliance Administrator, DLP Compliance Management]
 effort_hours: 6

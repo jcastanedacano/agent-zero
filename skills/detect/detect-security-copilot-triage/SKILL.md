@@ -9,9 +9,9 @@ description: >-
   prompts and automatic correlation of Sentinel and Defender entities.
 tags: [detect, security-copilot, triage, aisoc, incident-response, mttd]
 atlas_techniques: [AML.T0054, AML.T0051]
-d3fend_techniques: [D3-SBV, D3-NTA]
-nist_ai_rmf: [MANAGE-3.2, MANAGE-4.1]
-nist_csf: [DE.AE-02, RS.AN-01, RS.AN-03]
+d3fend_techniques: []
+nist_ai_rmf: [MANAGE-4.1, MANAGE-4.3]
+nist_csf: [DE.AE-02, RS.AN-03]
 ms_license: [Microsoft Security Copilot, Microsoft Sentinel]
 ms_roles: [Security Operator, Microsoft Sentinel Reader]
 effort_hours: 2

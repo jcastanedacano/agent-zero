@@ -9,9 +9,9 @@ description: >-
   investigation state from conversational context.
 tags: [detect, sentinel, mcp-server, security-copilot, aisoc, agentic-soc]
 atlas_techniques: [AML.T0054]
-d3fend_techniques: [D3-NTA, D3-SBV]
-nist_ai_rmf: [MANAGE-3.2, MANAGE-4.1]
-nist_csf: [DE.CM-01, RS.AN-03, RS.CO-02]
+d3fend_techniques: []
+nist_ai_rmf: [MEASURE-2.4, MANAGE-4.1]
+nist_csf: [DE.CM-09, RS.AN-03, RS.CO-02]
 ms_license: [Microsoft Sentinel, Microsoft Security Copilot]
 ms_roles: [Microsoft Sentinel Contributor, Security Operator]
 effort_hours: 3

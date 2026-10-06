@@ -10,9 +10,9 @@ description: >-
   UEBA already compute.
 tags: [detect, sentinel, behavioral-analytics, anomaly, baseline, aisoc, ueba]
 atlas_techniques: [AML.T0040, AML.T0084, AML.T0086]
-d3fend_techniques: [D3-NTA, D3-PA, D3-ANET]
-nist_ai_rmf: [MEASURE-2.6, MEASURE-2.5]
-nist_csf: [DE.AE-01, DE.CM-06]
+d3fend_techniques: [D3-RAPA, D3-UBA, D3-ANET]
+nist_ai_rmf: [MEASURE-2.4, MEASURE-3.1]
+nist_csf: [DE.CM-03, DE.AE-02]
 ms_license: [Microsoft Sentinel, Microsoft Entra ID Protection]
 ms_roles: [Microsoft Sentinel Contributor]
 effort_hours: 6

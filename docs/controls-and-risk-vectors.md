@@ -100,7 +100,7 @@ Every domain maps to named, configurable Microsoft controls. Expand a domain to 
 
 - Microsoft Purview Compliance Manager (EU AI Act + ISO 42001 + NIST AI RMF 1.0 templates)
 - Purview Audit (immutable record keeping)
-- Copilot Studio disclosure settings (Art. 13)
+- Copilot Studio disclosure settings (Art. 50)
 - Autonomy-graded incident taxonomy (human-directed / agent-initiated in scope / agent-initiated out of scope)
 - Jurisdictional reach documented per agent connector and MCP server
 - Assurance case structure over the Gap Assessment
@@ -117,7 +117,7 @@ Every domain maps to named, configurable Microsoft controls. Expand a domain to 
 - Azure AI Foundry model layer controls (prompt shields, content filters, groundedness detection)
 - Open source AI platform hardening (Langflow, Flowise, n8n)
 - Denial-of-Wallet mitigation (APIM rate limiting + Azure Cost Management alerts + input token pre-filter + per-deployment TPM quotas)
-- AI-BOM (machine-readable bill of materials: model version, dataset provenance, fine-tuning lineage, MCP server hashes — maps to EU AI Act Art. 13 and NIST AI RMF GOVERN-4)
+- AI-BOM (machine-readable bill of materials: model version, dataset provenance, fine-tuning lineage, MCP server hashes — maps to EU AI Act Art. 11 and NIST AI RMF MAP-4.1)
 - Agent KYC (Entra Agent ID sponsor as deployer attestation + per-agent APIM subscription key for attribution and granular revocation + no payment instruments held by agents)
 - Model weight security posture as a vendor question (B5)
 - Purview Claude Enterprise connector (prompt/response visibility into a monitored external model vendor)

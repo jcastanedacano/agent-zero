@@ -10,9 +10,9 @@ description: >-
   and unusual response volume from Foundry deployments.
 tags: [detect, sentinel, exfiltration, data-loss, sharepoint, exchange, aisoc]
 atlas_techniques: [AML.T0086, AML.T0057]
-d3fend_techniques: [D3-NTA, D3-DLP, D3-EAC]
-nist_ai_rmf: [MEASURE-2.6, MANAGE-3.2]
-nist_csf: [DE.CM-01, DE.AE-03, RS.AN-03]
+d3fend_techniques: [D3-UDTA, D3-OTF, D3-FAPA]
+nist_ai_rmf: [MEASURE-2.7, MANAGE-4.1]
+nist_csf: [DE.CM-09, DE.AE-03, RS.AN-03]
 ms_license: [Microsoft Sentinel, Microsoft Purview E3]
 ms_roles: [Microsoft Sentinel Contributor, Security Reader]
 effort_hours: 5

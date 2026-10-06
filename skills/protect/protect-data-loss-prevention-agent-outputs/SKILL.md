@@ -9,9 +9,9 @@ description: >-
   content containing sensitive data toward unauthorized destinations.
 tags: [protect, purview, dlp, sharepoint, onedrive, exchange, agent-outputs, exfiltration]
 atlas_techniques: [AML.T0086, AML.T0057]
-d3fend_techniques: [D3-DLP, D3-EAC]
-nist_ai_rmf: [MANAGE-2.2, GOVERN-6.1]
-nist_csf: [PR.DS-05, DE.CM-01]
+d3fend_techniques: [D3-FCR, D3-CF]
+nist_ai_rmf: [MEASURE-2.10, MANAGE-1.3]
+nist_csf: [PR.DS-02, PR.DS-10]
 ms_license: [Microsoft Purview E3, M365 E3]
 ms_roles: [Compliance Administrator, DLP Compliance Management]
 effort_hours: 5

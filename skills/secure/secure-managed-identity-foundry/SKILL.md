@@ -11,8 +11,8 @@ description: >-
 tags: [secure, foundry, managed-identity, azure-rbac, no-secrets, workload-identity, agent-identity]
 atlas_techniques: [AML.T0055, AML.T0040]
 d3fend_techniques: [D3-CH, D3-UAP]
-nist_ai_rmf: [MANAGE-1.3, GOVERN-2.2]
-nist_csf: [PR.AA-02, PR.AC-01]
+nist_ai_rmf: [MANAGE-1.3, MEASURE-2.7]
+nist_csf: [PR.AA-01, PR.AA-03]
 ms_license: [Microsoft Foundry, Azure subscription]
 ms_roles: [Owner or Role Based Access Control Administrator (role assignments), Contributor or Foundry Account Owner (change the Foundry resource), Foundry User (test the calls)]
 effort_hours: 5

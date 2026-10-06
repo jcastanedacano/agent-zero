@@ -68,7 +68,7 @@ AI agents differ from traditional software in three ways that affect board risk 
 
 **Current exposure:** [X] agents detected in tenant without approved owner or formal security review.
 
-**Regulatory implication:** EU AI Act Article 9 requires a risk management system for all AI systems. Undocumented agents violate this requirement.
+**Regulatory implication:** EU AI Act Article 9 requires a risk management system for high-risk AI systems. An undocumented agent used in a high-risk context cannot be covered by one.
 
 **Proposed control:** Copilot Studio approval flow + Conditional Access policy (estimated implementation: 2 weeks, no additional license cost).
 
@@ -80,7 +80,7 @@ AI agents differ from traditional software in three ways that affect board risk 
 
 **Current exposure:** [X] agents have active external MCP server connections. [Y] of these have no vendor security assessment on file.
 
-**Regulatory implication:** EU AI Act Article 25, NIST AI RMF GOVERN-5.1, ISO 42001 Clause 8.6 all require documented third-party AI risk management.
+**Regulatory implication:** EU AI Act Article 25, NIST AI RMF GOVERN-6.1, ISO 42001 Clause 8.1 and Annex A.10 all require documented third-party AI risk management.
 
 **Proposed control:** Vendor assessment process (22-question checklist) + Power Platform DLP policy to block unapproved external connectors.
 

@@ -10,8 +10,8 @@ description: >-
 tags: [govern, copilot-studio, entra, lifecycle, decommission, agent-hygiene]
 atlas_techniques: [AML.T0040]
 d3fend_techniques: [D3-UAP, D3-AM]
-nist_ai_rmf: [GOVERN-1.4, MANAGE-4.1]
-nist_csf: [PR.AA-01, ID.AM-01]
+nist_ai_rmf: [GOVERN-1.7, MANAGE-4.1]
+nist_csf: [PR.AA-01, ID.AM-08]
 ms_license: [M365 E3, Power Platform]
 ms_roles: [AI Administrator, Power Platform Administrator, Application Administrator]
 effort_hours: 4

@@ -10,9 +10,9 @@ description: >-
   rotation driven by the near-expiry event with a function.
 tags: [secure, keyvault, secrets, rotation, agent-credentials, azure-rbac]
 atlas_techniques: [AML.T0055, AML.T0083]
-d3fend_techniques: [D3-CH, D3-SCL]
-nist_ai_rmf: [MANAGE-1.3, GOVERN-6.2]
-nist_csf: [PR.DS-01, PR.AC-01]
+d3fend_techniques: [D3-CH, D3-CRO]
+nist_ai_rmf: [MANAGE-1.3, MEASURE-2.7]
+nist_csf: [PR.DS-01, PR.AA-01]
 ms_license: [Azure Key Vault (included in Azure subscription), Azure Event Grid and Azure Functions for rotation]
 ms_roles: [Key Vault Contributor (create the vault), Key Vault Secrets Officer (write secrets), Owner or Role Based Access Control Administrator (role assignments)]
 effort_hours: 4

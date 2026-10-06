@@ -10,9 +10,9 @@ description: >-
   for agent telemetry you own.
 tags: [detect, sentinel, prompt-injection, jailbreak, copilot-studio, foundry, aisoc]
 atlas_techniques: [AML.T0051, AML.T0054]
-d3fend_techniques: [D3-PA, D3-SBV]
-nist_ai_rmf: [MEASURE-2.6, MANAGE-3.2]
-nist_csf: [DE.CM-01, RS.AN-03]
+d3fend_techniques: [D3-MA, D3-CF]
+nist_ai_rmf: [MEASURE-2.7, MANAGE-4.1]
+nist_csf: [DE.CM-09, RS.AN-03]
 ms_license: [Microsoft Sentinel, M365 Copilot]
 ms_roles: [Microsoft Sentinel Contributor]
 effort_hours: 4

@@ -10,9 +10,9 @@ description: >-
   agent identities that reach sites of more than one segment.
 tags: [protect, purview, information-barriers, segmentation, compliance, teams, sharepoint]
 atlas_techniques: [AML.T0057, AML.T0036]
-d3fend_techniques: [D3-NI, D3-EAC]
-nist_ai_rmf: [GOVERN-6.2, MANAGE-2.2]
-nist_csf: [PR.DS-05, PR.AC-05]
+d3fend_techniques: [D3-UGPH, D3-AMED]
+nist_ai_rmf: [MEASURE-2.10, MANAGE-1.3]
+nist_csf: [PR.DS-10, PR.AA-05]
 ms_license: [Microsoft Purview E5, M365 E5 Compliance]
 ms_roles: [Compliance Administrator, IB Administrator]
 effort_hours: 8

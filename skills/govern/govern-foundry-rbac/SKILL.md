@@ -9,9 +9,9 @@ description: >-
   hold credentials, and limits which models can be deployed with Azure Policy.
 tags: [govern, foundry, rbac, least-privilege, connections, azure-policy]
 atlas_techniques: [AML.T0012, AML.T0040, AML.T0084]
-d3fend_techniques: [D3-MAN, D3-UAP]
-nist_ai_rmf: [GOVERN-2.1, GOVERN-4.2, MAP-1.5]
-nist_csf: [PR.AA-04, PR.AC-04, PR.AC-06]
+d3fend_techniques: [D3-UAP, D3-APA]
+nist_ai_rmf: [GOVERN-2.1, MANAGE-1.3, MAP-4.2]
+nist_csf: [PR.AA-01, PR.AA-05]
 ms_license: [Microsoft Foundry, Azure subscription]
 ms_roles: [Owner or Role Based Access Control Administrator (assign roles), Foundry Account Owner (deployments, shared connections), Foundry Project Manager (publish agents, assign Foundry User)]
 effort_hours: 3

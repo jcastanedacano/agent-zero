@@ -9,8 +9,8 @@ description: >-
   data agents access and what exposure risks exist before scaling.
 tags: [discover, purview, dspm, ai-hub, data-classification, oversharing]
 atlas_techniques: [AML.T0084, AML.T0036]
-d3fend_techniques: [D3-DAM, D3-SFA]
-nist_ai_rmf: [MAP-1.1, MAP-2.1, GOVERN-1.1]
+d3fend_techniques: [D3-DI, D3-AM]
+nist_ai_rmf: [GOVERN-1.1, MAP-1.1, MEASURE-2.10]
 nist_csf: [ID.AM-05, ID.RA-01]
 ms_license: [Microsoft 365 E5, Microsoft 365 E5 Compliance]
 ms_roles: [Compliance Administrator, Security Reader]

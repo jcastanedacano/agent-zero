@@ -30,9 +30,9 @@ description: >-
   {what it does} {on which MS product} {what risk it mitigates} — ~30 tokens
 tags: [{pillar}, {ms-product}, {scenario}]
 atlas_techniques: []   # MITRE ATLAS (2026.09) — AML.Txxxx[.xxx], verify IDs at atlas.mitre.org
-d3fend_techniques: []  # MITRE D3FEND v1.3 — D3-xxxx
-nist_ai_rmf: []        # GOVERN|MAP|MEASURE|MANAGE-x.x
-nist_csf: []           # GV|ID|PR|DE|RS|RC + category
+d3fend_techniques: []  # MITRE D3FEND v1.6 — D3-xxxx; an empty list is valid when no technique describes the skill
+nist_ai_rmf: []        # AI RMF 1.0 subcategory, GOVERN|MAP|MEASURE|MANAGE-x.x; check the statement, not only that the id exists
+nist_csf: []           # CSF 2.0 subcategory, for example PR.AA-05 (CSF 1.1 ids such as PR.AC-04 do not exist in 2.0)
 ms_license: []         # minimum licenses required
 ms_roles: []           # required Entra ID roles
 effort_hours: {n}

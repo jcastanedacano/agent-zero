@@ -11,9 +11,9 @@ description: >-
   activity logs what the agent actually uses.
 tags: [secure, entra, least-privilege, service-principal, agent-identity, oauth, app-roles]
 atlas_techniques: [AML.T0012, AML.T0040]
-d3fend_techniques: [D3-UAP, D3-MAN]
-nist_ai_rmf: [MANAGE-1.3, GOVERN-2.2]
-nist_csf: [PR.AA-05, PR.AC-04]
+d3fend_techniques: [D3-UAP, D3-AM]
+nist_ai_rmf: [MANAGE-1.3, GOVERN-2.1]
+nist_csf: [PR.AA-05]
 ms_license: [Microsoft Entra ID P1]
 ms_roles: [Application Administrator, Privileged Role Administrator]
 effort_hours: 6
