@@ -46,6 +46,42 @@ Limits that change the design:
 - For agents built in Copilot Studio, Learn documents one capability: when the knowledge source is SharePoint, a DLP policy scoped to the Microsoft 365 Copilot location can
   stop them from processing content with a chosen sensitivity label. Learn does not document blocking sensitive information types in prompts for Copilot Studio agents
 
+### Where DLP acts in a Copilot interaction
+
+```mermaid
+flowchart TB
+    U["User prompt in Microsoft 365 Copilot<br/>or Copilot Chat"]
+    P["DLP policy for the location<br/>Microsoft 365 Copilot and Copilot Chat"]
+    R1["Rule 1: sensitive information type in the prompt<br/>Action: Processing prompts (preview)"]
+    R2["Rule 2: same types, separate rule<br/>Action: Performing Web Searches"]
+    R3["Rule 3: sensitivity label on a file or email<br/>Action: Prevent Copilot from processing content"]
+    E1["Copilot does not answer the prompt<br/>and does not use it for searches"]
+    E2["Prompt is not sent to a web search provider<br/>Copilot answers from internal sources"]
+    E3["File or email is not used in the response<br/>it can still appear in the citations"]
+    A["Copilot response"]
+    G["DLP does not evaluate the response text:<br/>a rule that alerts on responses does not exist"]
+    U --> P
+    P --> R1
+    P --> R2
+    P --> R3
+    R1 --> E1
+    R2 --> E2
+    R3 --> E3
+    E2 --> A
+    E3 --> A
+    A --> G
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class U,P,A blue
+    class R1,R2,R3 purple
+    class E1,E2,E3 green
+    class G orange
+```
+
+**How to read it.** Each rule watches one input: the prompt (Rules 1 and 2) or a labeled item Copilot would use (Rule 3), and the green boxes are the effects. DLP evaluates prompts and those items but never the response text, so nothing can alert on what Copilot writes. Rule 3 is a separate rule because a rule cannot combine a sensitive information type with a sensitivity label. For Copilot Studio agents, Learn documents only the label rule on a SharePoint knowledge source.
+
 ## Prerequisites
 
 - Microsoft Purview with DLP for Microsoft 365 Copilot available to the tenant

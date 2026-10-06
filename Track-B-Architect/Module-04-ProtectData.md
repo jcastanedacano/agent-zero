@@ -32,6 +32,35 @@ By the end of this module, participants will be able to design a data protection
 
 7. **Cross-tenant vector search leakage — the access control that fails silently (OWASP LLM09:2026):** In multi-tenant deployments using Azure AI Search or any shared vector store, similarity search typically executes across the **entire index before access filters are applied**. The result: a document belonging to Tenant A can be returned as a relevant result for a Tenant B query if both share the same vector index. The model does not distinguish between "this chunk is yours" and "this chunk belongs to another tenant" — it sees tokens, not ACLs. This vector differs from prompt injection (LLM01) because it requires no malicious instruction: it is a geometric failure of the embedding space, not an instruction-following failure. A perfectly benign document can leak across tenants if cosine similarity retrieves it before the access filter runs. Controls in Azure AI Search: (a) **Security trimming** — Azure AI Search supports `$filter` with per-document security fields (a `tenantId` field or a serialized ACL); configure security trimming as a production requirement, not an optional optimization, because without that parameter the search returns results from every tenant; (b) **Separate indexes per tenant** — architecturally the safest option: each tenant gets its own index, eliminating the geometric risk by design at the cost of higher operational complexity; (c) **Row-level access control in the corpus** — every document in the index must carry an `allowedTenants` field or equivalent that the search filter validates on every query; documents without that field should be rejected at ingestion, not silently dropped at search time; (d) **Retrieval audit** — log which documents were retrieved for each query and by which tenant, to detect anomalous cross-tenant retrievals. Reference: OWASP LLM Top 10 2026, LLM09 — Vector and Embedding Weaknesses, Common Example #1 (Cross-Tenant Leakage via Shared Similarity Search).
 
+   ```mermaid
+   flowchart TB
+       Q["Tenant B query on a<br/>shared vector index"]
+       SIM["Similarity search can run<br/>across the entire index<br/>before access filters apply"]
+       D{"Security trimming<br/>filter configured?"}
+       LEAK["A Tenant A document is<br/>returned for a Tenant B query<br/>no malicious instruction needed"]
+       FLT["Per-document tenantId or ACL<br/>field limits what each<br/>tenant can retrieve"]
+       AUD["Retrieval audit: which<br/>documents each tenant retrieved"]
+       SEP["Separate index per tenant<br/>safest, higher operational<br/>complexity"]
+       ROW["Every document carries an<br/>allowedTenants field, rejected<br/>at ingestion if missing"]
+       Q --> SIM
+       SIM --> D
+       D -- "No" --> LEAK
+       D -- "Yes" --> FLT
+       LEAK -. "detected by" .-> AUD
+       LEAK -. "removed by design with" .-> SEP
+       FLT -. "relies on" .-> ROW
+       classDef blue fill:#0078D4,stroke:#333,color:#fff
+       classDef purple fill:#5E2750,stroke:#333,color:#fff
+       classDef green fill:#107C10,stroke:#333,color:#fff
+       classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+       class Q blue
+       class SIM,D purple
+       class LEAK orange
+       class SEP,ROW,AUD,FLT green
+   ```
+
+   **How to read it.** Follow the solid path from the query: without a per-document security filter, similarity search over a shared index can return another tenant's document, with no malicious instruction involved. The dotted branches show where the other controls act: the retrieval audit detects a leak, a separate index per tenant removes the shared index, and the allowedTenants field is what the filter relies on.
+
 8. **Multi-agent trust boundaries as an escalation vector:** A compromised agent that can invoke other agents pivots to new blast radii with their own permissions. The correct architectural design treats every agent-to-agent call as an untrusted call: verify explicit user authorization and limit inherited permissions between agents. Reference: Anthropic Zero Trust for AI Agents.
 
 9. **Membership inference — privacy without visible exfiltration:** If a model was fine-tuned with personal data (employee PII, customer data, medical records), an attacker can infer whether a specific record was in the training set by systematically querying the model and analyzing response patterns — without extracting the data directly. The risk is a privacy violation undetectable by DLP or standard Purview audit. Architectural controls: (a) do not fine-tune with PII without differential anonymization, (b) use Foundry RBAC to restrict who can query models fine-tuned with sensitive data, (c) monitor inference volume by identity. Maps to OWASP LLM Top 10 2026, LLM02 — Sensitive Information Disclosure (membership inference is not a standalone item in either the LLM or Agentic Applications Top 10; this is the closest-fit official category — privacy leakage without direct extraction).

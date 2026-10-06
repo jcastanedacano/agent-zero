@@ -44,6 +44,44 @@ An application or agent with application permissions shows up in `OfficeActivity
 `UserId` is `app@sharepoint` and `ApplicationId` holds the app; in Exchange `UserId` is the mailbox and `ClientAppId` holds the app.
 What Copilot reads on behalf of a user is not distinguishable here: it is in `CopilotActivity` (KQL Library P04-Q6).
 
+```mermaid
+flowchart LR
+    subgraph VEC["Exfiltration vectors"]
+        V1["1 Bulk access<br/>app or agent opens N files in a short time"]
+        V2["2 Summary as exfil<br/>the user copies the summary text out"]
+        V3["3 Connector abuse<br/>generic HTTP tool sends data to an external URL"]
+        V4["4 Email relay<br/>agent with Mail.Send mails an external account"]
+        V5["5 Cross-tenant<br/>agent shares data across tenants"]
+    end
+    subgraph COV["Coverage in this skill"]
+        C1["Step 1 rule: more than 50 unique files<br/>in 30 min, every 15 min, High"]
+        N1["No query: not visible in the audit record"]
+        C3["Step 3 rule: outbound HTTP to unapproved domains<br/>NOT VERIFIED: needs HTTP dependency telemetry"]
+        C2["Step 2 rule: mail to external domains<br/>every 5 min, High"]
+        N2["No query here"]
+    end
+    C4["Step 4: DLP match joined to the mail<br/>by message id"]
+    OTH["Also in the workflow, not tied to one vector<br/>Step 5: response volume of a Foundry account<br/>Step 6: Purview signals for AI"]
+    V1 --> C1
+    V2 -.-> N1
+    V3 --> C3
+    V4 --> C2
+    V5 -.-> N2
+    C4 -->|"Critical if both match"| C2
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class V1,V2,V3,V4,V5 blue
+    class C1,C2 green
+    class C3,N1,N2 orange
+    class C4 purple
+    class OTH blue
+```
+
+**How to read it.** Each exfiltration vector the skill lists is on the left, with what covers it on the right. Two vectors have no query, because summary text copied out is not visible in the audit record, and the HTTP rule stays NOT VERIFIED until the agents emit HTTP dependency telemetry. Mail sent by an app that also matches a DLP rule (Step 4) is raised from High to Critical, and Steps 5 and 6 add signals that do not belong to a single vector.
+
 ## Workflow
 
 ### Step 1 — Create rule: bulk file access by an app or agent

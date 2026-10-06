@@ -52,6 +52,46 @@ configurable control, not a fixed product limit.
 - Agent risk signals and the unmanaged-agents count in the registry need an E7 or Agent 365 license (Microsoft
   Learn); the controls below do not depend on them
 
+```mermaid
+flowchart TB
+    AB["Agent Builder agent<br/>created by a user"]
+    P{"Which path?"}
+    GATE{"Sharing restricted?<br/>(Option A)"}
+    CAT["Submit to the organization catalog<br/>(Agent Store)"]
+    REG["Registry: Shared by creator<br/>no request, no admin review<br/>updates apply at once"]
+    APR["Admin must approve and deploy<br/>before others can use it<br/>(new sharing actions only)"]
+    REQ["Requests queue (Pending review,<br/>Pending update, Pending activate)<br/>open the request: check owner,<br/>data sources, tools, custom actions"]
+    D{"Publish?"}
+    REVIEW["Step 5: monthly registry review<br/>compare each Shared by creator agent<br/>with your sharing policy<br/>keep, require catalog submission, or block"]
+    BLK["Block the agent<br/>removed from Copilot, Outlook, Teams"]
+    PUB["Publish to store<br/>narrowest audience, policy template"]
+    REJ["Reject submission<br/>with documented justification"]
+    LOG["Step 4: record the decision<br/>governance log (SharePoint list or custom table)"]
+    AB --> P
+    P -->|"Share with the organization"| GATE
+    P -->|"Submit for admin review"| CAT
+    GATE -->|"No (default: all users can share)"| REG
+    GATE -->|"Yes"| APR
+    CAT --> REQ
+    REQ --> D
+    D -->|"Yes"| PUB
+    D -->|"No"| REJ
+    PUB --> LOG
+    REJ --> LOG
+    REG --> REVIEW
+    REVIEW -->|"block"| BLK
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class AB,REQ blue
+    class P,GATE,CAT,D,REVIEW,LOG purple
+    class REG orange
+    class APR,BLK,PUB,REJ green
+```
+
+**How to read it.** Follow an Agent Builder agent down its two paths. Sharing never creates a request: by default the agent shows only in the registry as Shared by creator, while the Requests queue holds submissions to the organization catalog. The control that closes the sharing path is restricting who can share (Option A), backed by the monthly registry review and the Block action.
+
 ## Workflow
 
 ### Step 1 — Decide who can access agents

@@ -30,6 +30,36 @@ effort_hours: 3
 - For Step 4: the Defender AI agent inventory (the `AgentsInfo` table in Advanced Hunting)
 - For Step 5: the Foundry account's diagnostic setting sending `Audit` and `RequestResponse` to the Sentinel workspace
 
+```mermaid
+flowchart TB
+    ACC["Foundry account<br/>Microsoft.CognitiveServices/accounts<br/>kind AIServices"]
+    PRJ["Project<br/>child resource of the account"]
+    AG["Agents in the projects<br/>prompt agents, workflows, hosted agents"]
+    E2["Steps 2 and 3: account audit<br/>az cognitiveservices account list<br/>disableLocalAuth, publicNetworkAccess,<br/>identity.type"]
+    E5["Step 5: Sentinel RequestResponse<br/>operation, caller IP, status, sizes<br/>no agent name, content or tokens<br/>describes the account, not an agent"]
+    EP["Steps 2 and 3: projects call<br/>properties.agentIdentity<br/>(missing: high risk)"]
+    RISK["disableLocalAuth false or empty:<br/>API keys still work (high risk)"]
+    E1["Step 1: Foundry Control Plane<br/>status, version, Entra ID<br/>(the agent identity)"]
+    E4["Step 4: AgentsInfo (Advanced Hunting)<br/>owner and Entra agent identity<br/>per Foundry agent"]
+    ACC -->|"contains"| PRJ
+    PRJ -->|"contains"| AG
+    ACC -->|"audited with"| E2
+    ACC -->|"diagnostic setting"| E5
+    PRJ -->|"read with"| EP
+    E2 -->|"reveals"| RISK
+    AG -->|"listed by"| E1
+    AG -->|"checked with"| E4
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class ACC,PRJ,AG blue
+    class E2,EP,E1,E4 purple
+    class E5,RISK orange
+```
+
+**How to read it.** Read top to bottom: the account contains projects, and projects contain the agents. Each source sits at the level it can speak about: the account audit and the diagnostic logs describe the account, while Foundry Control Plane and AgentsInfo describe individual agents. Take away that RequestResponse records cannot tell you which agent called, so the owner and identity per agent come from Step 1 and Step 4.
+
 ## Workflow
 
 ### Step 1 — List the agents in Foundry Control Plane

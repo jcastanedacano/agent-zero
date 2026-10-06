@@ -46,6 +46,41 @@ At the end of this module, you will be able to configure Entra Agent ID with lif
 
 Agent Builder (available in M365 Copilot) lets any licensed user create an agent and share it with the whole organization **immediately**, without a request to an admin: the **Requests** queue only receives agents submitted for approval, such as Copilot Studio agents published to the organization and Agent Builder submissions to the organization catalog. The shared agent appears in the agent registry as **Shared by creator**, with its creator as owner, but its identity, data sources and connectors get no formal review. An admin can restrict who can share and can block any agent.
 
+#### Paths to other users at a glance
+
+```mermaid
+flowchart TB
+    A["Copilot Studio agent<br/>published to the organization"]
+    C["Agent Builder agent submitted to<br/>the organization catalog<br/>(Agent Store)"]
+    B["Agent Builder agent<br/>shared by its creator"]
+    RQ["Requests queue, Microsoft 365 admin center<br/>Pending review, Pending update, Pending activate"]
+    Q{"Has an admin restricted<br/>who can share?"}
+    RV["AI Administrator or Global Administrator<br/>checks owner, data sources and tools<br/>Publish to store or Reject submission"]
+    RES["Restricted: an admin must approve<br/>and deploy the agent before<br/>others can use it"]
+    OPEN["Default: shared at once, no request,<br/>no admin review, updates apply at once<br/>Registry type: Shared by creator"]
+    DET2["PowerPlatformAdminActivity<br/>BotCreate, BotPublish, BotShare<br/>No event records an approval<br/>(not verified on a live tenant)"]
+    DET["No audit operation for sharing is documented<br/>Detect by inventory and CopilotActivity,<br/>not by an alert rule"]
+    A --> RQ
+    C --> RQ
+    B --> Q
+    RQ --> RV
+    Q -->|"yes"| RES
+    Q -->|"no (default)"| OPEN
+    RV -.->|"compare with the approval"| DET2
+    OPEN --> DET
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class A,B,C,DET2 blue
+    class RQ,RES green
+    class Q,RV purple
+    class OPEN,DET orange
+```
+
+**How to read it.** Read it as three entry paths. The Copilot Studio publish and the Agent Builder catalog submission both pass through the Requests queue, where an admin approves or rejects. The Agent Builder sharing path does not, unless an admin has restricted who can share, and because no sharing audit operation is documented, the orange box is detected by inventory and not by an alert rule.
+
 ### Why MFA is not the control for agents
 
 Agents cannot complete interactive MFA, and Learn documents **Block** as the only access control for agent identities. A user policy that requires MFA does not reach an agent acting as itself, and a policy for the agent identity does not apply to its agent user. Documented in [Microsoft Entra CA for agents](https://learn.microsoft.com/en-us/entra/identity/conditional-access/agent-id).

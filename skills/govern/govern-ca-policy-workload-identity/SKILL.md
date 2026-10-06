@@ -44,6 +44,41 @@ An agent registered with Entra Agent ID is a different object with its own polic
 
 Always start in `enabledForReportingButNotEnforced`, review the sign-in logs for at least 7 days, then enable.
 
+### Scope and rollout at a glance
+
+```mermaid
+flowchart TB
+    Q1{"Registered with<br/>Entra Agent ID?"}
+    X1["Separate policy type and license plan:<br/>use secure-ca-policy-agents"]
+    Q2{"Step 1: single-tenant service<br/>principal of type Application?"}
+    X2["Not covered by this policy:<br/>multitenant app or managed identity<br/>(managed identity: use an access review)"]
+    S1["Step 2: Named Location with the<br/>public egress IP ranges"]
+    S2["Step 3: policy in report-only, Block<br/>assigned to the service principal directly<br/>(condition: location or service principal risk)"]
+    S3["Step 4: review the sign-in logs<br/>for at least 7 days"]
+    Q3{"False positives?"}
+    S4["Step 5: state enabled"]
+    V["Verify: Query 3 shows result code 53003<br/>for sign-ins from external IPs"]
+    Q1 -- "Yes" --> X1
+    Q1 -- "No" --> Q2
+    Q2 -- "No" --> X2
+    Q2 -- "Yes" --> S1
+    S1 --> S2
+    S2 --> S3
+    S3 --> Q3
+    Q3 -- "Yes: validate the Named Location" --> S1
+    Q3 -- "No" --> S4
+    S4 --> V
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class Q1,Q2,Q3,S1,S2,S3 purple
+    class X1,X2 orange
+    class S4,V green
+```
+
+**How to read it.** The two decisions at the top settle whether this skill applies at all: an Entra Agent ID agent, a multitenant app or a managed identity is handled elsewhere or not covered. For a service principal that is in scope, the rollout loops until the report-only logs show no false positives. Block is the only grant control, so at least 7 days in report-only is the safety net before the policy is enabled.
+
 ## Prerequisites
 
 - Agent service principals identified (Pillar 1 output)

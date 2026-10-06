@@ -31,6 +31,46 @@ effort_hours: 4
 - Purview Audit enabled with retention configured (minimum 90 days)
 - Microsoft 365 Copilot or Copilot Studio active in the tenant to generate agent activity signals
 
+## Flow at a glance
+
+```mermaid
+flowchart TB
+    R["Sustained low-volume<br/>exfiltration below Sentinel<br/>alert thresholds"]
+    subgraph IRM["Purview Insider Risk Management"]
+        direction TB
+        I1["Step 1: enable the AI<br/>activity indicators<br/>(preview on some tenants:<br/>verify availability)"]
+        I2["Step 2: Data leaks by risky<br/>users template, 3 standard<br/>deviations from the user<br/>baseline, 30-day rolling"]
+    end
+    subgraph SEN["Microsoft Sentinel"]
+        direction TB
+        S1["SecurityAlert from<br/>Microsoft 365 Insider<br/>Risk Management"]
+        S2["CloudAppEvents<br/>ActionType InvokeAgent<br/>per AccountObjectId"]
+        S3["Step 3: join on AadUserId =<br/>AccountObjectId<br/>Not exercised with data: no<br/>InvokeAgent events"]
+        S4["Step 4: UserP90 of daily<br/>InvokeAgent count per user<br/>as the alert threshold, not<br/>a fixed one"]
+        S5["Step 5: Microsoft Security<br/>analytics rule, source IRM,<br/>severity Medium and High"]
+        S6["Sentinel incident<br/>for unified investigation"]
+    end
+    R -.->|"covered by"| I2
+    I1 --> I2
+    I2 -->|"IRM alerts"| S1
+    S1 --> S3
+    S2 --> S3
+    S2 --> S4
+    S1 --> S5
+    S5 --> S6
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class R orange
+    class I1,I2,S3,S4,S5 purple
+    class S1,S2 blue
+    class S6 green
+```
+
+**How to read it.** Read it from the Purview group to the Sentinel group: IRM raises the alert from the AI activity indicators and the baseline, and Sentinel joins those alerts to InvokeAgent activity per user and turns Medium and High alerts into incidents. The point is the division of labor: IRM covers the sustained low-volume vector that fixed Sentinel thresholds miss, and Sentinel supplies the agent context. The Step 3 join has not been exercised with data, because the validation workspace had no InvokeAgent events.
+
 ## Workflow
 
 ### Step 1 — Enable AI activity indicators in IRM

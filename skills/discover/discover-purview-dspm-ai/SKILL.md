@@ -31,6 +31,38 @@ effort_hours: 2
 - At least one active Copilot Studio or Azure AI Foundry agent in the tenant
 - Access to the Microsoft Purview portal: purview.microsoft.com
 
+```mermaid
+flowchart TB
+    subgraph PORTAL["Purview portal"]
+        ACT["Step 1: enable DSPM for AI<br/>needs Copilot or Copilot Studio data"]
+        DASH["Step 2: exposure dashboard (preview)<br/>sensitive data accessed, overshared content,<br/>unlabeled files, users with sensitive data"]
+    end
+    subgraph SENT["Sentinel workspace"]
+        OA["OfficeActivity<br/>FileAccessed, FileDownloaded<br/>agent traffic is a UserAgent guess"]
+        MP["MicrosoftPurviewInformationProtection<br/>label events: changes, not the current label"]
+        Q3["Step 3: at-risk site query<br/>RiskScore = unlabeled accesses / total accesses"]
+        Q45["Steps 4 and 5: NOT VERIFIED<br/>not runnable as written, design sketches"]
+        OUT["Sites ranked by RiskScore<br/>above 50: document the site<br/>above 70: remediate before enabling<br/>retrieval on new agents"]
+    end
+    ACT --> DASH
+    OA -->|"file access"| Q3
+    MP -->|"labeled objects (left join)"| Q3
+    MP -.->|"reads columns it does not have"| Q45
+    Q3 --> OUT
+    DASH ~~~ OA
+    DASH ~~~ MP
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class ACT,Q3 purple
+    class DASH,OA,MP blue
+    class Q45 orange
+    class OUT green
+```
+
+**How to read it.** The Purview portal group holds the dashboard, and the Sentinel group holds the KQL queries. Only Step 3 is a working query: it joins file access in OfficeActivity with label events and ranks the sites by RiskScore. Steps 4 and 5 are marked NOT VERIFIED because they read columns that the table does not have, so confirm your tenant before relying on them.
+
 ## Workflow
 
 ### Step 1 — Activate DSPM for AI in Purview

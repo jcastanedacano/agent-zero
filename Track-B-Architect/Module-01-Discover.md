@@ -22,6 +22,39 @@ By the end of this module, participants will be able to design an agent inventor
 
    **Closing the local agent blind spot with Intune and Microsoft Defender for Endpoint:** For organizations with managed devices, two controls extend discovery to endpoint-hosted agents. (a) **Microsoft Defender for Endpoint** (MDE) discovers unsanctioned local agents running on managed devices and can apply security baselines that restrict common agent execution paths — if an MDE policy is active, a local LLM script running outside approved paths generates an alert. (b) **Intune** device compliance policies can require that local AI agents run inside **Windows Execution Containers** — Windows-based isolation environments where the agent is assigned a distinct Entra Agent ID and is subject to the same Conditional Access policies as cloud agents. Without Execution Containers, a local agent inherits the device user's identity and is invisible to CA. This is the only mechanism that brings local agents into the same governance perimeter as tenant-registered agents. Reference: [Zero Trust security for AI agents](https://techcommunity.microsoft.com/blog/microsoftmechanicsblog/zero-trust-security-for-ai-agents/4533091) (Microsoft Mechanics, 2026).
 
+   ```mermaid
+   flowchart TB
+       A1["Copilot Studio and<br/>Azure AI Foundry agents"]
+       A2["Power Automate<br/>with AI steps"]
+       A3["Local agents<br/>Claude Code, MCP servers, LLM scripts"]
+       S1["Telemetry in the<br/>AgentsInfo table"]
+       S2["Events in the<br/>CloudAppEvents table"]
+       S3["No cloud signal without an<br/>active endpoint connector<br/>structural blind spot"]
+       MDE["Defender for Endpoint<br/>discovers unsanctioned local agents<br/>security baselines restrict<br/>execution paths"]
+       INT{"Agent inside a Windows<br/>Execution Container?"}
+       ALT["Alert when a local LLM script<br/>runs outside approved paths,<br/>if an MDE policy is active"]
+       YES["Own Entra Agent ID, same<br/>Conditional Access as<br/>cloud agents"]
+       NO["Inherits the device user<br/>identity, invisible to<br/>Conditional Access"]
+       A1 --> S1
+       A2 --> S2
+       A3 --> S3
+       S3 -- "managed devices" --> MDE
+       S3 -- "managed devices: Intune can require it" --> INT
+       MDE --> ALT
+       INT -- "Yes" --> YES
+       INT -- "No" --> NO
+       classDef blue fill:#0078D4,stroke:#333,color:#fff
+       classDef purple fill:#5E2750,stroke:#333,color:#fff
+       classDef green fill:#107C10,stroke:#333,color:#fff
+       classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+       class A1,A2,A3,S1,S2 blue
+       class S3,NO orange
+       class MDE,INT purple
+       class ALT,YES green
+   ```
+
+   **How to read it.** Follow each agent type down its column: the signal it leaves and what remains uncovered. Copilot Studio, Foundry and Power Automate with AI steps leave a cloud signal, while local agents leave none until an endpoint control is in place. The Execution Container branch is the only one that gives a local agent its own Entra Agent ID and puts it under the same Conditional Access as tenant-registered agents.
+
 2. **Shadow AI as the default state:** Agent Builder (M365 Copilot) allows any licensed user to create and share agents without admin review; only submitting an agent to the organization catalog (Agent Store) goes through admin approval in the Microsoft 365 admin center (Microsoft Learn, July 2026). These agents appear in Agent 365 Registry but without an Entra Agent ID, no technical owner, and no DLP review. They are not exceptions — they are the baseline case in any M365 E5 tenant with Copilot enabled.
 
 3. **Applicable Microsoft controls:** Purview DSPM for AI maps agent interactions with sensitive data — it complements but does not replace identity inventory. Defender AI Agent Inventory requires active connectors per platform. SharePoint Advanced Management audits which sites are accessed by agents. Agent 365 is the central registry, but only covers registered agents.

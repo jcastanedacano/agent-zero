@@ -44,6 +44,44 @@ A Sentinel analytics rule that fires an alert is **detection**. The alert sittin
 
 The Logic App playbook is the enforcement layer. Without it, Sentinel is a detection-only platform. With it, detection becomes a control.
 
+### Enforcement flow at a glance
+
+```mermaid
+flowchart TB
+    R1["Jailbreak Attempt Detected<br/>CopilotActivity<br/>High, every 5 min"]
+    R2["Volume Spike Anomaly<br/>CloudAppEvents<br/>Medium, every 15 min"]
+    R3["Sensitive Data Access Off-Hours<br/>MicrosoftPurviewInformationProtection<br/>High, every 15 min"]
+    Q{"Automation rule on alert created:<br/>alert name contains Jailbreak?"}
+    N["Alert waits in the queue<br/>Detection only, no enforcement"]
+    P["Logic App<br/>playbook-revoke-actor-sessions"]
+    X1["Revoke sessions of the flagged user<br/>POST revokeSignInSessions on Graph<br/>Managed identity: User.RevokeSessions.All"]
+    G["Agent identity incident:<br/>no revokeSignInSessions call exists<br/>Approval, then PATCH servicePrincipal<br/>accountEnabled false"]
+    X2["Add a comment to the Sentinel incident"]
+    X3["Email the agent technical owner<br/>with the incident URL and AgentId"]
+    A["SOC analyst reviews the incident<br/>in the queue"]
+    R1 --> Q
+    R2 --> Q
+    R3 --> Q
+    Q -->|"no"| N
+    Q -->|"yes: T+0 to T+2 min"| P
+    P --> X1
+    X1 --> X2
+    X1 -.->|"agent identity"| G
+    X2 --> X3
+    X3 --> A
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class R1,R2,R3 blue
+    class Q,X2,X3,A purple
+    class P,X1 green
+    class N,G orange
+```
+
+**How to read it.** Read it top to bottom: three analytics rules raise alerts, and the only thing that decides whether the playbook runs is the alert name condition of the automation rule. In this module only the Jailbreak rule is wired to it, so alerts from the other two rules wait in the queue for an analyst, which is the gap between detection and enforcement. The dotted branch is the limit of the Graph call: revokeSignInSessions works for users only, so an incident on an agent identity needs a second, approved action.
+
 ### Sentinel as both target and platform
 
 Microsoft Sentinel is simultaneously:

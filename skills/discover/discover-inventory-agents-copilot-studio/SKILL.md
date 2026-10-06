@@ -38,6 +38,35 @@ creator, have no owner, or are unmanaged.
 - Entra ID: permission to read service principals
 - An E7 or Agent 365 license for the **Unmanaged agents** count, agent risk signals and the Map usage filters
 
+```mermaid
+flowchart TB
+    AB["Agent Builder agent<br/>shared by its creator"]
+    PP["Step 2: Power Platform inventory<br/>drafts, owner, channels, connectors (preview)"]
+    EN["Step 3: Entra agent identities<br/>only agents with an Entra agent identity"]
+    REG["Step 1: Registry in the Microsoft 365 admin center<br/>total, per type, without owners, unmanaged"]
+    REQ["Requests tab<br/>only what waits for approval<br/>note the count, do not subtract it"]
+    RS["review_set<br/>Shared by creator<br/>+ Agents without owners<br/>+ Unmanaged agents (E7 or Agent 365)"]
+    RK["Step 4: classify by risk<br/>connectors, creator, distribution"]
+    SE["Step 5: Sentinel (if connectors are active)<br/>PowerPlatformAdminActivity, CopilotActivity"]
+    AB -->|"appears as Shared by creator"| REG
+    AB -.->|"no request, unless submitted to the catalog"| REQ
+    PP -.->|"compare: a difference is not shadow AI by itself"| REG
+    EN -.->|"identity view, not every agent"| REG
+    REG -->|"three counts"| RS
+    RS --> RK
+    RK --> SE
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class AB orange
+    class PP,EN,REG,REQ blue
+    class RS green
+    class RK,SE purple
+```
+
+**How to read it.** Read top to bottom. The review set is built from three registry counts, not from Registry minus Requests, because the Requests tab only holds what waits for approval. A shared Agent Builder agent never creates a request, so it shows only in the registry as Shared by creator. The Power Platform inventory and the Entra agent identities are cross-checks, and a difference with the registry is not shadow AI by itself.
+
 ## Workflow
 
 ### Step 1 — Registry and Agent Map in the Microsoft 365 admin center

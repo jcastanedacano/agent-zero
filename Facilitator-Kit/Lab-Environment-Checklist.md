@@ -97,7 +97,7 @@ AuditLogs | where TimeGenerated > ago(7d) | take 5
 
 | Issue | Recovery |
 |-------|----------|
-| `AgentsInfo` empty | Re-run ARM template; confirm Defender XDR data connector is connected and has ingested data |
+| `AgentsInfo` empty | The ARM template deploys no connectors and no data. Check the Agent 365 onboarding and the Microsoft 365 connector in Defender (see Prerequisites), allow 2 to 4 hours, and confirm the Defender XDR connector streams the table to the workspace. Advanced Hunting is the other place to run the query |
 | Sentinel workspace missing | Deploy via ARM template → takes ~10 minutes |
 | Participant missing role | Entra admin center → Users → [user] → Assigned roles → Add assignment |
 | CDX tenant expired | Request new CDX tenant (48h lead time) or use M365 Developer Program sandbox |

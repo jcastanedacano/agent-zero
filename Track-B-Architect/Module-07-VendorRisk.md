@@ -29,6 +29,30 @@ By the end of this module, participants will be able to evaluate third-party AI 
 
 2. **Azure API Management as MCP server gateway — the enforcement architecture:** Identifying and assessing MCP servers (point 1, Domain D checklist) is necessary but not sufficient without a network enforcement point. The Microsoft-recommended architecture places approved MCP servers **behind Azure API Management (APIM)**: APIM acts as the single entry point for all MCP tool invocations, enforcing: (a) allow-list policy — only MCP servers registered in APIM can be reached by agents, all others are blocked at the network layer; (b) rate limiting per agent identity — preventing a single agent from flooding a tool; (c) authentication enforcement — agents must present a valid token before APIM forwards the request to the MCP server; (d) request/response logging — every tool call is logged in APIM for audit, feeding the same `CloudAppEvents` pipeline that `ExecuteToolByGateway` queries rely on. Without APIM (or an equivalent API gateway), MCP server allow/block decisions exist only as governance policies — an agent can bypass them by connecting directly to an MCP endpoint if it knows the URL. APIM makes the allow-list a technical enforcement boundary, not just a policy statement. Configuration path: Azure API Management → APIs → import MCP server OpenAPI spec → apply `validate-jwt` policy + rate limit + logging.
 
+   ```mermaid
+   flowchart TB
+       AG["Agent"]
+       GW["Azure API Management<br/>single entry point for MCP tools<br/>allow-list, token check (validate-jwt)<br/>rate limit per agent identity, logging"]
+       BYP["Without a gateway, an agent that<br/>knows the URL connects directly:<br/>allow and block exist only as policy"]
+       MCP["Approved MCP server<br/>registered in APIM"]
+       BLK["Other MCP servers<br/>blocked at the network layer"]
+       LOG["Every tool call is logged<br/>feeds the CloudAppEvents pipeline<br/>behind ExecuteToolByGateway"]
+       AG -- "every MCP tool call" --> GW
+       AG -. "no gateway" .-> BYP
+       GW -- "registered and authenticated" --> MCP
+       GW -. "not registered" .-> BLK
+       GW --> LOG
+       classDef blue fill:#0078D4,stroke:#333,color:#fff
+       classDef purple fill:#5E2750,stroke:#333,color:#fff
+       classDef green fill:#107C10,stroke:#333,color:#fff
+       classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+       class AG,MCP,LOG blue
+       class GW,BLK green
+       class BYP orange
+   ```
+
+   **How to read it.** Every agent call to an MCP server goes through the gateway, which allows only registered servers, checks the token, rate-limits per agent identity and logs the call. The orange box is the case without it: the allow-list is then only a governance statement that an agent can bypass by connecting directly. The gateway is what turns the allow-list into a technical boundary.
+
 3. **The MCP server risk profile:** When an agent connects to an MCP server, it declares tools it can invoke at runtime. Those tools execute in the context of the agent's identity — with the agent's permissions. A malicious or compromised MCP server can: inject instructions into tool responses (indirect prompt injection / XPIA), exfiltrate data through tool return values, escalate privilege through tool chain abuse. Microsoft's own documentation warns: *"When you connect to non-Microsoft MCP servers, you do so at your own risk. MCP implementations are vulnerable to attacks, cascading failures, and loss of human oversight."* The `AgentsInfo.McpServers` field in Defender Advanced Hunting is your inventory of connected external MCP servers. If it's not empty and the server isn't internal, it needs a vendor assessment.
 
    > **Microsoft MCP certification path:** Microsoft requires third-party MCP servers to undergo certification through the Power Platform connector certification program before being made available to all users. Only certified MCP servers appear in the Microsoft 365 admin center **Agents and Tools** section, where IT admins can allow or block them at the tenant level. Uncertified MCP servers connected directly to agents bypass this control. Reference: [Microsoft MCP server certification](https://learn.microsoft.com/microsoft-copilot-studio/mcp-server-certification).
@@ -134,6 +158,39 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 - 16–19: Conditional approval — remediate gaps within 90 days
 - 11–15: Limited use only — no sensitive data; remediation required before expansion
 - < 11: Do not connect. Escalate to CISO.
+
+### Evaluation flow at a glance
+
+```mermaid
+flowchart TB
+    S["External AI vendor or<br/>MCP server: proposed, or<br/>found connected by the<br/>lab queries"]
+    CK["Checklist: domains A to E<br/>22 questions, one point per Pass<br/>Domain D, MCP Server Specific,<br/>only if applicable"]
+    Q1{"Score 20 to 22?"}
+    O1["Approved for<br/>production use"]
+    Q2{"Score 16 to 19?"}
+    O2["Conditional approval<br/>remediate gaps within 90 days"]
+    Q3{"Score 11 to 15?"}
+    O3["Limited use only, no sensitive<br/>data, remediation required<br/>before expansion"]
+    O4["Below 11: do not connect<br/>escalate to CISO"]
+    S --> CK
+    CK -- "total score out of 22" --> Q1
+    Q1 -- "Yes" --> O1
+    Q1 -- "No" --> Q2
+    Q2 -- "Yes" --> O2
+    Q2 -- "No" --> Q3
+    Q3 -- "Yes" --> O3
+    Q3 -- "No" --> O4
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class S blue
+    class CK,Q1,Q2,Q3 purple
+    class O1 green
+    class O2,O3,O4 orange
+```
+
+**How to read it.** Every vendor or MCP server goes through the same 22 questions and the number of Pass answers decides the outcome. Read the decisions as a staircase: the first score band the total fits is the approval status. Only 20 to 22 is approved outright; anything lower carries a remediation condition or a stop, and a score below 11 is escalated to the CISO.
 
 ---
 

@@ -42,6 +42,33 @@ In the AISOC context, Microsoft Sentinel has two simultaneous roles:
 
 The native MCP server enables the second role: security agents can query Sentinel data directly from their own context
 
+```mermaid
+flowchart TB
+    SC["Security Copilot<br/>Sources: Microsoft Sentinel<br/>Read for investigation, Read/Write for response"]
+    CA["Custom agent<br/>(not Security Copilot)"]
+    TG["AI agents under attack<br/>jailbreak, exfiltration, anomalies"]
+    MCP["Sentinel native MCP server<br/>list_incidents, get_incident_details,<br/>run_kql_query, update_incident_status,<br/>add_incident_comment, get_entity_insights"]
+    REST["Sentinel REST API<br/>GET incidents with a filter on<br/>severity and status"]
+    KQ["Arbitrary KQL is off by default<br/>for Security Copilot: enable it explicitly"]
+    W["Microsoft Sentinel workspace<br/>Target: detects attacks on agents<br/>Platform: where security agents work"]
+    RK["Write access is a risk: if a security agent<br/>is compromised, so is the incident record"]
+    SC --> MCP
+    CA --> REST
+    SC -.-> KQ
+    MCP --> W
+    REST --> W
+    TG --> W
+    W -.-> RK
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class SC,CA,MCP,REST,W blue
+    class TG,KQ,RK orange
+```
+
+**How to read it.** Read it from the top: the agents under attack feed Sentinel in its Target role, while Security Copilot reaches it through the native MCP server and custom agents through the REST API in its Platform role. The thing to take from it is that the same write path that lets a security agent update incidents is also a risk, because a compromised security agent compromises the record.
+
 ## Workflow
 
 ### Step 1 — Connect Security Copilot to Sentinel

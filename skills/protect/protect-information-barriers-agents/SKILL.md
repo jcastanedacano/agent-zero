@@ -40,6 +40,34 @@ IB restricts two-way communication and collaboration between segments in:
   IB does not separate an application that holds its own SharePoint permissions. Use Query 3 to find those, and control them with Entra permissions and Conditional Access
   (Pillar 2 and 3 skills). The audit log has an `AppBypassInformationBarrier` operation, "changed apps access for SharePoint sites": review that tenant setting with your SharePoint administrator
 
+### Coverage at a glance
+
+```mermaid
+flowchart TB
+    Q1{"What crosses the segment boundary?"}
+    A["Segments on one supported attribute<br/>One IB policy per direction (two-way only)<br/>Agent users: Learn documents users and groups,<br/>not agent users specifically"]
+    C["Email: IB does not restrict it,<br/>Exchange Online included<br/>Use Exchange mail flow rules"]
+    D["Applications and agent identities<br/>A service principal is not a user account,<br/>so it cannot be a member of a segment"]
+    A2["Apply the policies (can take several hours)<br/>Enable for SharePoint and OneDrive<br/>(about 1 hour)"]
+    B["Restricted between segments:<br/>Teams, SharePoint, OneDrive, Planner"]
+    E["Find them with Query 3<br/>Control with Entra permissions and Conditional Access<br/>Review AppBypassInformationBarrier with the<br/>SharePoint administrator"]
+    Q1 -- "User accounts" --> A
+    Q1 -- "Email" --> C
+    Q1 -- "Application or agent identity" --> D
+    A --> A2
+    A2 --> B
+    D --> E
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class Q1,A,A2 purple
+    class B,E green
+    class C,D orange
+```
+
+**How to read it.** Start from what crosses the boundary. User accounts are what Information Barriers separate, in Teams, SharePoint, OneDrive and Planner. Email and applications or agent identities fall outside it: use Exchange mail flow rules for email, and Query 3 with Entra permissions and Conditional Access for service principals. The thing to remember is that an agent holding its own SharePoint permissions is not separated by a segment.
+
 ## Workflow
 
 ### Step 1 — Define organizational segments

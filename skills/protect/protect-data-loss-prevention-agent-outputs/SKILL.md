@@ -32,6 +32,38 @@ effort_hours: 5
 2. An agent exports CRM data to a CSV in OneDrive and a user downloads it without restriction
 3. An agent drafts an email with confidential information and sends it to an external recipient
 
+### Where each control sits
+
+```mermaid
+flowchart TB
+    O["Agent outputs<br/>files, CSV exports, drafted email"]
+    L1["SharePoint sites and OneDrive<br/>only the sites where agents operate"]
+    L2["Exchange email<br/>own policy, if agents have Mail.Send"]
+    L3["Devices (Endpoint DLP)<br/>Windows devices onboarded to Purview"]
+    R1["Rule 1: shared outside the organization<br/>and label Confidential or AI-Generated<br/>Block only people outside your organization<br/>plus policy tip and alert"]
+    N["Not DLP rules: no such condition exists<br/>Download on unmanaged devices: Conditional Access<br/>High-volume access: Sentinel Query 3 and<br/>detect-data-exfiltration-agent"]
+    R3["Label Confidential or AI-Generated<br/>Block copy to USB, print, clipboard,<br/>upload from the browser"]
+    P["Simulation mode for 7 days,<br/>then Turn the policy on immediately"]
+    O --> L1
+    O --> L2
+    O --> L3
+    L1 --> R1
+    L1 --> N
+    L3 --> R3
+    R1 --> P
+    R3 --> P
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class O,L1,L2,L3 blue
+    class R1,R3 green
+    class N orange
+    class P purple
+```
+
+**How to read it.** Each branch is a place where an agent output can leave: SharePoint and OneDrive, Exchange, or the device. The green boxes are what a DLP rule can enforce. The orange box is what DLP cannot express, so those cases go to Conditional Access, Sentinel and the exfiltration detection skill. The policy runs in simulation mode for 7 days before it is turned on.
+
 ## Workflow
 
 ### Step 1 — Identify agent output locations

@@ -105,6 +105,38 @@ AgentsInfo
 
 **Reading the identity columns:** `NoEntraIdentity` counts agents with neither `EntraAgentID` nor `EntraBlueprintID`; `BlueprintOnly` counts agents that have a blueprint but no agent identity in this tenant. They are different findings. The second is common for third-party agents (in a validated tenant they appeared under platform `Other`) and means *confirm how the agent authenticates*, not *identity laundering*. An agent with an `EntraAgentID` has a dedicated identity whether or not a blueprint is recorded. `High` requires no owner **and** no Entra identity at all. Counts are distinct agents (`dcountif` on `AgentId`), not snapshot rows: `AgentsInfo` keeps a snapshot per agent per day. `RiskLevel` is a triage heuristic of this lab, not the AI agent posture risk that Defender calculates (Preview): review that one in **Assets → AI agents**. `NoEntraIdentity` means `AgentsInfo` records neither an agent identity nor a blueprint; Copilot Studio agents created before May 2026 use an app registration and Agent Builder agents have no identity properties, so confirm before calling it identity laundering.
 
+#### How Step 1 classifies one agent
+
+```mermaid
+flowchart TB
+    Q{"AgentsInfo row for one agent:<br/>which Entra identity is recorded?"}
+    S1["AgentIdentity<br/>EntraAgentID is set"]
+    S2["BlueprintOnly<br/>EntraBlueprintID set, EntraAgentID empty<br/>confirm how it authenticates"]
+    S3["NoEntraIdentity<br/>neither EntraAgentID nor EntraBlueprintID"]
+    L["Low<br/>owner set and agent identity present<br/>(Medium if Blocked or Deleted)"]
+    M["Medium<br/>a missing owner, a blueprint-only identity<br/>or no Entra identity with an owner"]
+    H["High: shadow AI<br/>no owner and no Entra identity"]
+    Q -->|"EntraAgentID set"| S1
+    Q -->|"blueprint only"| S2
+    Q -->|"neither"| S3
+    S1 -->|"owner set"| L
+    S1 -->|"no owner"| M
+    S2 -->|"owner set or not"| M
+    S3 -->|"owner set"| M
+    S3 -->|"no owner"| H
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class Q purple
+    class S1,S2,S3 blue
+    class L green
+    class M,H orange
+```
+
+**How to read it.** Read it top to bottom: first the Entra identity that AgentsInfo records, then whether Owners is set. High needs both gaps at once, which is the shadow AI case of Step 2, and a blueprint-only agent is always Medium because it means confirm how the agent authenticates, not identity laundering. This is the triage heuristic of the lab, not the AI agent posture risk that Defender calculates.
+
 **Document in your playbook:** How many agents appear as High risk? Which platforms have the highest count of agents without an owner? How many are `BlueprintOnly`, and who is accountable for each vendor?
 
 ---

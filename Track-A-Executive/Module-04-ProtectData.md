@@ -26,6 +26,34 @@ By the end of this module, participants will be able to evaluate the data exfilt
 
 4. **The exfiltration trifecta — when risk becomes real:** Data exfiltration through an agent requires three conditions to coexist simultaneously: (1) **attacker-controlled data reaches the agent** (via a poisoned document, an injected tool response, or a manipulated email the agent reads); (2) **the agent has access to sensitive information** (SharePoint sites with confidential content, Key Vault secrets, email inboxes); (3) **the agent has a channel to send data externally** (email tool, HTTP connector, MCP server with outbound capability). When all three are present, exfiltration is viable regardless of other controls. The executive decision framework: assess each agent deployment against all three conditions. An agent that meets only two of the three is significantly safer — removing any one leg collapses the risk. Purview DLP and SharePoint sensitivity labels address leg 2 (limit accessible data); CA policies and APIM allow-lists address leg 3 (restrict outbound channels); Prompt Shield and input validation address leg 1 (filter attacker-controlled content). Reference: OWASP AI Exchange — Agentic AI, "Lethal Trifecta."
 
+   ```mermaid
+   flowchart TB
+       C1["Prompt Shield and<br/>input validation"]
+       C2["Purview DLP and SharePoint<br/>sensitivity labels"]
+       C3["CA policies and<br/>APIM allow-lists"]
+       L1["1. Attacker-controlled data<br/>reaches the agent<br/>poisoned document, injected<br/>tool response, manipulated email"]
+       L2["2. The agent has access to<br/>sensitive information<br/>SharePoint sites, Key Vault<br/>secrets, email inboxes"]
+       L3["3. The agent has a channel to<br/>send data externally<br/>email tool, HTTP connector,<br/>MCP server with outbound capability"]
+       EX["All three present together:<br/>exfiltration is viable<br/>regardless of other controls"]
+       OK["Remove any one leg and the risk collapses<br/>an agent that meets only two of the three<br/>is significantly safer"]
+       C1 -. "filters attacker-controlled content" .-> L1
+       C2 -. "limits accessible data" .-> L2
+       C3 -. "restricts outbound channels" .-> L3
+       L1 --> EX
+       L2 --> EX
+       L3 --> EX
+       EX -. "break one condition" .-> OK
+       classDef blue fill:#0078D4,stroke:#333,color:#fff
+       classDef purple fill:#5E2750,stroke:#333,color:#fff
+       classDef green fill:#107C10,stroke:#333,color:#fff
+       classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+       class L1,L2,L3 blue
+       class EX orange
+       class C1,C2,C3,OK green
+   ```
+
+   **How to read it.** Read the three middle boxes as an AND: exfiltration through an agent is viable only when all three conditions hold for the same agent. Each green box at the top is the control family that addresses one condition. The decision to take away is to assess every agent deployment against all three conditions and remove at least one leg, because two of three is significantly safer.
+
 5. **Remediation order matters:** Enabling agent retrieval on a SharePoint site before applying sensitivity labels and remediating ACL errors creates an active exposure window. The correct order is: label → audit ACLs → enable retrieval.
 
 ---

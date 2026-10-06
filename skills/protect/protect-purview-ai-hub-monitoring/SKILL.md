@@ -38,6 +38,42 @@ portal as *DSPM for AI (classic)* next to the newer *Data Security Posture Manag
 - Reports (total interactions, sensitive interactions per AI app, insider risk severity) and one-click policies
 - Copilot Studio agents published to non-Microsoft channels need pay-as-you-go billing for these controls
 
+## Flow at a glance
+
+```mermaid
+flowchart TB
+    E["Interactions with Copilot,<br/>agents and AI apps"]
+    AUD["Step 1: turn on Purview<br/>Audit (needed for AI<br/>interaction and sensitive<br/>info type events)"]
+    CONN["Microsoft Copilot connector<br/>CopilotInteraction and<br/>AIAppInteraction events"]
+    DSPM["DSPM for AI (classic)<br/>prompt and response text,<br/>sensitive info types,<br/>DLP rule matches"]
+    TAB["CopilotActivity table<br/>in the Sentinel workspace"]
+    POL["Step 2: one-click policies<br/>Insider Risk and<br/>Communication Compliance<br/>and collection policies"]
+    N["Stays in Purview, not in<br/>Sentinel tables: prompt<br/>and response text, sensitive<br/>info types, DLP matches"]
+    COR["Step 6: correlate in<br/>Sentinel with the<br/>skill queries"]
+    REP["Step 3: reports, after at<br/>least a day (Copilot<br/>experiences and agents)"]
+    APP["Step 4: Discover, Apps and<br/>agents (Agent 365 is not<br/>listed: use AI observability)"]
+    E --> AUD
+    E -->|"audit events"| CONN
+    AUD --> DSPM
+    CONN --> TAB
+    DSPM --> POL
+    DSPM -.-> N
+    TAB --> COR
+    POL --> REP
+    REP --> APP
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class E,CONN,DSPM,TAB blue
+    class AUD,REP,APP,COR purple
+    class POL green
+    class N orange
+```
+
+**How to read it.** The same interactions feed two places. The Purview branch holds the content signals and the policies, and the Sentinel branch receives only the audit events through the Microsoft Copilot connector. The thing to take from it: prompt and response text, sensitive info types and DLP matches never reach a Sentinel table, so Sentinel queries work with users, apps and the sensitivity label ids of the resources Copilot read, and content review happens in the Purview activity explorer.
+
 ## Workflow
 
 ### Step 1 — Turn on Audit

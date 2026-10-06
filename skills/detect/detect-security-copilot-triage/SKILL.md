@@ -31,6 +31,37 @@ effort_hours: 2
 - Connection to Microsoft Defender XDR configured in Security Copilot Sources
 - Minimum Security Operator role for the analyst
 
+```mermaid
+flowchart TB
+    S["Security Copilot<br/>sources: Sentinel, Defender XDR,<br/>Entra, Purview"]
+    I["Sentinel incident<br/>for example a jailbreak alert"]
+    T["Step 2: jailbreak triage prompt<br/>severity, agent involved, indicators,<br/>Defender XDR activity (last 4 hours)"]
+    D{"Real jailbreak attempt?<br/>Confidence level"}
+    ES["Step 3: executive summary<br/>at most 150 words for CISO escalation"]
+    FP["False positive"]
+    PR["Which permissions held by the agent<br/>could be exploited?"]
+    REC["Recommendation: contain now<br/>(revoke token) or monitor<br/>for 30 more minutes"]
+    HU["A human analyst decides and acts<br/>Security Copilot cannot revoke tokens<br/>or block an SP"]
+    S --> T
+    I --> T
+    T --> D
+    T -->|"escalation"| ES
+    D -->|"Low"| FP
+    D -->|"High or medium"| PR
+    PR --> REC
+    REC --> HU
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class S,I blue
+    class T,D,ES,PR,REC purple
+    class FP green
+    class HU orange
+```
+
+**How to read it.** Read it top to bottom: Security Copilot runs the triage prompt on a Sentinel incident, scores confidence, and for high or medium confidence checks which agent permissions could be exploited before it recommends containing or monitoring. The recommendation always ends at a human, because Security Copilot cannot revoke tokens or block a service principal itself.
+
 ## Workflow
 
 ### Step 1 — Configure the data sources in Security Copilot

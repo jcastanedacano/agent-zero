@@ -55,6 +55,39 @@ The `AI-Generated` sub-label identifies which content was produced or
 processed by an agent, independent of the sensitivity level. Copilot does not set it by itself:
 apply it from the agent with `assignSensitivityLabel`, or with an auto-labeling rule on the content.
 
+## Flow at a glance
+
+```mermaid
+flowchart TB
+    OUT["File produced or processed<br/>by an agent"]
+    LBL["Steps 1 and 2: create the<br/>AI-Generated sub-label<br/>under Confidential"]
+    P1["Copilot inheritance<br/>Copilot in Word, PowerPoint, Outlook<br/>Copilot Studio agents in<br/>Word and PowerPoint"]
+    P2["Step 4: the agent calls<br/>assignSensitivityLabel<br/>with the AI-Generated id<br/>(Graph v1.0, metered API)"]
+    P3["Auto-labeling policy<br/>(Steps 3, 5 and 6)<br/>content-based rules, simulation<br/>for 7 days, then enforcement"]
+    O1["Copies the highest-priority<br/>source label, a user can<br/>override it. It does not set<br/>AI-Generated"]
+    O2["Labels files at rest: Office<br/>clients add no watermark,<br/>header or footer to them"]
+    O3["Content-based only: no<br/>condition on which service<br/>principal wrote the file<br/>Keeps manual labels by default"]
+    OUT --> P1
+    OUT --> P2
+    OUT --> P3
+    LBL --> P2
+    LBL --> P3
+    P1 -.->|"limit"| O1
+    P2 -.->|"limit"| O2
+    P3 -.->|"limit"| O3
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class OUT blue
+    class LBL purple
+    class P1,P2,P3 green
+    class O1,O2,O3 orange
+```
+
+**How to read it.** An agent output can get a label by three routes: Copilot inheritance from a labeled source, a direct assignSensitivityLabel call from the agent, or a content-based auto-labeling policy; each orange box is the limit of the route above it. The AI-Generated sub-label comes only from the last two, so create it first and do not expect Copilot to apply it. Auto-labeling looks at content, not at which service principal wrote the file, so labeling by author means calling the API from the agent.
+
 ## Workflow
 
 ### Step 1 — Audit existing sensitivity labels in the tenant

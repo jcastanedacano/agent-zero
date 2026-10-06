@@ -45,6 +45,40 @@ By the end of this module, participants will be able to design a detection and r
 
    **Activation checklist for the lab:** (1) Confirm Azure AI Foundry deployment has Prompt Shield enabled for both prompt and indirect modes; (2) Confirm Defender for Cloud "AI services" plan is active on the subscription; (3) Confirm Sentinel has the Defender XDR connector enabled; (4) Run a test injection phrase in the Foundry Playground and verify the alert appears in Defender for Cloud within 5 minutes.
 
+   ```mermaid
+   flowchart TB
+       AG["Agent prompt or tool response<br/>to an Azure AI Foundry or<br/>Azure OpenAI deployment"]
+       EXT["Agents on external model APIs<br/>or self-hosted models:<br/>outside Prompt Shield coverage"]
+       Q1{"Prompt Shield<br/>enabled?"}
+       LOG["Log-based KQL: Q1, Q7, Q9<br/>(after inference), or equivalent<br/>controls from the model provider"]
+       G1["No signal reaches<br/>Defender for Cloud"]
+       PS["Prompt Shield evaluates the<br/>full assembled prompt before<br/>inference: user prompts and<br/>indirect attacks"]
+       Q2{"Defender for AI services<br/>plan active?"}
+       G2["Detections are not surfaced<br/>as alerts and do not flow<br/>into Sentinel"]
+       DFC["Alert in Defender for Cloud<br/>lab check: within 5 minutes<br/>of a test injection phrase"]
+       XDR["Microsoft Defender XDR data<br/>connector, not the legacy<br/>Defender for Cloud connector"]
+       SA["Sentinel SecurityAlert<br/>AlertType PromptInjection<br/>or JailbreakAttempt"]
+       AG --> Q1
+       EXT --> LOG
+       Q1 -- "No" --> G1
+       Q1 -- "Yes" --> PS
+       PS --> Q2
+       Q2 -- "No" --> G2
+       Q2 -- "Yes" --> DFC
+       DFC --> XDR
+       XDR --> SA
+       classDef blue fill:#0078D4,stroke:#333,color:#fff
+       classDef purple fill:#5E2750,stroke:#333,color:#fff
+       classDef green fill:#107C10,stroke:#333,color:#fff
+       classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+       class AG,DFC,XDR blue
+       class Q1,Q2,LOG purple
+       class EXT,G1,G2 orange
+       class PS,SA green
+   ```
+
+   **How to read it.** Follow the main path from the agent call to a Sentinel alert: the pre-inference signal exists only if both activation steps are done, and each No branch ends in silence. The orange box at the top right is the limit of this layer: agents on external model APIs or self-hosted models fall outside it and rely on the log-based KQL or the model provider's own controls, and the KQL runs after the prompt has reached the model.
+
 7. **Behavioral drift monitoring — detecting silent degradation:** An agent can degrade its security posture gradually without any configuration changing. The underlying model may be updated, the fine-tuning corpus may evolve, or the production input distribution may shift until previously rare patterns become the norm. The result is behavioral drift: the refusal rate on borderline requests drops from 92% to 61% over six months with no alert, no policy change, and no recorded incident. Detection requires behavioral metrics over time, not just fixed-threshold alerts. Applicable controls: (a) **Per-agent refusal rate baseline** — a weekly query measuring the percentage of conversations with at least one safety refusal over total conversations; a drop of more than 10 percentage points against the prior month triggers a review; (b) **Sentinel drift workbook** — plot refusal rate, HITL escalation rate, and tool call volume over a 90-day rolling window per agent; (c) **Model review on provider updates** — when Azure OpenAI publishes a new model version, re-run the Track C red team playbook before migrating the agent to production. Reference: CLLMSE §8.2 — Behavioral Drift Detection.
 
 8. **Canary tokens and honeytokens as detective controls for RAG agents:** Preventive controls (Prompt Shield, DLP, CA) reduce the probability of exfiltration but do not guarantee detection when an attack succeeds. Two detective controls complement the prevention layer: (a) **Canary token** (decoy credential) — a Key Vault secret, a database connection string, or an API key with valid format but no real privileges, planted in the agent's environment. If the token appears in outbound network logs, in an agent response to an external user, or in Sentinel as a credential used against a real resource, it confirms exfiltration occurred. Microsoft Sentinel has credential detectors in `AADNonInteractiveUserSignInLogs` and `AzureActivity` — a well-named canary token (for example `canary-agent-kv-prod`) surfaces immediately if used; (b) **Honeytoken** (decoy document in the RAG corpus) — a document formatted like sensitive data (employee list, contract, financial result) planted in SharePoint with a convincing name but fabricated content. If the RAG agent retrieves it and returns it in a response, the Purview Audit log records the access. If that content appears outside the expected perimeter, it confirms the RAG corpus access control failed. Key difference: the canary token detects credential exfiltration; the honeytoken detects corpus access failure. They are complementary. Implementation: create the honeytoken in SharePoint with read permissions scoped to the agent only; create a Sentinel alert that fires when the document name appears in `SharePointFileOperations` with an external AccountId. Reference: CLLMSE §5.4.

@@ -32,6 +32,39 @@ effort_hours: 5
 4. **Impossible travel**: the same SP authenticating from two countries in < 1 hour
 5. **CA policy bypass**: a successful authentication that should have been blocked
 
+```mermaid
+flowchart LR
+    subgraph VEC["Abuse vectors"]
+        V1["1 Token theft<br/>agent SP signs in from an unknown IP"]
+        V2["2 Privilege escalation<br/>SP acquires roles it was not assigned"]
+        V3["3 Agent spawning<br/>agent creates new SPs or applications"]
+        V4["4 Impossible travel<br/>same SP in two countries in under 1 hour"]
+        V5["5 CA policy bypass<br/>a success that should have been blocked"]
+    end
+    subgraph RUL["Rules, enriched by the Step 5 watchlist"]
+        R1["Step 1: AISEC-Agent-SignIn-Unknown-IP<br/>every 5 min, High"]
+        R3["Step 3: AISEC-Agent-Privilege-Escalation<br/>every 15 min, Critical"]
+        R2["Step 2: AISEC-Agent-Spawning-Detected<br/>every 15 min, Critical"]
+        R4["Step 4: AISEC-Agent-Impossible-Travel<br/>hourly, High"]
+        NR["No rule step in the workflow"]
+    end
+    V1 --> R1
+    V2 --> R3
+    V3 --> R2
+    V4 --> R4
+    V5 -.-> NR
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class V1,V2,V3,V4,V5 blue
+    class R1,R2,R3,R4 green
+    class NR orange
+```
+
+**How to read it.** Each abuse vector on the left is covered by one analytics rule on the right, and the rules enrich their incidents with the watchlist of known agent service principals from Step 5. The two Critical rules are privilege escalation and agent spawning, and spawning is the highest-risk vector because a compromised agent can create persistent sub-agents with inherited permissions. The fifth vector, CA policy bypass, has no rule step in this workflow: the Verification section counts four rules.
+
 ## Workflow
 
 ### Step 1 — Create rule: SP sign-in from a non-corporate IP

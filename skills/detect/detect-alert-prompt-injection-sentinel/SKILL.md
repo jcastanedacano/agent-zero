@@ -53,6 +53,45 @@ a flag, so this skill reads the flags and the alerts, not the words.
 
 To read the actual prompt text during an investigation, use Content Search or the AI interaction events in DSPM for AI (Learn).
 
+```mermaid
+flowchart TB
+    A1["CopilotActivity<br/>JailbreakDetected per message<br/>XPIADetected per resource"]
+    A2["SecurityAlert<br/>Defender alerts for AI agents (preview)<br/>Defender for Cloud AI.Azure_Jailbreak alerts"]
+    Q{"Step 1: each source has<br/>data in 7 days?"}
+    NO["Resolve ingestion first<br/>Sentinel rejects rules on tables it cannot resolve"]
+    R12["Queries 1 and 2: Scheduled rules<br/>every 5 min, lookback 1 hour,<br/>alert on 1 or more results"]
+    R3["Query 3: reads existing alerts<br/>prefer the incident Sentinel already has<br/>over a second rule"]
+    INC["Incident<br/>grouped by Account entity, 24 h window"]
+    PB["Step 4: playbook on incident creation<br/>enrich the actor in Microsoft Graph<br/>SigninLogs and AuditLogs, last 8 hours"]
+    D{"AttemptCount 10 or more?"}
+    AP["Ask for approval, then<br/>revoke the user sessions"]
+    AG["Alert on an agent: follow<br/>detect-respond-playbook-agent-containment"]
+    N["Notify the AISOC Teams channel"]
+    A1 --> Q
+    A2 --> Q
+    Q -->|"No"| NO
+    Q -->|"Yes"| R12
+    Q -->|"Yes"| R3
+    R12 --> INC
+    R3 --> INC
+    INC --> PB
+    PB --> D
+    PB -->|"alert is on an agent"| AG
+    D -->|"Yes"| AP
+    D -->|"No"| N
+    AP --> N
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class A1,A2 blue
+    class Q,R12,R3,INC,PB,D,N purple
+    class NO orange
+    class AP,AG green
+```
+
+**How to read it.** Read it top to bottom: check that the sources have data, run the rules on the platform flags and alerts, then let the incident drive the playbook. Query 4 (BehaviorInfo) runs only in Advanced Hunting, so it is not on this path. The one thing to take from it is that the rules read flags and alerts, never prompt text, and a source with no data blocks its rule until ingestion is fixed.
+
 ## Workflow
 
 ### Step 1 — Verify the sources (mandatory)

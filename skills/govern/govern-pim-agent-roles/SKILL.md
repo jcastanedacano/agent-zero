@@ -28,6 +28,41 @@ PIM for workload identities (service principals) requires **Entra Workload ID Pr
 PIM for users and groups: Entra ID P2.
 Verify licensing before starting.
 
+## From permanent role to just-in-time access
+
+```mermaid
+flowchart TB
+    A["Step 1: agent with a permanent role<br/>always active, global scope is the highest risk"]
+    Q{"Which kind of access?"}
+    S1["Steps 2 and 3: Azure RBAC role<br/>set duration, justification and approval<br/>add an Eligible assignment, remove the permanent one"]
+    S2["Step 4: Entra ID role<br/>justification required<br/>permanent eligible assignments off"]
+    S3["Step 4 note: Graph API permission<br/>limited native PIM support<br/>consider revoke and re-consent on demand"]
+    E["Eligible assignment<br/>no standing privilege"]
+    R["Activation request: justification, and approval<br/>for Contributor+ roles by the security team group<br/>(MFA for the approving human, not the agent)"]
+    W["Role active only during the window<br/>recommended maximum 1 to 4 hours"]
+    M["Step 5: Sentinel monitors activations<br/>alert on off-hours activations"]
+    A --> Q
+    Q -- "Azure RBAC role" --> S1
+    Q -- "Entra ID role" --> S2
+    Q -- "Graph API permission" --> S3
+    S1 --> E
+    S2 --> E
+    E --> R
+    R --> W
+    W -- "Window ends" --> E
+    W --> M
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class A,S3 orange
+    class Q,S1,S2,R purple
+    class E green
+    class W,M blue
+```
+
+**How to read it.** Follow the permanent role down to what replaces it: an eligible assignment that is active only for the activation window. The branch depends on the kind of access, and Graph API permissions are the weak spot because native PIM support is limited. The loop between the eligible state and the active window is what removes standing privilege, and Sentinel watches each activation.
+
 ## Workflow
 
 ### Step 1 — Identify agents' permanent roles
