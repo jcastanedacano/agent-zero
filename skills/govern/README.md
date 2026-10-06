@@ -28,8 +28,8 @@ OUTPUT: Agents under formal control → input for Pillar 3 (Secure) and Pillar 4
 | `govern-agent365-approval-flow` | Agent 365, Power Platform | No |
 | `govern-ca-policy-workload-identity` | Entra ID, Graph API | sentinel-ca-monitoring.kql |
 | `govern-pim-agent-roles` | Entra PIM | sentinel-pim-activations.kql |
-| `govern-dlp-policy-copilot-prompts` | Purview Compliance | sentinel-dlp-agents.kql |
-| `govern-lifecycle-decommission-agent` | Power Platform, Graph API | sentinel-inactive-agents.kql |
+| `govern-dlp-policy-copilot-prompts` | Purview DLP for Microsoft 365 Copilot | sentinel-dlp-agents.kql |
+| `govern-lifecycle-decommission-agent` | M365 admin center, Power Platform, Graph API | sentinel-inactive-agents.kql |
 
 ## Known constraints in the Microsoft stack
 

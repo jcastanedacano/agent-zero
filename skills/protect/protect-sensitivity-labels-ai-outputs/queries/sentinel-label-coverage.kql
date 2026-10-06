@@ -1,65 +1,65 @@
 // skill: protect-sensitivity-labels-ai-outputs
-// workspace: {workspace-name} | conectores: Purview, MicrosoftDataLossPrevention
+// workspace: {workspace-name} | conectores: Microsoft 365 (OfficeActivity), Microsoft Purview Information Protection (MicrosoftPurviewInformationProtection)
+// Validado en un workspace Sentinel (oct 2026): la version anterior leia PurviewAuditLog y MicrosoftDataLossPrevention, tablas que no existen en ese workspace.
+// Los eventos de etiquetado estan en MicrosoftPurviewInformationProtection (Operation FileSensitivityLabelApplied, SensitivityLabelApplied y
+// AutoSensitivityLabelRuleMatch, con SensitivityLabelId, ActionSource y a veces LabelName) y la etiqueta de cada archivo que se toca esta en OfficeActivity
+// (SensitivityLabelId). Una aplicacion o agente con permisos de aplicacion aparece con UserType Application. El nombre de la etiqueta solo viene en algunos eventos
+// de Purview: el resto queda como GUID y se resuelve en Purview (Information protection, Labels). Todas compilan y se ejecutaron: Q1 a Q3 y Q5 devolvieron filas, y Q4
+// devolvio filas con un GUID de etiqueta real (con la lista vacia no devuelve nada).
+// hc_label_ids es la lista de GUID de tus etiquetas Highly Confidential: sustituyela.
 
-// ── Query 1: Archivos etiquetados por auto-labeling policy en últimos 30 días ─
-let lookback = 30d;
-PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where OperationName has_any ("SensitivityLabelApplied", "SensitivityLabelUpdated", "FileSensitivityLabelApplied")
-| extend
-    FileName  = tostring(parse_json(AuditData).SourceFileName),
-    Label     = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelId),
-    AppliedBy = tostring(parse_json(AuditData).UserId),
-    Site      = tostring(parse_json(AuditData).SiteUrl)
-| project TimeGenerated, FileName, Label, AppliedBy, Site
-| order by TimeGenerated desc
+// ── Query 1: Etiquetas aplicadas o coincidencias de auto-etiquetado en 30 dias ───────────────────────────────────────
+MicrosoftPurviewInformationProtection
+| where TimeGenerated > ago(30d)
+| where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied", "AutoSensitivityLabelRuleMatch")
+| summarize Events = count(), Files = dcount(ObjectId), LastEvent = max(TimeGenerated)
+    by Workload, Operation, ActionSource, SensitivityLabelId, LabelName
+| order by Events desc
 
-// ── Query 2: Archivos sin label en ubicaciones donde operan agentes ───────────
-// Proxy: archivos modificados recientemente por SPs de agentes sin label
-PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where OperationName has_any ("FileModified", "FileUploaded")
-| where UserId has_any ("ServicePrincipal", "@contoso.com") == false  // ajustar para SPs de agentes
-| extend HasLabel = isnotempty(tostring(parse_json(AuditData).SensitivityLabelEventData))
-| where HasLabel == false
-| summarize UnlabeledCount = count() by tostring(parse_json(AuditData).SiteUrl)
-| order by UnlabeledCount desc
+// ── Query 2: Archivos tocados por aplicaciones o agentes sin etiqueta ───────────────────────────────────────────────
+// Un archivo sin SensitivityLabelId que una aplicacion lee o escribe en SharePoint u OneDrive.
+OfficeActivity
+| where TimeGenerated > ago(30d)
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where Operation in ("FileModified", "FileUploaded", "FileAccessed")
+| where UserType == "Application"
+| where isempty(SensitivityLabelId)
+| summarize UnlabeledEvents = count(), Files = dcount(OfficeObjectId) by Site_Url, ApplicationId
+| order by UnlabeledEvents desc
+| take 50
 
-// ── Query 3: Distribución de labels en contenido tocado por agentes ───────────
-PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where OperationName has "SensitivityLabel"
-| extend LabelName = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelName)
-| where isnotempty(LabelName)
-| summarize Count = count() by LabelName
-| order by Count desc
+// ── Query 3: Distribucion de etiquetas en el contenido que tocan las aplicaciones ───────────────────────────────────
+let labels = MicrosoftPurviewInformationProtection
+    | where isnotempty(SensitivityLabelId) and isnotempty(LabelName)
+    | summarize LabelName = any(LabelName) by SensitivityLabelId;
+OfficeActivity
+| where TimeGenerated > ago(30d)
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where UserType == "Application"
+| where isnotempty(SensitivityLabelId)
+| join kind=leftouter labels on SensitivityLabelId
+| extend LabelShown = iff(isnotempty(LabelName), LabelName, "Etiqueta sin nombre resuelto")
+| summarize Events = count(), Files = dcount(OfficeObjectId) by SensitivityLabelId, LabelShown
+| order by Events desc
 
-// ── Query 4: Archivos con label Highly Confidential accedidos por agentes ──────
-// Alta prioridad — agentes no deberían acceder a HC sin aprobación explícita
-PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where OperationName has_any ("FileAccessed", "FileDownloaded")
-| extend
-    LabelName = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelName),
-    AccessedBy = tostring(parse_json(AuditData).UserId)
-| where LabelName has_any ("Highly Confidential", "HC")
-| where AccessedBy has_any ("bot", "agent", "copilot", "sp-")  // ajustar según naming del tenant
-| project TimeGenerated, LabelName, AccessedBy,
-    FileName = tostring(parse_json(AuditData).SourceFileName)
-| extend Alert = "Agente accedió a contenido Highly Confidential — revisar"
-| order by TimeGenerated desc
+// ── Query 4: Aplicaciones o agentes que accedieron a archivos Highly Confidential ───────────────────────────────────
+// Alta prioridad: un agente no deberia acceder a Highly Confidential sin aprobacion explicita.
+let hc_label_ids = dynamic([]);   // GUID de tus etiquetas Highly Confidential
+OfficeActivity
+| where TimeGenerated > ago(30d)
+| where Operation in ("FileAccessed", "FileDownloaded")
+| where UserType == "Application"
+| where SensitivityLabelId in (hc_label_ids)
+| summarize Events = count(), Files = dcount(OfficeObjectId), LastSeen = max(TimeGenerated) by ApplicationId
+| extend Alert = "Aplicacion o agente accedio a contenido Highly Confidential: revisar"
+| order by Events desc
 
-// ── Query 5: Tendencia de cobertura de labels (% de archivos etiquetados) ──────
-let total_files = PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where OperationName has_any ("FileModified", "FileUploaded", "FileAccessed")
-| summarize Total = count() by bin(TimeGenerated, 1d);
-let labeled_files = PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where OperationName has "SensitivityLabel"
-| summarize Labeled = count() by bin(TimeGenerated, 1d);
-total_files
-| join kind=leftouter labeled_files on TimeGenerated
+// ── Query 5: Cobertura de etiquetas (% de eventos de archivo sobre contenido etiquetado), por dia y tipo de actor ────────
+OfficeActivity
+| where TimeGenerated > ago(30d)
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where Operation in ("FileModified", "FileUploaded", "FileAccessed")
+| summarize Total = count(), Labeled = countif(isnotempty(SensitivityLabelId))
+    by Day = bin(TimeGenerated, 1d), Initiator = iff(UserType == "Application", "Aplicacion", "Usuario")
 | extend CoveragePct = round(100.0 * Labeled / Total, 1)
-| project TimeGenerated, Total, Labeled, CoveragePct
-| order by TimeGenerated asc
+| order by Day asc, Initiator asc

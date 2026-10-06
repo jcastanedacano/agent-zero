@@ -1,61 +1,60 @@
 // skill: govern-dlp-policy-copilot-prompts
-// workspace: {workspace-name} | conector requerido: Purview (MicrosoftDataLossPrevention)
+// workspace: {workspace-name} | conectores: Microsoft 365 (OfficeActivity), Defender XDR o Purview (SecurityAlert), Microsoft Copilot (CopilotActivity)
+// Validado en un workspace Sentinel (oct 2026): la version anterior leia MicrosoftDataLossPrevention, una tabla que no existe en ese workspace, y esperaba Workload
+// "CopilotExperiences". Las coincidencias de DLP de Exchange, SharePoint y OneDrive estan en OfficeActivity (operacion DLPRuleMatch o DlpRuleMatch), y las alertas
+// de DLP de Purview llegan a SecurityAlert (ProductName "Microsoft Data Loss Prevention", la politica va dentro de AlertName). Las coincidencias de DLP durante
+// interacciones con Copilot estan en el explorador de actividad de DSPM for AI, no en una tabla de Sentinel: el registro de auditoria de Copilot solo muestra los
+// recursos restringidos por una politica en AccessedResources.PolicyDetails (Q4). Q1 a Q3 compilan y devolvieron filas; Q4 compila y no tiene filas (NO VERIFICADO).
 
-// ── Query 1: DLP policy matches en Copilot en últimos 7 días ─────────────────
-MicrosoftDataLossPrevention
-| where TimeGenerated > ago(7d)
-| where Workload has_any ("CopilotExperiences", "Copilot", "Teams")
-| extend
-    PolicyName   = tostring(parse_json(PolicyDetails)[0].PolicyName),
-    RuleName     = tostring(parse_json(PolicyDetails)[0].Rules[0].RuleName),
-    ActionsTaken = tostring(parse_json(PolicyDetails)[0].Rules[0].Actions)
-| project
-    TimeGenerated,
-    UserId,
-    Workload,
-    PolicyName,
-    RuleName,
-    ActionsTaken,
-    SensitiveInfoTypes = tostring(SensitiveInfoTypeData)
-| order by TimeGenerated desc
-
-// ── Query 2: Usuarios con más violaciones DLP (posibles exfiltración) ─────────
-MicrosoftDataLossPrevention
+// ── Query 1: Coincidencias de reglas DLP por carga de trabajo (30 dias) ──────────────────────────────────────────
+OfficeActivity
 | where TimeGenerated > ago(30d)
-| where Workload has_any ("CopilotExperiences", "Copilot")
+| where Operation in ("DLPRuleMatch", "DlpRuleMatch")
+| summarize Matches = count(), Users = dcount(UserId), LastMatch = max(TimeGenerated) by Workload = OfficeWorkload, RecordType
+| order by Matches desc
+
+// ── Query 2: Usuarios con mas coincidencias DLP (posible exfiltracion) ───────────────────────────────────────────
+OfficeActivity
+| where TimeGenerated > ago(30d)
+| where Operation in ("DLPRuleMatch", "DlpRuleMatch")
 | summarize
     ViolationCount = count(),
-    UniqueRules    = dcount(tostring(parse_json(PolicyDetails)[0].Rules[0].RuleName)),
+    Workloads      = make_set(OfficeWorkload),
     LastViolation  = max(TimeGenerated)
-  by UserId
+  by User = tolower(UserId)
 | where ViolationCount >= 3
 | extend RiskLevel = case(
     ViolationCount >= 10, "Alto",
     ViolationCount >= 5,  "Medio",
-    "Bajo"
-)
+    "Bajo")
 | order by ViolationCount desc
 
-// ── Query 3: Tipos de información sensible detectados en prompts ──────────────
-MicrosoftDataLossPrevention
-| where TimeGenerated > ago(7d)
-| where Workload has_any ("CopilotExperiences", "Copilot")
-| extend SITs = parse_json(SensitiveInfoTypeData)
-| mv-expand SIT = SITs
-| extend
-    SITName  = tostring(SIT.SensitiveInfoTypeName),
-    SITCount = toint(SIT.Count)
-| summarize TotalDetections = sum(SITCount) by SITName
-| order by TotalDetections desc
+// ── Query 3: Alertas de DLP de Purview por politica ──────────────────────────────────────────────────────────────
+// El nombre de la politica va dentro de AlertName: "DLP policy (<politica>) matched for ...".
+SecurityAlert
+| where TimeGenerated > ago(30d)
+| where ProductName == "Microsoft Data Loss Prevention"
+| summarize arg_max(TimeGenerated, *) by SystemAlertId
+| extend PolicyName = extract(@"DLP policy \((.+?)\) matched", 1, AlertName)
+| summarize Alerts = count(), LastAlert = max(TimeGenerated) by PolicyName, AlertSeverity
+| order by Alerts desc
 
-// ── Query 4: Acciones bloqueadas vs solo auditadas ────────────────────────────
-MicrosoftDataLossPrevention
-| where TimeGenerated > ago(7d)
-| extend Actions = tostring(parse_json(PolicyDetails)[0].Rules[0].Actions)
-| extend ActionType = case(
-    Actions has "BlockAccess",   "Bloqueado",
-    Actions has "GenerateAlert", "Solo alerta",
-    "Auditado"
-)
-| summarize Count = count() by ActionType, Workload
-| order by Count desc
+// ── Query 4: Recursos que Copilot no pudo usar por una politica (DLP para Copilot) ──────────────────────────────────
+// NO VERIFICADO: Learn dice que AccessedResources[].PolicyDetails se usa cuando el acceso de Copilot a un recurso se bloqueo o restringio por una politica, y
+// Status distingue exito y fallo. En el workspace de validacion la clave PolicyDetails existe y esta vacia en los 2 recursos listados en 90 dias.
+CopilotActivity
+| where TimeGenerated > ago(30d)
+| where RecordType == "CopilotInteraction"
+| mv-expand Resource = LLMEventData.AccessedResources
+| extend PolicyDetails = tostring(Resource.PolicyDetails), ResourceStatus = tostring(Resource.Status)
+| where isnotempty(PolicyDetails) or ResourceStatus =~ "failure"
+| project
+    TimeGenerated,
+    ActorName,
+    AgentName,
+    AppIdentity,
+    ResourceUrl = tostring(Resource.SiteUrl),
+    LabelId     = tostring(Resource.SensitivityLabelId),
+    ResourceStatus,
+    PolicyDetails
+| order by TimeGenerated desc

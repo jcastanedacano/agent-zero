@@ -13,7 +13,7 @@ d3fend_techniques: [D3-UAP, D3-AM]
 nist_ai_rmf: [GOVERN-1.4, MANAGE-4.1]
 nist_csf: [PR.AA-01, ID.AM-01]
 ms_license: [M365 E3, Power Platform]
-ms_roles: [Power Platform Administrator, Application Administrator]
+ms_roles: [AI Administrator, Power Platform Administrator, Application Administrator]
 effort_hours: 4
 ---
 
@@ -27,7 +27,7 @@ effort_hours: 4
 ## Prerequisites
 
 - Pillar 1 agent list (with owner and creation date)
-- Power Platform Admin Center access
+- Microsoft 365 admin center (AI Administrator) and Power Platform admin center access
 - Graph API to revoke permissions in Entra ID
 - An offboarding process that includes reviewing the departing employee's agents
 
@@ -54,20 +54,40 @@ Before decommissioning, confirm with:
 
 Response window: 5 business days. No response = proceed with decommission.
 
-### Step 3 — Disable the agent in Copilot Studio
+If the owner has left and the agent is still needed, reassign it instead: **Assign a new owner** in the Microsoft 365 admin center (Agents → All agents, for ownerless agents), or the
+Power Platform API operation to reassign ownership of orphaned agents (Microsoft Learn).
+
+### Step 3 — Block the agent (reversible)
+
+Choose the control that matches the platform; all of them can be undone:
 
 ```
-Copilot Studio → [Agent] → Settings → General → Status → Disabled
+Microsoft 365 admin center → Agents → All agents → [Agent] → Block
 ```
 
-Or via the Power Platform Admin Center:
+Blocking an agent built with Agent Builder or Copilot Studio stops it in Microsoft Copilot and in other host products such as Outlook and Teams. Blocking a SharePoint or Foundry agent only
+affects its availability in Microsoft Copilot Chat.
+
 ```
-Environments → [Env] → Copilot Studio → Agents → [Agent] → Disable
+Power Platform admin center → Manage → Inventory (or Manage → Copilot Studio) → [Agent] → Block
 ```
 
-Keep it disabled for 7 days before deleting (rollback window).
+Applies only to published agents; makers can still see and test the agent in Copilot Studio, but it cannot be used in any other channel. The same action through the Power Platform API:
+
+```http
+POST https://api.powerplatform.com/copilotstudio/environments/{environment-id}/bots/{bot-id}/api/botQuarantine/SetAsQuarantined?api-version=1
+```
+
+It takes a user token (Global, AI or Power Platform administrator, scope `CopilotStudio.AdminActions.Invoke`) and does not support classic chatbots (405). `SetAsUnquarantined` reverses it.
+
+For a Microsoft Foundry agent, use **Stop** in the Microsoft 365 admin center (the **Azure AI Owner** role is required; it deallocates the Azure compute of the deployment) or **Block** in the Foundry Control Plane.
+
+Keep it blocked or stopped for 7 days before deleting (rollback window). A delete in the Microsoft 365 admin center is also reversible: it is a soft delete with a 30-day recovery window.
 
 ### Step 4 — Revoke OAuth consent grants in Entra ID
+
+Applies to agents that run on a service principal or an app registration. For an agent that has a Microsoft Entra Agent ID, deleting the agent also deletes its agent identity (Microsoft Learn,
+Power Platform API agent deletion): capture the grants and role assignments (Steps 4 and 5) before the delete.
 
 ```http
 # Get the service principal's consent grants
@@ -120,7 +140,7 @@ agent identity (a service principal) and the agent's user account, paired 1:1 wi
 
 ## Verification
 
-- [ ] Agent in Disabled state (not Deleted) for 7 days
+- [ ] Agent blocked, quarantined or stopped (not deleted) for 7 days
 - [ ] OAuth consent grants revoked (GET returns an empty array)
 - [ ] App role assignments revoked
 - [ ] Service principal deleted (GET returns 404; restorable from the recycle bin for 30 days)
@@ -129,5 +149,9 @@ agent identity (a service principal) and the agent's user account, paired 1:1 wi
 ## Implementation notes
 
 - Do not delete production SPs during testing — use dedicated test agents to validate the decommission process
+- The Power Platform API delete operation supports only Agent Builder agents; agents built in Copilot Studio need Power Platform environment admin permissions to delete (Microsoft Learn)
+- Queries 1 and 3 returned no rows on the validation workspace (no inactive agent or account), Query 4 returned an agent identity, and Query 5 returned agents with a null owner id and no disabled owner account
+- Removed in this version, because Microsoft Learn (Oct 2026) does not support them: the Copilot Studio path "Settings → General → Status → Disabled" and the Power Platform admin center path
+  "Environments → [Env] → Copilot Studio → Agents → Disable", and the `CopilotStudio_CL` and `FoundryAgents_CL` tables (they do not exist in the validation workspace)
 - Verify the SP is not shared with other applications before deleting it: `GET /servicePrincipals/{id}/appRoleAssignedTo` to see all assignments
 - Graph API `DELETE /servicePrincipals/{id}` removes the SP at once, but Entra keeps deleted service principals and app registrations in the recycle bin and they can be restored for 30 days (Microsoft Learn); after that the deletion is permanent. Document the state before proceeding anyway

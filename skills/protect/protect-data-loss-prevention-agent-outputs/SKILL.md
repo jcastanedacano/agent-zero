@@ -24,7 +24,7 @@ effort_hours: 5
 - When sensitivity labels are configured (see the previous skill) and you need
   to block actions on labeled content
 - Key difference from `govern-dlp-policy-copilot-prompts`: that skill protects
-  input prompts; this skill protects generated outputs/files
+  what Copilot receives and processes; this skill protects generated outputs/files
 
 ## Risk scenarios covered
 
@@ -46,69 +46,64 @@ Build the list of target locations for the policy.
 ### Step 2 — Create a DLP policy for outputs in SharePoint/OneDrive
 
 ```
-Purview Compliance Portal → Data loss prevention → Policies → Create policy
-→ Custom → Custom policy
+Microsoft Purview portal → Data loss prevention → Policies → + Create policy
+→ Enterprise applications & devices → Custom → Custom policy
 ```
 
 **Locations:**
 - SharePoint sites: select only the sites where agents operate
 - OneDrive accounts: all, or a group-based selection
-- Exchange email: include if agents have access to Mail.Send
+- Exchange email: create it as its own policy (Learn's best practice is to keep email in a separate DLP policy), and include it if agents have Mail.Send
 
 **Rules:**
 
 **Rule 1 — Block external sharing of AI content with sensitive data:**
 ```
-Condition: Content contains sensitivity label [Confidential / AI-Generated]
+Condition: Content is shared from Microsoft 365 > with people outside my organization
 AND
-Condition: Content is shared with [people outside the organization]
-Action: Block access + Notify user + Generate alert
+Condition: Content contains > Sensitivity labels [Confidential / AI-Generated]
+Action: Restrict access or encrypt the content in Microsoft 365 locations
+        > Block only people outside your organization
+        + Notify users with a policy tip + Generate an alert
 ```
 
-**Rule 2 — Restrict downloading AI files on unmanaged devices:**
-```
-Condition: Content contains sensitivity label [Confidential / AI-Generated]
-AND
-Condition: Device is not managed (Intune)
-Action: Block download + Allow view only
-```
+**Rule 2 — Downloads on unmanaged devices (not a DLP rule):**
+The DLP pages reviewed list no condition for the management state of the device in the SharePoint and OneDrive locations. Restrict download on unmanaged devices with Conditional
+Access (see `secure-ca-policy-agents`) and use Endpoint DLP (Step 4) for managed devices.
 
-**Rule 3 — Alert on high-volume access to AI files in a short window:**
-```
-Condition: Content contains sensitivity label [AI-Generated]
-AND
-Condition: Activity count > 50 in 30 minutes (same user)
-Action: Generate alert + Restrict access
-```
+**Rule 3 — High-volume access (not a DLP rule):**
+DLP has no condition for "activity count in a time window". Detect it in Sentinel with Query 3 of `queries/sentinel-dlp-outputs.kql` and with
+`detect-data-exfiltration-agent` (Query 1).
 
 ### Step 3 — Simulation mode
 
-Enable **Test mode** for 7 days.
+Create the policy with **Run the policy in simulation mode** for 7 days.
 Review:
 
 ```
-DLP → Reports → DLP policy matches
+Microsoft Purview portal → Data loss prevention → Activity explorer / Alerts
 → Filter by the newly created policy
 ```
 
-Tune thresholds if Rule 3 generates false positives.
+Tune the rules if Rule 1 generates false positives. Learn notes that when a file already contains the sensitive content before it is uploaded, external sharing is blocked
+proactively and no alert or incident report is sent (the event shows in the audit log and Activity explorer).
 
 ### Step 4 — Configure endpoint DLP (if applicable)
 
-To control what happens when a user downloads an AI-generated file to their device:
+To control what happens when a user copies an AI-generated file off their device, create a DLP policy with **Devices** as the location:
 
 ```
-DLP → Endpoint DLP settings → Browser and app restrictions
-→ Add unallowed apps: non-corporate applications
-→ Clipboard restriction: restrict copy-paste of AI-Generated content
+DLP policy → Locations: Devices
+→ Condition: Content contains > Sensitivity labels [Confidential / AI-Generated]
+→ Actions: block copy to USB, print, copy to clipboard, upload from the browser
 ```
 
-Requires devices onboarded to MDE with Endpoint DLP enabled.
+Requires Windows devices onboarded to Microsoft Purview.
 
 ### Step 5 — Activate and monitor
 
 ```
-DLP policy → Turn it on right away
+DLP policy → Turn the policy on immediately
 ```
 
 Monitor during the first week with Sentinel queries.
@@ -120,7 +115,7 @@ Monitor during the first week with Sentinel queries.
 ## Verification
 
 - [ ] Policy covers every identified agent output location
-- [ ] Test mode returns the expected matches (not only files without sensitive data)
+- [ ] Simulation mode returns the expected matches (not only files without sensitive data)
 - [ ] The external-sharing rule blocks correctly in test
 - [ ] Policy in active enforcement
 - [ ] Compliance alerts configured for the security team
@@ -128,6 +123,10 @@ Monitor during the first week with Sentinel queries.
 
 ## Implementation notes
 
-- Endpoint DLP requires devices onboarded to Microsoft Defender for Endpoint (MDE) — verify onboarding status before enabling this protection vector
-- The high-volume rule can generate false positives for users running broad searches — tune the threshold
+- Queries 1 to 5 read `OfficeActivity` (Microsoft 365 connector): DLP matches are the operations `DLPRuleMatch` and `DlpRuleMatch`, the label of a file is `SensitivityLabelId`, and the recipients of a mail are in `Item.Recipients`.
+  They compile and returned rows on the validation workspace; Query 3 and Query 4 of the label list need your label GUIDs
+- A DLP event carries the user and the record type, not the policy name; the policy name is in the Purview DLP alerts (`SecurityAlert`)
+- The external-sharing events (`AnonymousLinkCreated`, `SharingInvitationCreated`) do not carry the label: join the file with Query 3 or with the label inventory
 - To validate the policy: create a file with synthetic data (for example a fictitious credit card number) in SharePoint and verify enforcement
+- Removed in this version, because Microsoft Learn (Oct 2026) does not support them: the `MicrosoftDataLossPrevention` and `PurviewAuditLog` tables (they do not exist in the validation workspace),
+  a SharePoint DLP condition on an unmanaged device, a DLP condition on activity count, and an Endpoint DLP "clipboard restriction" settings page (copy to clipboard is an action in the policy rule)

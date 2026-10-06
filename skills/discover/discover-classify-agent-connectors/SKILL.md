@@ -82,5 +82,5 @@ Priority order:
 ## Implementation notes
 
 - In tenants with few demo agents, the connector table may hold limited data — use real production data or synthetic data imported via CSV
-- Purview AI Hub (if enabled in the tenant) can provide automatic classification of the data accessed by connectors — it complements this inventory
+- Microsoft Purview Data Security Posture Management (DSPM) for AI can show the sensitive data that agents access — it complements this inventory
 - Prioritize classifying external connectors (generic HTTP, webhooks) over internal Microsoft connectors that already have native DLP coverage

@@ -21,7 +21,7 @@ Objective: know which AI agents exist, who created them, what data they touch, a
 | Skill | MS product | Sentinel connectors | KQL |
 |---|---|---|---|
 | `discover-inventory-agents-copilot-studio` | M365 admin center registry, Power Platform inventory, Graph | PowerPlatformAdminActivity, CopilotActivity | sentinel-inventory.kql |
-| `discover-enumerate-foundry-agents` | Azure AI Foundry, Azure CLI | FoundryAgents_CL | sentinel-foundry.kql |
+| `discover-enumerate-foundry-agents` | Microsoft Foundry (Control Plane), Azure CLI | AzureDiagnostics, AgentsInfo | sentinel-foundry.kql |
 | `discover-shadow-ai-entra-principals` | Entra ID, Graph API | AuditLogs, AADServicePrincipalSignInLogs | sentinel-shadow-principals.kql |
 | `discover-classify-agent-connectors` | Power Platform Admin Center | — | — |
 
@@ -34,5 +34,5 @@ Risk register with, at minimum, these columns:
 
 This register is the direct input for:
 - `govern-ca-policy-workload-identity` (Pillar 2)
-- `protect-purview-ai-hub-monitoring` (Pillar 4)
+- `protect-purview-ai-hub-monitoring` (Pillar 4, DSPM for AI)
 - `detect-alert-prompt-injection-sentinel` (Pillar 5)

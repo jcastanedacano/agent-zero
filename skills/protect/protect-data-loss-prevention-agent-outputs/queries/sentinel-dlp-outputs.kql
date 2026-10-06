@@ -1,65 +1,75 @@
 // skill: protect-data-loss-prevention-agent-outputs
-// workspace: {workspace-name} | conector: MicrosoftDataLossPrevention, PurviewAuditLog
+// workspace: {workspace-name} | conector: Microsoft 365 (OfficeActivity)
+// Validado en un workspace Sentinel (oct 2026): la version anterior leia MicrosoftDataLossPrevention y PurviewAuditLog, tablas que no existen en ese workspace.
+// Todo sale de OfficeActivity: las coincidencias DLP son operaciones DLPRuleMatch (SharePoint y OneDrive) o DlpRuleMatch (Exchange), la etiqueta de un archivo va
+// en SensitivityLabelId, y los destinatarios de un correo van en Item.Recipients. Un evento DLP trae el usuario y el tipo de registro, no el nombre de la politica
+// (el nombre llega en las alertas de SecurityAlert: ver govern-dlp-policy-copilot-prompts Q3). Todas compilan y se ejecutaron: Q1, Q2, Q4 y Q5 devolvieron filas, y Q3
+// devolvio filas con un GUID de etiqueta real (con la lista vacia no devuelve nada).
+// ai_label_ids es la lista de GUID de tus etiquetas para contenido de IA: sustituyela.
+let ai_label_ids = dynamic([]);   // GUID de la etiqueta Confidential \ AI-Generated y sus equivalentes
 
-// ── Query 1: DLP matches sobre contenido AI-Generated en últimos 7 días ───────
-let lookback = 7d;
-MicrosoftDataLossPrevention
-| where TimeGenerated > ago(lookback)
-| where Workload has_any ("SharePoint", "OneDrive", "Exchange")
-| extend
-    PolicyName   = tostring(parse_json(PolicyDetails)[0].PolicyName),
-    RuleName     = tostring(parse_json(PolicyDetails)[0].Rules[0].RuleName),
-    ActionTaken  = tostring(parse_json(PolicyDetails)[0].Rules[0].Actions),
-    SensLabel    = tostring(parse_json(SensitiveInfoTypeData))
-| where PolicyName has "AI" or RuleName has "AI" or SensLabel has "AI-Generated"
-| project TimeGenerated, UserId, Workload, PolicyName, RuleName, ActionTaken, ObjectId
+// ── Query 1: Coincidencias DLP en SharePoint, OneDrive y Exchange (7 dias) ──────────────────────────────────────────
+OfficeActivity
+| where TimeGenerated > ago(7d)
+| where OfficeWorkload in ("SharePoint", "OneDrive", "Exchange")
+| where Operation in ("DLPRuleMatch", "DlpRuleMatch")
+| project TimeGenerated, UserId, UserType, Workload = OfficeWorkload, RecordType, OfficeObjectId
 | order by TimeGenerated desc
 
-// ── Query 2: Intentos de compartición externa bloqueados ──────────────────────
-MicrosoftDataLossPrevention
-| where TimeGenerated > ago(lookback)
-| where Workload has_any ("SharePoint", "OneDrive")
-| where tostring(parse_json(PolicyDetails)[0].Rules[0].Actions) has "BlockAccess"
-| extend
-    SharedWith = tostring(parse_json(tostring(ExchangeMetaData)).RecipientStatus)
-| project TimeGenerated, UserId, ObjectId, SharedWith,
-    PolicyName = tostring(parse_json(PolicyDetails)[0].PolicyName)
+// ── Query 2: Enlaces anonimos o invitaciones a invitados creados en SharePoint y OneDrive (7 dias) ────────────────────
+// Validado: los eventos AnonymousLinkCreated existen en el workspace y traen el archivo. La etiqueta no viaja en el evento de compartir: cruza el archivo con
+// la etiqueta por Query 3 o con el inventario de etiquetas.
+OfficeActivity
+| where TimeGenerated > ago(7d)
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where Operation in ("SharingInvitationCreated", "AnonymousLinkCreated", "SecureLinkCreated", "SharingSet", "AddedToSecureLink")
+| where TargetUserOrGroupType =~ "Guest" or Operation == "AnonymousLinkCreated"
+| project TimeGenerated, UserId, Operation, FileName = SourceFileName, Site = Site_Url, SharedWith = TargetUserOrGroupName
 | order by TimeGenerated desc
 
-// ── Query 3: Volumen de archivos AI accedidos por usuario (detectar exfiltración) ─
-PurviewAuditLog
+// ── Query 3: Volumen de acceso a archivos con etiqueta de IA por usuario o aplicacion (ventana de 30 minutos) ─────────────
+// Un usuario o una aplicacion que lee muchos archivos con la etiqueta de IA en poco tiempo. Para vigilar solo agentes, filtra por UserType == "Application".
+OfficeActivity
 | where TimeGenerated > ago(1d)
-| where Workload has_any ("SharePoint", "OneDrive")
-| where OperationName has_any ("FileAccessed", "FileDownloaded")
-| extend LabelName = tostring(parse_json(AuditData).SensitivityLabelEventData.SensitivityLabelName)
-| where LabelName has "AI-Generated"
-| summarize
-    FileCount      = count(),
-    UniqueFiles    = dcount(tostring(parse_json(AuditData).SourceFileName)),
-    TimeRange      = datetime_diff("minute", max(TimeGenerated), min(TimeGenerated))
-  by UserId, bin(TimeGenerated, 30m)
-| where FileCount > 20  // ajustar según baseline del tenant
-| extend Alert = strcat("Volumen anómalo: ", FileCount, " accesos a archivos AI en ", TimeRange, " minutos")
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where Operation in ("FileAccessed", "FileDownloaded")
+| where SensitivityLabelId in (ai_label_ids)
+| extend Actor = iff(UserType == "Application", strcat("app:", ApplicationId), UserId)
+| summarize FileCount = dcount(OfficeObjectId), Events = count(), LastSeen = max(TimeGenerated) by Actor, Window = bin(TimeGenerated, 30m)
+| where FileCount > 20   // ajustar segun la linea base del tenant
+| extend Alert = strcat("Volumen anomalo: ", FileCount, " archivos con etiqueta de IA en la ventana")
 | order by FileCount desc
 
-// ── Query 4: Emails con contenido AI-Generated enviados a dominios externos ───
-MicrosoftDataLossPrevention
+// ── Query 4: Correo con coincidencia DLP enviado a dominios externos ─────────────────────────────────────────────────
+// Une el evento Send (Item.InternetMessageId, Item.Recipients) con el DlpRuleMatch de Exchange (OfficeObjectId). Incluye correo de usuarios y de aplicaciones:
+// para solo aplicaciones, filtra por SenderType == "Application".
+let lookback = 7d;
+let internal_domains = dynamic(["contoso.com"]);   // ajustar al tenant
+let sent = OfficeActivity
+    | where TimeGenerated > ago(lookback)
+    | where OfficeWorkload == "Exchange" and Operation in ("Send", "SendAs", "SendOnBehalf")
+    | extend ItemJson = parse_json(Item)
+    | mv-expand Recipient = ItemJson.Recipients
+    | extend RecipientAddress = tolower(tostring(Recipient.Address))
+    | extend RecipientDomain = tostring(split(RecipientAddress, "@")[1])
+    | where RecipientDomain !in (internal_domains)
+    | summarize ExternalRecipients = make_set(RecipientAddress, 10)
+        by SentTime = TimeGenerated, Sender = UserId, SenderType = UserType, Subject = tostring(ItemJson.Subject), MessageId = tostring(ItemJson.InternetMessageId);
+OfficeActivity
 | where TimeGenerated > ago(lookback)
-| where Workload == "Exchange"
-| extend
-    Recipients = tostring(parse_json(tostring(ExchangeMetaData)).UniqueMessageRecipients),
-    LabelApplied = tostring(SensitiveInfoTypeData)
-| where Recipients has_any (".com", ".net", ".org") and Recipients !has "contoso.com"
-| where LabelApplied has "AI-Generated" or LabelApplied has "Confidential"
-| project TimeGenerated, UserId, Recipients, LabelApplied
-| extend Risk = "Email con contenido AI-Generated enviado externamente"
-| order by TimeGenerated desc
+| where OfficeWorkload == "Exchange" and Operation in ("DlpRuleMatch", "DLPRuleMatch")
+| project DlpTime = TimeGenerated, MessageId = OfficeObjectId
+| join kind=inner sent on MessageId
+| project SentTime, DlpTime, Sender, SenderType, Subject, ExternalRecipients
+| extend Risk = "Correo con coincidencia DLP enviado a un dominio externo"
+| order by SentTime desc
 
-// ── Query 5: Top archivos AI-Generated con más intentos de acceso denegado ─────
-MicrosoftDataLossPrevention
+// ── Query 5: Objetos con mas coincidencias DLP (7 dias) ──────────────────────────────────────────────────────────
+// OfficeObjectId es el identificador del archivo en SharePoint y OneDrive y el InternetMessageId en Exchange.
+OfficeActivity
 | where TimeGenerated > ago(7d)
-| where tostring(parse_json(PolicyDetails)[0].Rules[0].Actions) has "Block"
-| summarize BlockCount = count(), UniqueUsers = dcount(UserId)
-    by ObjectId
-| order by BlockCount desc
+| where OfficeWorkload in ("SharePoint", "OneDrive", "Exchange")
+| where Operation in ("DLPRuleMatch", "DlpRuleMatch")
+| summarize Matches = count(), UniqueUsers = dcount(UserId) by OfficeObjectId, Workload = OfficeWorkload
+| order by Matches desc
 | take 20

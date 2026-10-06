@@ -23,7 +23,7 @@ OUTPUT: Protected data with active visibility and controls → input for Pillar 
 
 | Skill | MS product | Minimum license | KQL available |
 |---|---|---|---|
-| `protect-purview-ai-hub-monitoring` | Purview AI Hub | Purview E3 | sentinel-ai-hub-activity.kql |
+| `protect-purview-ai-hub-monitoring` | Purview DSPM for AI | Purview E3 | sentinel-ai-hub-activity.kql |
 | `protect-sensitivity-labels-ai-outputs` | Purview, AIP | Purview E3 + AIP P2 | sentinel-label-coverage.kql |
 | `protect-data-loss-prevention-agent-outputs` | Purview DLP | Purview E3 | sentinel-dlp-outputs.kql |
 | `protect-information-barriers-agents` | Purview IB | M365 E5 Compliance | sentinel-information-barriers.kql |
@@ -32,7 +32,7 @@ OUTPUT: Protected data with active visibility and controls → input for Pillar 
 
 | Skill | What it protects | Where the control sits |
 |---|---|---|
-| `govern-dlp-policy-copilot-prompts` (P2) | Sensitive data the user sends to the agent | In the input prompt, in real time |
+| `govern-dlp-policy-copilot-prompts` (P2) | Sensitive data in Copilot prompts, and labeled files and emails Copilot would use | In Microsoft 365 Copilot and Copilot Chat, before the response |
 | `protect-data-loss-prevention-agent-outputs` (P4) | Files and content the agent generates | In SharePoint / OneDrive / Exchange, post-generation |
 
 Both skills are complementary — they cover different vectors.
@@ -41,9 +41,9 @@ Both skills are complementary — they cover different vectors.
 
 | Constraint | Impact | Workaround |
 |---|---|---|
-| Purview auto-labeling via API: limited support | Some configurations are unavailable via Graph | Use the Compliance Portal for initial configuration |
-| Graph labels endpoint: `/beta` only | Not production-ready for automation | Accept and document, monitor for GA |
+| Purview labels and auto-labeling policies are configured in the portal or Security & Compliance PowerShell | No Graph configuration path in the pages reviewed | Use the Microsoft Purview portal |
+| Graph `assignSensitivityLabel` is a protected, metered API | Needs metered APIs enabled | Use it for agents that write files |
 | IB: requires Security & Compliance PowerShell | Not accessible via Lokka-Microsoft MCP | Run PowerShell directly |
-| IB SharePoint: propagation takes up to 24h | The control is not immediate | Plan the implementation window |
-| AI Hub: preview feature | May change without notice | Validate against MS Learn before documenting |
-| IB for agent SPs: requires Entra attributes | Without attributes, SPs are not filterable | Establish a naming convention for agent SPs |
+| IB SharePoint: about 1 hour after enabling, and up to 24 hours after a user's segment changes (OneDrive) | The control is not immediate | Plan the implementation window |
+| DSPM for AI (classic) and the new DSPM coexist, with preview parts | May change without notice | Validate against MS Learn before documenting |
+| IB segments are built from user and group attributes (not `DisplayName`) and do not cover email | A service principal cannot be a segment member | Control apps with Entra permissions and Conditional Access; list them with Query 3 |

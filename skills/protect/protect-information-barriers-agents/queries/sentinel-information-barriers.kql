@@ -1,65 +1,67 @@
 // skill: protect-information-barriers-agents
-// workspace: {workspace-name} | conector: PurviewAuditLog, MicrosoftDataLossPrevention
+// workspace: {workspace-name} | conector: Microsoft 365 (OfficeActivity)
+// Validado en un workspace Sentinel (oct 2026): la version anterior leia PurviewAuditLog y buscaba operaciones InformationBarrierPolicyViolation, IBPolicyViolation y
+// CrossSegmentAccess, que no figuran en la lista de actividades de auditoria de Learn. Las actividades documentadas de Information Barriers son de SharePoint y
+// OneDrive: SPOIBIsEnabled, SPOIBIsDisabled, SiteIBModeSet, SiteIBModeChanged, SiteIBSegmentsSet, SiteIBSegmentsChanged, SiteIBSegmentsRemoved y
+// AppBypassInformationBarrier (Q1). Learn no documenta un evento de "violacion": un acceso bloqueado por IB no llega como evento. Por eso Q2 y Q3 cruzan los accesos
+// de OfficeActivity con TU mapa de segmentos. Q2 y Q3 compilan y se ejecutaron con un mapa de ejemplo; Q1 compila y no tiene filas (NO VERIFICADO).
 
-// ── Query 1: Violations de Information Barriers en últimos 7 días ─────────────
-let lookback = 7d;
-PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where OperationName has_any (
-    "InformationBarrierPolicyViolation",
-    "IBPolicyViolation",
-    "CrossSegmentAccess"
-)
-| extend
-    Segment1  = tostring(parse_json(AuditData).Segment1),
-    Segment2  = tostring(parse_json(AuditData).Segment2),
-    Workload  = tostring(parse_json(AuditData).Workload),
-    BlockedBy = tostring(parse_json(AuditData).PolicyName)
-| project TimeGenerated, UserId, Segment1, Segment2, Workload, BlockedBy
+// ── Query 1: Cambios administrativos de Information Barriers en SharePoint y OneDrive ─────────────────────────────────
+// SPOIBIsDisabled y AppBypassInformationBarrier son las dos que debilitan el control: alerta siempre.
+OfficeActivity
+| where TimeGenerated > ago(90d)
+| where Operation in (
+    "SPOIBIsEnabled", "SPOIBIsDisabled",
+    "SiteIBModeSet", "SiteIBModeChanged",
+    "SiteIBSegmentsSet", "SiteIBSegmentsChanged", "SiteIBSegmentsRemoved",
+    "AppBypassInformationBarrier")
+| project TimeGenerated, UserId, Operation, Site_Url, Parameters
 | order by TimeGenerated desc
 
-// ── Query 2: Intentos de acceso cross-segment en SharePoint ──────────────────
-PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where Workload has "SharePoint"
-| where OperationName has_any ("FileAccessed", "FileDownloaded", "SiteCollectionAdminAdded")
-| extend
-    SiteUrl    = tostring(parse_json(AuditData).SiteUrl),
-    AccessedBy = tostring(parse_json(AuditData).UserId)
-| where SiteUrl has_any ("finance", "legal", "trading", "research")  // ajustar a naming del tenant
-| summarize
-    AccessCount = count(),
-    Operations  = make_set(OperationName, 5)
-  by AccessedBy, SiteUrl
-| extend CrossSegmentRisk = case(
-    // Detectar cuando el patrón del user no corresponde al segmento del site
-    AccessedBy has "finance" and SiteUrl has "legal", "Alto",
-    AccessedBy has "legal" and SiteUrl has "finance", "Alto",
-    "Revisar"
-)
-| where CrossSegmentRisk == "Alto"
+// ── Query 2: Usuarios de un segmento que acceden a sitios de un segmento bloqueado ───────────────────────────────────
+// Sustituye los tres datatable por tu mapa: usuario a segmento, sitio a segmento y pares bloqueados. El nombre del sitio es el cuarto fragmento de la URL
+// (https://tenant.sharepoint.com/sites/<sitio>/). Para listas largas, usa un Watchlist de Sentinel con _GetWatchlist().
+let UserSegment = datatable(UserId: string, Segment: string) [
+    "usuario1@contoso.com", "Finance",
+    "usuario2@contoso.com", "Legal"
+];
+let SiteSegment = datatable(SiteName: string, Segment: string) [
+    "finance-reports", "Finance",
+    "legal-cases",     "Legal"
+];
+let BlockedPairs = datatable(SegmentA: string, SegmentB: string) [
+    "Finance", "Legal",
+    "Legal",   "Finance"
+];
+OfficeActivity
+| where TimeGenerated > ago(7d)
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where Operation in ("FileAccessed", "FileDownloaded")
+| where UserType == "Regular"
+| extend SiteName = tostring(split(Site_Url, "/")[4])
+| join kind=inner UserSegment on UserId
+| join kind=inner (SiteSegment | project SiteName, SiteSegmentName = Segment) on SiteName
+| join kind=inner BlockedPairs on $left.Segment == $right.SegmentA and $left.SiteSegmentName == $right.SegmentB
+| summarize AccessCount = count(), Files = dcount(OfficeObjectId), Operations = make_set(Operation, 5)
+    by UserId, UserSegment = Segment, SiteName, SiteSegment = SiteSegmentName
+| extend Alert = "Acceso a un sitio de un segmento que la politica de Information Barriers separa del segmento del usuario"
 | order by AccessCount desc
 
-// ── Query 3: Agentes AI accediendo a segmentos no autorizados ────────────────
-// Requiere convención de naming para SPs de agentes (ej: "agent-" prefix)
-PurviewAuditLog
-| where TimeGenerated > ago(lookback)
-| where tostring(parse_json(AuditData).UserId) has_any ("agent-", "sp-agent", "bot-")
-| extend
-    AgentId  = tostring(parse_json(AuditData).UserId),
-    SiteUrl  = tostring(parse_json(AuditData).SiteUrl),
-    Resource = tostring(parse_json(AuditData).SourceFileName)
-| project TimeGenerated, AgentId, SiteUrl, Resource, OperationName
-| order by TimeGenerated desc
-
-// ── Query 4: Estado de aplicación de políticas IB (admin events) ─────────────
-PurviewAuditLog
+// ── Query 3: Aplicaciones o agentes con acceso a sitios de mas de un segmento ───────────────────────────────────────
+// Information Barriers segmenta usuarios y grupos (atributos de Entra o Exchange): Learn no documenta un segmento para un service principal ni para una identidad de
+// agente. Esta consulta lista las aplicaciones que tocan sitios de mas de un segmento, que son las que IB no separa. Usa el mismo SiteSegment de Q2.
+let SiteSegment = datatable(SiteName: string, Segment: string) [
+    "finance-reports", "Finance",
+    "legal-cases",     "Legal"
+];
+OfficeActivity
 | where TimeGenerated > ago(30d)
-| where OperationName has_any (
-    "InformationBarrierPoliciesApplication",
-    "NewInformationBarrierPolicy",
-    "SetInformationBarrierPolicy"
-)
-| project TimeGenerated, UserId, OperationName,
-    PolicyName = tostring(parse_json(AuditData).PolicyName)
-| order by TimeGenerated desc
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where UserType == "Application"
+| extend SiteName = tostring(split(Site_Url, "/")[4])
+| join kind=inner SiteSegment on SiteName
+| summarize Segments = make_set(Segment), Sites = dcount(SiteName), Events = count(), Files = dcount(OfficeObjectId) by ApplicationId
+| extend SegmentCount = array_length(Segments)
+| where SegmentCount > 1
+| extend Alert = "Aplicacion con acceso a sitios de mas de un segmento: IB no la separa"
+| order by Events desc
