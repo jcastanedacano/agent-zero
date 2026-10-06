@@ -53,21 +53,26 @@ effort_hours: 4
 
 ### Step 3 — Correlate IRM signals with agent activity in Sentinel
 
+> **Run on 2026-10-05 (Sentinel workspace and Advanced Hunting).** The earlier version indexed `Entities` as an array (it is a string, so the query failed), grouped `CloudAppEvents` by `UserId` (the table has no such column; it has `AccountObjectId`) and, in Step 4, nested aggregates (`avg(count())`), which is invalid. The IRM alert's account entity carries `AadUserId`, which matches `CloudAppEvents.AccountObjectId`. The workspace had 3 IRM alerts in 30 days and no `InvokeAgent` events, so the join returns nothing; the join itself was not exercised with data.
+
 ```kql
 // Correlate IRM alerts with agent activity in the same period
 let IRMAlerts = SecurityAlert
     | where TimeGenerated > ago(30d)
     | where ProductName == "Microsoft 365 Insider Risk Management"
-    | project AlertTime = TimeGenerated, AffectedUser = tostring(Entities[0].Name), AlertName;
+    | mv-expand Entity = parse_json(Entities)
+    | where tostring(Entity.Type) == "account"
+    | project AlertTime = TimeGenerated, AffectedUserId = tolower(tostring(Entity.AadUserId)), AlertName;
 // ActionType was "AgentInteraction" (not documented); InvokeAgent is the documented value (Microsoft Learn, Agent 365 observability). Not run against live events.
 let AgentActivity = CloudAppEvents
     | where TimeGenerated > ago(30d)
     | where ActionType == "InvokeAgent"
+    | extend AccountObjectId = tolower(AccountObjectId)
     | summarize AgentCalls = count(), UniqueAgents = dcount(tostring(RawEventData["AgentId"]))
-        by UserId, bin(TimeGenerated, 1h);
+        by AccountObjectId, bin(TimeGenerated, 1h);
 IRMAlerts
-| join kind=inner (AgentActivity) on $left.AffectedUser == $right.UserId
-| project AlertTime, AffectedUser, AlertName, AgentCalls, UniqueAgents
+| join kind=inner (AgentActivity) on $left.AffectedUserId == $right.AccountObjectId
+| project AlertTime, AffectedUserId, AlertName, AgentCalls, UniqueAgents
 | sort by AgentCalls desc
 ```
 
@@ -78,14 +83,11 @@ IRMAlerts
 CloudAppEvents
 | where TimeGenerated between (ago(30d) .. ago(1d))
 | where ActionType == "InvokeAgent"
+| summarize DailyCount = count() by AccountObjectId, bin(TimeGenerated, 1d)
 | summarize
-    DailyAvg = avg(count()),
-    DailyP90 = percentile(count(), 90)
-    by UserId, bin(TimeGenerated, 1d)
-| summarize
-    UserBaseline = avg(DailyAvg),
-    UserP90 = avg(DailyP90)
-    by UserId
+    UserBaseline = avg(DailyCount),
+    UserP90 = percentile(DailyCount, 90)
+    by AccountObjectId
 | where UserP90 > 0
 | sort by UserP90 desc
 ```

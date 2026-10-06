@@ -132,10 +132,10 @@
       ],
       "properties": {
         "displayName": "Agentic AI — Jailbreak Attempt Detected",
-        "description": "Detects jailbreak attempts against Copilot/agent interactions using the platform's own JailbreakDetected signal in LLMActivity (Azure Monitor / Log Analytics), rather than a hand-rolled phrase match against CloudAppEvents. Corresponds to lab Module 05 (Detect & Respond) and KQL Library P05-Q1. Query structure matches the official Microsoft documentation example (learn.microsoft.com/azure/azure-monitor/reference/queries/copilotactivity, confirmed current Sep 2026): table is LLMActivity, RecordType filters to CopilotInteraction, and JailbreakDetected lives inside LLMEventData.Messages (an array — requires mv-expand), not as a flat top-level field.",
+        "description": "Detects jailbreak attempts against Copilot/agent interactions using the platform's own JailbreakDetected signal in CopilotActivity (Azure Monitor / Log Analytics, filled by the Sentinel Microsoft Copilot connector), rather than a hand-rolled phrase match against CloudAppEvents. Corresponds to lab Module 05 (Detect & Respond) and KQL Library P05-Q1. The table is CopilotActivity (learn.microsoft.com/azure/azure-monitor/reference/tables/copilotactivity). Learn's sample-queries page for it still uses the old name LLMActivity, which does not resolve in a workspace (checked Oct 2026). RecordType filters to CopilotInteraction, and JailbreakDetected lives inside LLMEventData.Messages (an array — requires mv-expand), not as a flat top-level field.",
         "severity": "High",
         "enabled": true,
-        "query": "LLMActivity\n| where TimeGenerated > ago(1h)\n| where RecordType == \"CopilotInteraction\"\n| extend Messages = LLMEventData.Messages\n| mv-expand Messages\n| where tobool(Messages.JailbreakDetected) == true\n| project TimeGenerated, ActorName, ActorUserId, AgentName, MessageId = tostring(Messages.Id), JailbreakDetected = tobool(Messages.JailbreakDetected)",
+        "query": "CopilotActivity\n| where TimeGenerated > ago(1h)\n| where RecordType == \"CopilotInteraction\"\n| extend Messages = LLMEventData.Messages\n| mv-expand Messages\n| where tobool(Messages.JailbreakDetected) == true\n| project TimeGenerated, ActorName, ActorUserId, AgentName, MessageId = tostring(Messages.Id), JailbreakDetected = tobool(Messages.JailbreakDetected)",
         "queryFrequency": "PT5M",
         "queryPeriod": "PT1H",
         "triggerOperator": "GreaterThan",

@@ -11,6 +11,9 @@
 // Use: Detect agents reading large volumes of files in short windows
 //      Threshold: >100 operations in 10 minutes (adjust per baseline)
 // Recommended: Use as Analytics Rule with 10-minute frequency
+// Validated live (Oct 2026, Advanced Hunting): runs without errors. The validation tenant has real SharePoint
+//      traffic (632 file operations in 7 days) but no agent-like user agent, so it returned no rows. Agent traffic
+//      is guessed from UserAgent (see P01-Q4): confirm which user agents your agents send before relying on it.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(1d)
@@ -100,6 +103,10 @@ OfficeActivity
 // Q4: External Connector Data Egress — Agent Sending Data Out
 // Use: Detect agents sending data to external endpoints via connectors
 //      This is the "silent exfiltration" vector — HTTPS to legitimate-looking endpoints
+// NOT VERIFIED (live tenant, Oct 2026): runs without errors in Advanced Hunting and returns no rows. CloudAppEvents has
+//      no "Microsoft Power Platform" application events there (applications seen: OneDrive, Microsoft 365, Exchange,
+//      Azure, SharePoint, Teams), and ConnectorActionExecuted, TargetUrl and ResponseSizeBytes are not documented
+//      values. The workspace lists a PowerPlatformDlpActivity table (Sentinel) that returned no rows. Treat as a template.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
@@ -134,7 +141,7 @@ CloudAppEvents
 //       reference has no memory-content attribute (prompt and response text are "not yet
 //       surfaced in advanced hunting"), so RawEventData["MemoryContent"] has no documented
 //       source. Pattern only; not run against live events (0 agent ActionTypes in the
-//       validation tenant, Oct 2026).
+//       validation tenant, Oct 2026). It runs without errors in Advanced Hunting and returns nothing.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
@@ -167,14 +174,19 @@ CloudAppEvents
 // Use: Detect when a compromised agent pivots to invoke another agent
 //      Trust boundary violation: Agent A calling Agent B without user authorization
 // Reference: Anthropic Zero Trust for AI Agents — multi-agent trust boundaries
+// NOT VERIFIED (live tenant, Oct 2026): the ActionTypes AgentInvokedAgent, AgentDelegation, SubAgentCreated and the keys
+//      CallingAgentId and UserContext are not documented. Microsoft Learn (Agent 365 observability) documents InvokeAgent
+//      with AgentId, TargetAgentId and UserKey inside RawEventData, which this query now uses. It runs without errors in
+//      Advanced Hunting and returns nothing (no InvokeAgent events). Declared agent-to-agent links are in
+//      AgentsInfo.ConnectedAgents (populated for 1 agent on the validation tenant).
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
 | where Application in ("Copilot Studio", "Azure AI Foundry", "Microsoft Power Platform")
-    and ActionType in ("AgentInvokedAgent", "AgentDelegation", "SubAgentCreated", "ConnectorActionExecuted")
-| extend CallingAgent = tostring(RawEventData["CallingAgentId"])
+    and ActionType == "InvokeAgent"
+| extend CallingAgent = tostring(RawEventData["AgentId"])
 | extend TargetAgent = tostring(RawEventData["TargetAgentId"])
-| extend CallerUserContext = tostring(RawEventData["UserContext"])
+| extend CallerUserContext = tostring(RawEventData["UserKey"])
 | where isnotempty(CallingAgent) and isnotempty(TargetAgent)
 | summarize
     InvocationCount = count(),
@@ -197,7 +209,9 @@ CloudAppEvents
 //       "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
 //       Response text is "not yet surfaced in advanced hunting" per Learn, so
 //       RawEventData["AgentResponse"] has no documented source: pattern only. Not run
-//       against live events (0 agent ActionTypes in the validation tenant, Oct 2026).
+//       against live events (0 agent ActionTypes in the validation tenant, Oct 2026). It runs without errors in
+//       Advanced Hunting. The external-reference "rate" was avgif(1, flag), which is 1 for any agent with a single
+//       match and null otherwise, so the deviation could never be a rate; it is now the average of the 0/1 flag.
 // -----------------------------------------------------------------------------
 let AgentBaseline = CloudAppEvents
     | where TimeGenerated between (ago(30d) .. ago(1d))
@@ -207,7 +221,7 @@ let AgentBaseline = CloudAppEvents
     | extend HasExternalRef = tostring(RawEventData["AgentResponse"]) has_any ("http://", "https://", "click here", "download", "visit")
     | summarize
         AvgResponseLength = avg(ResponseLength),
-        ExternalRefRate = avgif(1, HasExternalRef == true)
+        ExternalRefRate = avg(toreal(HasExternalRef))
         by AgentId;
 CloudAppEvents
 | where TimeGenerated > ago(1d)
@@ -217,7 +231,7 @@ CloudAppEvents
 | extend HasExternalRef = tostring(RawEventData["AgentResponse"]) has_any ("http://", "https://", "click here", "download", "visit")
 | summarize
     CurrentAvgLength = avg(ResponseLength),
-    CurrentExternalRefRate = avgif(1, HasExternalRef == true),
+    CurrentExternalRefRate = avg(toreal(HasExternalRef)),
     InteractionCount = count()
     by AgentId
 | join kind=inner AgentBaseline on AgentId
@@ -238,7 +252,10 @@ CloudAppEvents
 //       "InvokeAgent" (Microsoft Learn, Agent 365 observability concepts).
 //       Prompt text is "not yet surfaced in advanced hunting" per Learn, so
 //       RawEventData["UserPrompt"] has no documented source: pattern only. Not run against
-//       live events (0 agent ActionTypes in the validation tenant, Oct 2026).
+//       live events (0 agent ActionTypes in the validation tenant, Oct 2026). It runs without errors in Advanced Hunting.
+//       Learn documents platform flags instead of prompt text: Messages[].JailbreakDetected and
+//       AccessedResources[].XPIADetected (cross prompt injection attack) in the Copilot audit record, available in the
+//       CopilotActivity table (see P05-Q1). Both keys exist on the validation workspace, none is true.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)

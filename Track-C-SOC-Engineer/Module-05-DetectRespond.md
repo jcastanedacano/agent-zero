@@ -81,7 +81,7 @@ Prerequisites: onboard the tenant to Agent 365, connect the Microsoft 365 connec
    - Tactics: Execution, Initial Access
 3. **Set rule logic tab — paste this query:**
 
-   > **Telemetry limit (Microsoft Learn, October 2026).** The ActionType was `AgentInteraction`, which is not a documented value; it is now `InvokeAgent`. Agent 365 observability does not expose prompt text in `CloudAppEvents` (`gen_ai.input.messages` is "not yet surfaced in advanced hunting"), so `RawEventData["UserPrompt"]` has no documented source and this query returns no rows on that telemetry today. Use it as a pattern for a source that carries the prompt, and see P05-Q1 for the platform's own jailbreak signal in `LLMActivity`. The validation tenant had no agent ActionTypes in `CloudAppEvents` (30 days, October 2026).
+   > **Telemetry limit (Microsoft Learn, October 2026).** The ActionType was `AgentInteraction`, which is not a documented value; it is now `InvokeAgent`. Agent 365 observability does not expose prompt text in `CloudAppEvents` (`gen_ai.input.messages` is "not yet surfaced in advanced hunting"), so `RawEventData["UserPrompt"]` has no documented source and this query returns no rows on that telemetry today. Use it as a pattern for a source that carries the prompt, and see P05-Q1 for the platform's own jailbreak signal in `CopilotActivity` (Learn's sample-queries page for that table still shows the old name `LLMActivity`, which does not resolve in a workspace). The validation tenant had no agent ActionTypes in `CloudAppEvents` (30 days, October 2026).
 
 ```kql
 CloudAppEvents
@@ -215,17 +215,21 @@ Create this as a third analytics rule: `Agentic AI — Sensitive Data Access Off
 
 ### Step 5 — KQL: Structural false negative audit
 
+> **Run on a Sentinel workspace (Oct 2026).** The earlier version read `IncidentProviderName` (the column is `ProviderName`), tested `has` on a dynamic array, and counted table rows: `SecurityIncident` writes a row per change to an incident (839 rows for 105 incidents in 30 days), so `IncidentCount > 3` held for any incident edited a few times. It now keeps the latest row per incident first. No title matched the filter on that workspace, so it returned nothing.
+
 ```kql
 SecurityIncident
 | where TimeGenerated > ago(30d)
+| summarize arg_max(TimeGenerated, *) by IncidentNumber
 | where Title has_any ("agent", "copilot", "AI interaction", "jailbreak")
 | summarize
     IncidentCount = count(),
-    FirstIncident = min(TimeGenerated),
-    LastIncident = max(TimeGenerated),
+    FirstIncident = min(CreatedTime),
+    LastIncident = max(CreatedTime),
+    ClosedCount = countif(Status == "Closed"),
     StatusHistory = make_set(Status)
-    by Title, IncidentProviderName
-| extend NeverClosed = not(StatusHistory has "Closed")
+    by Title, ProviderName
+| extend NeverClosed = ClosedCount == 0
 | extend IsRepeat = IncidentCount > 3
 | where NeverClosed or IsRepeat
 | project

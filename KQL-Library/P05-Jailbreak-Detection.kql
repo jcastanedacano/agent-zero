@@ -2,7 +2,9 @@
 // P05 — DETECT & RESPOND
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: CloudAppEvents, MicrosoftPurviewInformationProtection, AgentsInfo
+// Tables: CopilotActivity, CloudAppEvents, OfficeActivity, MicrosoftPurviewInformationProtection, SecurityIncident, AuditLogs
+// Re-run on 2026-10-05: Q1, Q3, Q4 and Q5 on a Sentinel workspace; Q2 and Q6 to Q9 in Advanced Hunting. Q2 and Q6 to Q9 have
+//      no source data on the validation tenant (no agent ActionTypes in CloudAppEvents) and are patterns.
 // =============================================================================
 
 
@@ -12,13 +14,21 @@
 //      interactions, using the platform's own JailbreakDetected signal.
 // Note: CloudAppEvents has no "AgentInteraction" ActionType for this scenario
 //       (verified live against a production tenant, Sep 2026). Jailbreak
-//       detection lives in LLMActivity (Azure Monitor / Log Analytics), inside
-//       LLMEventData.Messages — an array, requires mv-expand. Query structure
-//       matches the official Microsoft example, confirmed current Sep 2026:
-//       learn.microsoft.com/azure/azure-monitor/reference/queries/copilotactivity
+//       detection lives in CopilotActivity (Azure Monitor / Log Analytics, filled by the Sentinel
+//       "Microsoft Copilot" connector), inside LLMEventData.Messages: an array, requires mv-expand
+//       (each message holds Id, isPrompt and JailbreakDetected; Microsoft Learn, "Audit logs for
+//       Copilot and AI applications").
+// Validated live (Oct 2026, Sentinel workspace): the earlier version read LLMActivity, which does not resolve
+//       there (the editor underlines it and the query fails). The table is CopilotActivity (Learn table
+//       reference), and Learn's sample-queries page for that table still shows the old name LLMActivity, so
+//       copying the example fails. CopilotActivity holds 245 rows in 90 days on the validation workspace. Q1 now
+//       runs and returned no rows: of 155 messages in 90 days, 7 carry the JailbreakDetected key and none is true
+//       (checked with == false, which returns them with actor and message id). AgentName is empty on those
+//       interactions (Copilot apps, not custom agents), and prompt and response text are not in the audit record
+//       (Learn: use Content Search or DSPM for AI).
 // Recommended: Analytics Rule | Frequency: 5m | Lookback: 1h | Severity: High
 // -----------------------------------------------------------------------------
-LLMActivity
+CopilotActivity
 | where TimeGenerated > ago(1h)
 | where RecordType == "CopilotInteraction"
 | extend Messages = LLMEventData.Messages
@@ -46,18 +56,20 @@ LLMActivity
 //       agent ActionTypes in CloudAppEvents (30 days, Oct 2026), and Learn says telemetry is
 //       dropped unless a tenant user holds a Microsoft 365 E7 or Agent 365 license and the
 //       agent emits an invoke_agent span.
+// Validated live (Oct 2026, Advanced Hunting): the earlier version nested aggregates (avg(count()) and
+//       stdev(count())), which is invalid ("Function 'count' cannot be invoked in current context"), so it never
+//       ran. It now counts calls per agent and hour first, then takes the average and standard deviation of those
+//       counts, and runs without errors (no rows: there are no InvokeAgent events). Hours without calls are not in the
+//       baseline, so it is the average of the active hours.
 // -----------------------------------------------------------------------------
 let Baseline = CloudAppEvents
     | where TimeGenerated between (ago(8d) .. ago(1d))
     | where ActionType == "InvokeAgent"
     | extend AgentId = tostring(RawEventData["AgentId"])
+    | summarize HourlyCount = count() by AgentId, bin(TimeGenerated, 1h)
     | summarize
-        AvgHourlyCallCount = avg(count()),
-        StdDevCallCount = stdev(count())
-        by AgentId, bin(TimeGenerated, 1h)
-    | summarize
-        BaselineAvg = avg(AvgHourlyCallCount),
-        BaselineStdDev = avg(StdDevCallCount)
+        BaselineAvg = avg(HourlyCount),
+        BaselineStdDev = stdev(HourlyCount)
         by AgentId;
 CloudAppEvents
 | where TimeGenerated > ago(1h)
@@ -124,22 +136,30 @@ OfficeActivity
 // Q4: Structural False Negative Detection — Controls That Detect But Don't Block
 // Use: Audit your own detection coverage — identify rules firing without enforcement
 //      If an alert fires repeatedly for the same entity with no remediation, it's a false negative pattern
+// Validated live (Oct 2026, Sentinel workspace): the earlier version failed (it read IncidentProviderName, but the
+//      column is ProviderName, and tested "has" on a dynamic array) and, once fixed, would have counted table rows:
+//      SecurityIncident writes a row per change to an incident (839 rows for 105 incidents in 30 days on the
+//      validation workspace), so "IncidentCount > 3" held for any incident edited a few times. It now keeps the
+//      latest row per IncidentNumber first. No incident title matched agent, copilot or AI interaction in 30 days
+//      there, so it returned nothing; with the title filter dropped it groups 37 titles (5 repeated, 34 never closed).
 // -----------------------------------------------------------------------------
 SecurityIncident
 | where TimeGenerated > ago(30d)
+| summarize arg_max(TimeGenerated, *) by IncidentNumber
 | where Title has_any ("agent", "copilot", "AI interaction")
 | summarize
     IncidentCount = count(),
-    FirstIncident = min(TimeGenerated),
-    LastIncident = max(TimeGenerated),
+    FirstIncident = min(CreatedTime),
+    LastIncident = max(CreatedTime),
+    ClosedCount = countif(Status == "Closed"),
     StatusHistory = make_set(Status)
-    by Title, IncidentProviderName
-| extend NeverClosed = not(StatusHistory has "Closed")
+    by Title, ProviderName
+| extend NeverClosed = ClosedCount == 0
 | extend RepeatAlerts = IncidentCount > 3
 | where NeverClosed or RepeatAlerts
 | project
     Title,
-    IncidentProviderName,
+    ProviderName,
     IncidentCount,
     FirstIncident,
     LastIncident,
@@ -156,15 +176,24 @@ SecurityIncident
 // Q5: Agent Token Revocation Audit — Verify Enforcement Actions Completed
 // Use: Confirm that playbook enforcement actions (token revocation) actually executed
 //      If jailbreak alert fired but no revocation appears, enforcement failed
+// Validated live (Oct 2026, Sentinel workspace): "Revoke refresh tokens for user" is not an AuditLogs operation, so
+//      that branch never matched. Revoking a user's sessions is logged as "Update user" with the property
+//      StsRefreshTokensValidFrom (4 such events in 90 days on the validation workspace, all manual). The query
+//      now reads that, and also "Hard delete service principal" (5 in 90 days). "Update service principal" counts any
+//      update (95 in 90 days), not only a disable: narrow it before using the automation rate as proof of enforcement.
 // -----------------------------------------------------------------------------
 AuditLogs
 | where TimeGenerated > ago(7d)
 | where OperationName in (
-    "Revoke refresh tokens for user",
+    "Update user",
     "Delete service principal",
+    "Hard delete service principal",
     "Update service principal",
     "Remove member from role"
 )
+| extend IsSessionRevocation = OperationName == "Update user" and tostring(TargetResources) has "StsRefreshTokensValidFrom"
+| where OperationName != "Update user" or IsSessionRevocation
+| extend Action = iff(IsSessionRevocation, "Revoke sessions (Update user: StsRefreshTokensValidFrom)", OperationName)
 | extend RevokedEntity = tostring(TargetResources[0].displayName)
 | extend RevokedBy = tostring(InitiatedBy.user.userPrincipalName)
 | extend InitiatedByApp = tostring(InitiatedBy.app.displayName)
@@ -174,9 +203,9 @@ AuditLogs
     LastRevocation = max(TimeGenerated),
     AutomatedCount = countif(IsAutomated == true),
     ManualCount = countif(IsAutomated == false)
-    by OperationName
+    by Action
 | extend AutomationRate = round(100.0 * AutomatedCount / RevocationCount, 1)
-| project OperationName, RevocationCount, AutomatedCount, ManualCount, AutomationRate, LastRevocation
+| project Action, RevocationCount, AutomatedCount, ManualCount, AutomationRate, LastRevocation
 | sort by RevocationCount desc
 
 
@@ -192,7 +221,7 @@ AuditLogs
 //       SessionId and StepIndex are not documented RawEventData keys (documented: ConversationId,
 //       SessionIdentity), and it is not verified that the high-privilege events on the other
 //       side of the join carry the agent's session key, so the join may never match. Not run
-//       against live events.
+//       against live events (it runs without errors in Advanced Hunting, Oct 2026, and returns nothing).
 // -----------------------------------------------------------------------------
 let HighPrivilegeActions = dynamic([
     "FilePermanentlyDeleted", "FileDeleted", "MessageSent",
