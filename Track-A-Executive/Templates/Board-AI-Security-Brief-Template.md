@@ -158,7 +158,7 @@ Certification status: ☐ Pursuing ☐ Not applicable ☐ Certified (expires: [D
 | External AI vendors connected | `AgentsInfo` where `McpServers` count > 0, distinct vendor domains | Defender XDR Advanced Hunting |
 | Shadow AI agents | Agents without owner AND without any Entra identity (no agent identity, no blueprint) | Defender XDR Advanced Hunting |
 | AI-related incidents | `SecurityIncident` where Title contains agent/copilot/AI | Microsoft Sentinel |
-| Time to detect jailbreak | Minutes from `CloudAppEvents` JailbreakScore > threshold to `SecurityIncident` created | Microsoft Sentinel |
+| Time to detect jailbreak | Minutes from a message flagged `JailbreakDetected` in `CopilotActivity` to `SecurityIncident` created | Microsoft Sentinel |
 | Time to contain | Minutes from incident creation to token revocation in Logic App | Microsoft Sentinel automation |
 
 ---

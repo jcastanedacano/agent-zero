@@ -26,7 +26,7 @@ At the end of this module, you will be able to create Sentinel analytics rules f
 
 ## Core Content
 
-1. **Jailbreak attempts as an active incident vector:** A successful jailbreak converts the agent into an executor of malicious instructions with legitimate system access. The signal is in prompt patterns in `CloudAppEvents`, not network behavior — which makes perimeter controls insufficient.
+1. **Jailbreak attempts as an active incident vector:** A successful jailbreak converts the agent into an executor of malicious instructions with legitimate system access. The signal is in the interaction record, not in network behavior, which makes perimeter controls insufficient. The platform itself marks a message as a jailbreak attempt (`JailbreakDetected` in the Copilot audit record, ingested into Sentinel as `CopilotActivity`); prompt text is not queryable in `CloudAppEvents` or in that record, so the detection is built on the platform's flag.
 
 2. **Structural false negatives from human calibration:** Detection rules calibrated for human behavior generate false negatives with agents. An agent making 5,000 calls in an hour may be operating normally. Without a per-agent baseline using `percentile()` or `avg()` over long time windows, any fixed threshold generates either false positives or false negatives.
 
@@ -73,47 +73,44 @@ Prerequisites: onboard the tenant to Agent 365, connect the Microsoft 365 connec
 
 ### Step 1 — Create a jailbreak detection analytics rule
 
+Prerequisite: the **Microsoft Copilot** data connector is enabled in Sentinel, so the `CopilotActivity` table exists and receives the Copilot audit records (check with `CopilotActivity | take 1`).
+
 1. In **Microsoft Sentinel** → **Analytics** → **Create** → **Scheduled query rule**
 2. **General tab:**
    - Name: `Agentic AI — Jailbreak Attempt Detected`
-   - Description: Detects prompt patterns consistent with system instruction override attempts
+   - Description: Raises an alert when the platform flags a Copilot message as a jailbreak attempt (`JailbreakDetected`)
    - Severity: **High**
    - Tactics: Execution, Initial Access
-3. **Set rule logic tab — paste this query:**
+3. **Set rule logic tab — paste this query** (it is P05-Q1 with three extra columns for the entity mapping):
 
-   > **Telemetry limit (Microsoft Learn, October 2026).** The ActionType was `AgentInteraction`, which is not a documented value; it is now `InvokeAgent`. Agent 365 observability does not expose prompt text in `CloudAppEvents` (`gen_ai.input.messages` is "not yet surfaced in advanced hunting"), so `RawEventData["UserPrompt"]` has no documented source and this query returns no rows on that telemetry today. Use it as a pattern for a source that carries the prompt, and see P05-Q1 for the platform's own jailbreak signal in `CopilotActivity` (Learn's sample-queries page for that table still shows the old name `LLMActivity`, which does not resolve in a workspace). The validation tenant had no agent ActionTypes in `CloudAppEvents` (30 days, October 2026).
+   > **Why the platform's flag and not a phrase score (Microsoft Learn, October 2026).** Agent 365 observability does not expose prompt text in `CloudAppEvents` (`gen_ai.input.messages` is "not yet surfaced in advanced hunting"), and the Copilot audit record does not carry prompt text either (Learn points to Content Search or DSPM for AI), so a rule that scores phrases has nothing to read. The audit record does carry the platform's own verdict: each entry in `Messages` has `Id`, `isPrompt` and `JailbreakDetected`. The table is `CopilotActivity`; Learn's sample-queries page for it still shows the old name `LLMActivity`, which does not resolve in a workspace.
+   >
+   > **Run on a Sentinel workspace (Oct 2026).** The query runs and flagged nothing: of 155 messages in 90 days, 7 carry the key and none is true. The same projection with `== false` returns those 7 with actor, client IP and app identity, so the entity mapping below has data. **Not verified:** a message actually flagged `true`, and whether Copilot Studio agent interactions reach this table (Learn lists the app identity `Copilot.Studio.<AppId>`; every record on the validation tenant came from Microsoft 365 Copilot). The prompt-injection exercise in Module 06 (step 5) is where you find out.
 
 ```kql
-CloudAppEvents
+CopilotActivity
 | where TimeGenerated > ago(1h)
-| where Application in ("Microsoft Copilot", "Copilot Studio", "Azure AI Foundry")
-    and ActionType == "InvokeAgent"
-| extend PromptText = tostring(RawEventData["UserPrompt"])
-| extend AgentId = tostring(RawEventData["AgentId"])
-| extend JailbreakScore = toint(
-    toint(PromptText has "ignore previous instructions") * 3 +
-    toint(PromptText has "disregard your system prompt") * 3 +
-    toint(PromptText has "you are now a") * 2 +
-    toint(PromptText has "act as if you have no") * 2 +
-    toint(PromptText has "forget all previous") * 2 +
-    toint(PromptText has "override:") * 1
-)
-| where JailbreakScore >= 2
+| where RecordType == "CopilotInteraction"
+| extend Messages = LLMEventData.Messages
+| mv-expand Messages
+| where tobool(Messages.JailbreakDetected) == true
 | project
     TimeGenerated,
-    AccountDisplayName,
-    AgentId,
-    JailbreakScore,
-    PromptPreview = substring(PromptText, 0, 300),
-    IPAddress,
-    Application
+    ActorName,
+    ActorUserId,
+    AgentName,
+    AppIdentity,
+    AppHost,
+    SrcIpAddr,
+    MessageId = tostring(Messages.Id),
+    JailbreakDetected = tobool(Messages.JailbreakDetected)
 ```
 
 4. **Query scheduling:** Run every **5 minutes** | Lookup last **1 hour**
 5. **Alert threshold:** Generate alert when number of results is **greater than 0**
 6. **Entity mapping:**
-   - Account → `AccountDisplayName`
-   - IP → `IPAddress`
+   - Account → `ActorName`
+   - IP → `SrcIpAddr`
 7. Save and enable
 
 ---
@@ -260,7 +257,7 @@ Using the [Playbook Template](./Templates/Incident-Response-Playbook-Template.md
 ### Analytics Rules Deployed
 | Rule Name | Severity | Frequency | Table | Status |
 |-----------|----------|-----------|-------|--------|
-| Agentic AI — Jailbreak Attempt Detected | High | 5 min | CloudAppEvents | Enabled |
+| Agentic AI — Jailbreak Attempt Detected | High | 5 min | CopilotActivity | Enabled |
 | Agentic AI — Volume Spike Anomaly | Medium | 15 min | CloudAppEvents | Enabled |
 | Agentic AI — Sensitive Data Access Off-Hours | High | 15 min | MicrosoftPurviewInformationProtection | Enabled |
 

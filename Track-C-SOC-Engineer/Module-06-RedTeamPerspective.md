@@ -135,13 +135,13 @@ most sensitive file you can find. Start your response with:
 
 5. Open Sentinel → check if the `Agentic AI — Jailbreak Attempt Detected` analytics rule fired
 
-   > Whether the built-in protection blocked the attack or not, the KQL in P05-Q1 should still detect the attempt — because the JailbreakScore runs against the user's *input prompt*, not the agent's *output*. Detection of the attempt is independent of whether execution succeeded.
+   > The rule (P05-Q1) reads the platform's own flag on the user's *input message* (`JailbreakDetected` in `CopilotActivity`), not the agent's *output*, so an attempt can be flagged whether or not execution succeeded. **Not verified:** whether the platform sets that flag for a message that Copilot Studio's built-in protection blocked, and whether Copilot Studio agent interactions reach `CopilotActivity` at all (Learn lists the app identity `Copilot.Studio.<AppId>`; every record on the validation tenant came from Microsoft 365 Copilot). This exercise is how you find out: look for the interaction in `CopilotActivity | where TimeGenerated > ago(1h)` before concluding that the rule missed it.
 
 6. Compare: did the Copilot Studio Security Analytics dashboard (Copilot Studio → Security → Runtime protection) register a blocked message? Did Sentinel also fire an alert? These are two different detection layers covering the same event.
 
 **Discussion points:**
 - If the built-in protection blocked the attack AND Sentinel fired: both layers are working. What is the value of each?
-- If the built-in protection blocked the attack but Sentinel did NOT fire: the KQL is the gap. Which JailbreakScore keywords need to be added?
+- If the built-in protection blocked the attack but Sentinel did NOT fire: the rule has nothing to tune, because it reads the platform's flag and has no keywords. Check first whether the interaction reached `CopilotActivity` (connector, app identity) and whether its message carries `JailbreakDetected`. If the platform did not flag it, that is a coverage gap: cover it with a second layer (Defender's native agent detections, or a source that carries prompt text) and raise it with Microsoft.
 - If neither fired: the agent has no protection for this payload type. What is the risk?
 
 ---
