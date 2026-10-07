@@ -68,7 +68,7 @@ The panels follow the same logic as the detections in [detect-agent-identity-abu
 1. Open the workspace in Microsoft Sentinel (or Azure Monitor) and go to **Workbooks**, then **Add workbook** (New).
 2. Select **Edit**, then the **Advanced Editor** (`</>`), and the **Gallery Template** tab.
 3. Replace the content with the JSON file and select **Apply**, then **Save**, choosing the subscription, resource group and location.
-4. Pick the workspace in **Log Analytics workspace**, a **Time range** (7 to 90 days), and, if you have agents that do not appear in the sign-in logs, their ids in **Extra ids** (comma separated). The default value is a placeholder that matches nothing.
+4. Check the **Log Analytics workspace** (it defaults to **Any one**, so pick the right one if you have several), choose a **Time range** (7 to 90 days) and, if you have agents that do not appear in the sign-in logs, type their ids in **Extra ids** (comma separated). The default value is a placeholder that matches nothing.
 
 ### Limits
 
@@ -79,4 +79,4 @@ The panels follow the same logic as the detections in [detect-agent-identity-abu
 
 ### Validation
 
-Every query was run against a Sentinel workspace in October 2026 (90 days of data: 1 agent identity, 1 blueprint principal, 9 sign-ins, 1 Microsoft Graph call by the blueprint principal, 32 audit events that reference an agent). Each query ran without errors with the default parameters, with a 7-day range, and with an unrelated service principal in **Extra ids**, and both branches of the first-IP panel (a new IP for an agent with earlier sign-ins, and an agent with no history) returned rows. The workbook layout (tabs, parameters, panels) follows the Azure Workbooks schema in Microsoft Learn and has not been rendered in the portal yet.
+Every query was run against a Sentinel workspace in October 2026 (90 days of data: 1 agent identity, 1 blueprint principal, 9 sign-ins, 1 Microsoft Graph call by the blueprint principal, 32 audit events that reference an agent). Each query ran without errors with the default parameters, with a 7-day range, and with an unrelated service principal in **Extra ids**, and both branches of the first-IP panel (a new IP for an agent with earlier sign-ins, and an agent with no history) returned rows. The workbook was then deployed as a test copy (a `Microsoft.Insights/workbooks` resource with the workspace as its source) and opened in the Azure portal: the three tabs, the parameters and all 12 panels rendered with the same rows as the queries, and the panels without results (dormant agents, more than one country, agent spawning) showed their no-data message. The first version left the workspace parameter unset, so every panel asked for a workspace; it now defaults to **Any one**.
