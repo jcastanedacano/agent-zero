@@ -51,7 +51,7 @@ At the end of this module, you will be able to execute the five attack technique
 
 7. **Autonomous red team tooling — the dual-use problem:** The six attacks in this module are executed manually. The natural evolution is to automate them with an agent that runs the full chain, and those systems already exist: in published benchmarks, an autonomous pentesting system matched the performance of a principal pentester with more than twenty years of experience across roughly a hundred challenges, completing the task in 28 minutes against the human operator's 40 hours. The economics are uncontestable and adoption will be fast. Two considerations are not optional before adopting one. **First, the operational profile:** an autonomous pentesting agent is functionally identical to an autonomous attacker, and it will have extended access to the network it is assessing. If the system is not reliable, not aligned, or its behavior is not bounded by design, the security exercise becomes the incident. **Second, proliferation:** Cobalt Strike is a legitimate pentesting tool whose pirated versions are today a standard instrument of organized crime; the same trajectory applies to AI red team tooling, and its developers should implement KYC controls for the same reason. Minimum requirements before deploying one in your organization: written authorization with explicit scope (network ranges, systems included and excluded, time window), a tested kill switch with measured RTO (Track B Module 02, point 10), and complete action logging with retention equivalent to an incident. Reference: HACCA report (2026), "Automated Red Teaming and Pentesting".
 
-8. **Where an attacker enters an agent, and what they do once inside:** an agent can be reached on two independent planes, and a control on one does nothing for the other. The *identity plane* is tokens, consent, ownership, and credentials: it leaves sign-in, audit, and Identity Protection signals (Module 03 point 5, P03-Q12 to Q14). The *input plane* is what the agent reads and is asked: direct and indirect prompt injection, capability elicitation, and goal hijacking (Attacks 1, 4 and 5 below). It never touches the token pipeline, so it leaves no identity signal at the moment of injection and has to be detected on the agent's runtime and telemetry. A third route is governance: an unreviewed agent that is simply deployed (Attack 2, the Agent Builder bypass). **Once inside**, an attacker does not need to bring tooling: the agent's own tools, permissions, and connectors do the work, so the actions look like normal agent operations and leave no malware signature. Detection has to follow sequences of legitimate actions against a baseline, which is what P05-Q6 (sustained objective drift) and P05-Q8 (the JadePuffer chain: discovery, credential access, lateral movement, and bulk file operations in a compressed window) do. Changes to ownership, credentials, and consent on Agent ID objects belong to the identity plane: they are persistence and privilege escalation, not a separate first phase.
+8. **Where an attacker enters an agent, and what they do once inside:** an agent can be reached on two independent planes, and a control on one does nothing for the other. The *identity plane* is tokens, consent, ownership, and credentials: it leaves sign-in, audit, and Identity Protection signals (Module 03 point 5, P03-Q12 to Q14). The *input plane* is what the agent reads and is asked: direct and indirect prompt injection, capability elicitation, and goal hijacking (Attacks 1, 4 and 5 below). It never touches the token pipeline, so it leaves no identity signal at the moment of injection and has to be detected on the agent's runtime and telemetry. A third route is governance: an unreviewed agent that is simply deployed (Attack 2, the Agent Builder bypass). **Once inside**, an attacker does not need to bring tooling: the agent's own tools, permissions, and connectors do the work, so the actions look like normal agent operations and leave no malware signature. Detection has to follow sequences of legitimate actions against a baseline, which is what P05-Q6 (sustained objective drift) and P05-Q8 (the JadePuffer chain: discovery, credential access, lateral movement, and bulk file operations in a compressed window) do. Changes to ownership, credentials, and consent on Agent ID objects belong to the identity plane: they are persistence and privilege escalation, not a separate first phase. The identity plane stage by stage, with the Agent ID objects seen from the attacker's side, is in the Background section below.
 
    **ATLAS check:** every `AML.T####` ID cited in this module resolves to the technique name used here in the ATLAS data release 2026.09 (checked October 2026).
 
@@ -126,6 +126,50 @@ At the end of this module, you will be able to execute the five attack technique
 | Exfiltration | P04 + P03-Q6 | Volume anomalies + connector egress | No |
 
 > Built-in protection blocks UPIA/XPIA execution but does not generate Sentinel incidents. Your KQL detects the *attempt* regardless of whether built-in protection blocked the *action*. Both are required: protection for containment, KQL for investigation.
+
+### The identity plane stage by stage: the Agent ID objects from the attacker's side
+
+The kill chain above starts at the input plane. The same ATLAS tactics also describe an attack on the identity plane, where the target is the chain of Agent ID objects and not the prompt. Each object gives an attacker something different, and each stage leaves a different signal.
+
+```mermaid
+flowchart TB
+    H["Owners and sponsors (people)<br/>decide who can modify,<br/>re-enable or delete"]
+    B["Blueprint (application)<br/>holds the credentials<br/>creates agent identities"]
+    BP["Blueprint principal<br/>consent, app roles and<br/>inheritable permissions land here"]
+    A["Agent identity<br/>acts and requests tokens<br/>no credentials of its own"]
+    X1["Add a credential, owner or sponsor<br/>persistence<br/>signal: P03-Q12"]
+    X2["Consent or app role on the principal<br/>privilege escalation<br/>signal: P03-Q13, token roles"]
+    X3["Use a stolen agent token<br/>lateral movement<br/>signal: new IP, more than one country"]
+    X4["Create identities or applications<br/>execution, Deploy AI Agent<br/>signal: the spawning rule"]
+    H --> B
+    B -->|"creates"| A
+    B --> BP
+    BP -->|"inheritable permissions reach"| A
+    X1 -.-> B
+    X2 -.-> BP
+    X3 -.-> A
+    X4 -.-> B
+
+    classDef blue fill:#0078D4,stroke:#333,color:#fff
+    classDef purple fill:#5E2750,stroke:#333,color:#fff
+    classDef green fill:#107C10,stroke:#333,color:#fff
+    classDef orange fill:#FF8C00,stroke:#333,color:#24292f
+    class H,B,BP,A blue
+    class X1,X2,X3,X4 orange
+```
+
+**How to read it.** The blueprint holds the credentials and creates agent identities, its principal is where consent and app roles land, and the agent identity is what acts. Each orange step is an attacker move on one object, with the signal it leaves. The moves on the blueprint and its principal are the ones that let an attacker keep control, and they are the ones the native detections reach last or not at all.
+
+| Stage (ATLAS tactic) | What the attacker does to the Agent ID objects | Technique | What the native layer covers | Custom detection in this repo |
+|---|---|---|---|---|
+| Discovery (AML.TA0008) | Enumerates agent objects, blueprints and what each can reach, through the directory and Microsoft Graph | AML.T0075 Cloud Service Discovery (the technique names Entra ID), AML.T0084 Discover AI Agent Configuration | ID Protection "Entra Directory Reconnaissance" (offline) | No rule here: reads leave only `MicrosoftGraphActivityLogs` |
+| Initial Access and Privilege Escalation (AML.TA0004, AML.TA0012) | Uses the valid credentials of a person who can manage the blueprint (an owner, a sponsor or an administrator role), or of the blueprint itself | AML.T0012 Valid Accounts | Nothing specific to agents | Role and ownership hygiene (Track B Module 02 point 13); P03-Q12 shows who changed what afterwards |
+| Persistence (AML.TA0006) | Adds a credential to the blueprint, or an owner or sponsor: the blueprint can then create identities and sign in as its principal | No ATLAS technique fits. ATT&CK T1098.001 (credentials) and T1098 (owners and sponsors), as in P03-Q12 | "Suspicious credential usage" fires when the new credential is used, not when it is added | P03-Q12 |
+| Privilege Escalation (AML.TA0012) | Grants consent or an app role to the blueprint principal. With inheritable permissions the grant reaches every identity of the blueprint and shows only in the token claims at runtime | No ATLAS technique fits. ATT&CK T1671 and T1098.003, as in P03-Q13 | No detection in Learn's list of eight | P03-Q13; the Privileges tab of the [workbook](../Workbooks/README.md) (token roles and scopes, grants); [detect-agent-identity-abuse](../skills/detect/detect-agent-identity-abuse/SKILL.md) Query 3 (role assigned to an agent) |
+| Lateral Movement (AML.TA0015) | Uses a stolen agent token to reach what the agent can reach | AML.T0091.000 Application Access Token | "Unfamiliar resource access", "Failed access attempt" and "Sign-in spike": offline, and suppressed by learning mode for agents with little history. Conditional Access blocks new tokens only after the risk is raised | [detect-agent-identity-abuse](../skills/detect/detect-agent-identity-abuse/SKILL.md) Queries 1 and 4 (new IP, more than one country); [secure-ca-policy-agents](../skills/secure/secure-ca-policy-agents/SKILL.md) |
+| Execution (AML.TA0005) | Creates agent identities with the blueprint token, or has an agent identity create applications or service principals. On the validation tenant the blueprint token carried the app role `AgentIdentity.CreateAsManager` when it created an identity | AML.T0103 Deploy AI Agent | "Early life malicious activity" for a new agent that behaves like an attacker | [detect-agent-identity-abuse](../skills/detect/detect-agent-identity-abuse/SKILL.md) Query 2 (an agent identity as the initiator is spawning; a blueprint creating identities is the documented lifecycle); the "Objects created by an agent blueprint" panel of the workbook |
+
+The native column is Learn's list of eight ID Protection detections for agents (the full comparison is in [Module 05](./Module-05-DetectRespond.md#what-each-native-layer-covers-and-what-it-leaves-open)). Two points matter for the SOC. Persistence and privilege escalation on the blueprint are where the native layer is weakest: the credential detection fires when the new credential is used, and nothing in Learn's list covers a consent or an app role. And these events are hard to attribute: Agent ID objects appear in `AuditLogs` under generic application and service principal operations, and the `agentType` key held only `notAgentic` for every target in 90 days on the validation workspace, so correlate by object id and not by name (Module 03 point 5).
 
 ### Calibrating the exercise against an adversary level
 
