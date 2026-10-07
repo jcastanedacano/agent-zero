@@ -81,7 +81,7 @@ What each table returned in the validation tenant (October 2026), so you know wh
 | `AzureDiagnostics` (Foundry) | Data | Management calls only, about 600 records in 30 days; no prompts, tokens or content |
 | `MicrosoftPurviewInformationProtection`, `SecurityAlert` | Data | Label events; Data Loss Prevention alerts |
 | `AgentsInfo` | Advanced Hunting only | Empty in the workspace |
-| `AADRiskyAgents`, `AADAgentRiskEvents`, `BehaviorInfo`, `AppEvents`, `AppDependencies` | Table exists, no rows | The queries that read them are marked NOT VERIFIED |
+| `AADRiskyAgents`, `AADAgentRiskEvents`, `BehaviorInfo`, `AppEvents`, `AppDependencies` | Table exists, no rows | The queries that read them are marked NOT VERIFIED. For the two agent risk tables the cause is known: the tenant's Entra diagnostic settings do not export the `RiskyAgents` and `AgentRiskEvents` categories |
 | Power Platform tables (`PowerPlatformAdminActivity` and others) | Table exists, no rows | |
 | `FoundryAgents_CL`, `CopilotStudio_CL`, `PurviewAuditLog` | Do not exist | Older versions of some skills read them; they were rewritten |
 

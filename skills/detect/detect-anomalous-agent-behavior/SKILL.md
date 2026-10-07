@@ -161,7 +161,7 @@ UEBA generates the `BehaviorAnalytics` table. Learn lists `AADServicePrincipalSi
   rows for agents there. Their logic was exercised on all service principals: Query 2 returned one service at 3.03x its baseline
   and Query 4 returned two with off-hours sign-ins. Replace the agent filter by your own list of service principal object IDs to apply the same logic to
   agents that run on service principals without an Entra agent identity
-- Queries 5 and 6 returned no rows: `AADAgentRiskEvents` exists and is empty, and `BehaviorAnalytics` holds no rows from service principal sign-ins. Both are NOT VERIFIED
+- Queries 5 and 6 returned no rows: `AADAgentRiskEvents` exists and is empty because the Entra diagnostic settings of the tenant do not export the `RiskyAgents` and `AgentRiskEvents` categories (checked Oct 2026), and `BehaviorAnalytics` holds no rows from service principal sign-ins. Both are NOT VERIFIED
 - UEBA needs the Entra Security Administrator role plus Microsoft Sentinel Contributor and Log Analytics Contributor (least privileged), and it adds data
   storage charges. `BehaviorAnalytics` is not available until it is enabled (Learn)
 - `ActivityInsights` holds True or False indicators such as `FirstTimeUserAccessedResource`, not text

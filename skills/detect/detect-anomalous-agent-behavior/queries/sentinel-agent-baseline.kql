@@ -100,7 +100,7 @@ AADServicePrincipalSignInLogs
 | order by OffHoursSignIns desc
 
 // ── Query 5: Riesgo de agentes que Entra ID Protection ya calculo (deteccion de la plataforma) ──────────────────
-// NO VERIFICADO: AADAgentRiskEvents existe en el workspace con las columnas que documenta Learn, pero esta vacia. Requiere el diagnostico de Entra
+// NO VERIFICADO: AADAgentRiskEvents existe en el workspace con las columnas que documenta Learn, pero esta vacia: el tenant de validacion no exporta esas categorias (se comprobo en oct 2026). Requiere el diagnostico de Entra
 // AgentRiskEvents (y RiskyAgents para el estado del agente) y que ID Protection para agentes este activa (Entra ID P2 en preview; Learn dice
 // que pasara a requerir una licencia de Microsoft Agent 365). Las detecciones son offline: unfamiliarResourceAccess, signInSpike, failedAccessAttempt,
 // entraDirectoryReconnaissance, earlyLifeMaliciousActivity, suspiciousCredentialUsage, threatIntelligenceAccount y adminConfirmedAgentCompromised.

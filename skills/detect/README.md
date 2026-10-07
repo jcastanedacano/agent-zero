@@ -106,6 +106,7 @@ flowchart LR
 | Baseline requires a minimum of 7 days of data | Anomaly rules are not effective before that |
 | The Power Platform quarantine API takes a user access token (Global, AI or Power Platform administrator) | A Logic App managed identity cannot call it; not available via Lokka-Microsoft MCP |
 | `revokeSignInSessions` exists for users only | No session-revocation call for service principals or agent identities: disable, confirm compromised, remove credentials |
+| Native layers cover part of the agent threats | Compare them before building custom rules: the table in [Track C Module 05](../../Track-C-SOC-Engineer/Module-05-DetectRespond.md#what-each-native-layer-covers-and-what-it-leaves-open) lists what each one covers and leaves open |
 
 ## Closing the framework cycle
 
