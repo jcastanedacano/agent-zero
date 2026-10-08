@@ -659,8 +659,10 @@ AuditLogs
 // NOT VERIFIED (no data): runs without errors on the validation workspace (Oct 2026), where AADAgentRiskEvents
 //      and AADRiskyAgents exist but have no rows. The Entra diagnostic settings of that tenant do not export the
 //      categories AgentRiskEvents and RiskyAgents (checked Oct 2026; the category names are not the table
-//      names), so the empty result says nothing about agent risk, and AgentsInfo is empty there too. The join
-//      logic was also executed against a datatable shaped like the table and the real
+//      names), so the empty result says nothing about agent risk, and AgentsInfo is empty there too. The Graph API
+//      for the same data (riskyAgents, agentRiskDetections) answers 403 "Your tenant is not licensed for this
+//      feature" there even with IdentityRiskyAgent.Read.All and IdentityRiskEvent.Read.All granted (Oct 2026). The
+//      join logic was also executed against a datatable shaped like the table and the real
 //      AgentsInfo ids: the join worked regardless of GUID case and a low-risk event was filtered out.
 // Recommended: Analytics Rule | Frequency: 15m | Lookback: 1h | Severity: High
 // -----------------------------------------------------------------------------
