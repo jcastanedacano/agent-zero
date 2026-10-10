@@ -1,16 +1,16 @@
 // skill: detect-alert-prompt-injection-sentinel
-// workspace: {workspace-name} | conectores: Microsoft Copilot (CopilotActivity), Defender for Cloud y Defender XDR (SecurityAlert), Application Insights (AppEvents, opcional)
-// PREREQUISITO: verificar que las tablas existen y reciben datos antes de crear la regla de analitica (Paso 1 del SKILL.md)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia CopilotStudio_CL y FoundryAgents_CL, tablas personalizadas que no
-// existen en ese workspace, y buscaba frases en el texto del prompt. Learn dice que el registro de auditoria de Copilot no trae el texto del
-// prompt ni de la respuesta: trae un flag JailbreakDetected por mensaje y un flag XPIADetected por recurso. Q1 a Q3 usan esas senales y las
-// alertas de la plataforma; compilan y se ejecutaron en el workspace. Q4 se ejecuto en Advanced Hunting (0 filas) y Q5 no tiene datos
-// (AppEvents esta vacia en el workspace): ambas NO VERIFICADO.
+// workspace: {workspace-name} | connectors: Microsoft Copilot (CopilotActivity), Defender for Cloud and Defender XDR (SecurityAlert), Application Insights (AppEvents, optional)
+// PREREQUISITE: verify that the tables exist and receive data before creating the analytics rule (Step 1 of SKILL.md)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read CopilotStudio_CL and FoundryAgents_CL, custom tables that do not
+// exist in that workspace, and looked for phrases in the prompt text. Learn says the Copilot audit record does not carry the prompt or the
+// response text: it carries a JailbreakDetected flag per message and an XPIADetected flag per resource. Q1 to Q3 use those signals and the
+// platform alerts; they compile and ran on the workspace. Q4 ran in Advanced Hunting (0 rows) and Q5 has no data
+// (AppEvents is empty in the workspace): both NOT VERIFIED.
 
-// ── Query 1: Jailbreak marcado por la plataforma en interacciones de Copilot ──────────────────────────────────
-// El flag JailbreakDetected viaja en LLMEventData.Messages (un arreglo, por eso mv-expand). Es la misma senal que KQL Library P05-Q1.
-// Validado: en 90 dias hay 7 mensajes con la clave y ninguno en true, asi que la regla no devuelve filas (se comprobo con == false).
-// Regla recomendada: frecuencia 5 min, ventana 1 h, severidad segun AttemptCount.
+// ── Query 1: Platform-flagged jailbreak in Copilot interactions ───────────────────────────────────────────────
+// The JailbreakDetected flag travels in LLMEventData.Messages (an array, hence mv-expand). It is the same signal as KQL Library P05-Q1.
+// Validated: in 90 days there are 7 messages with the key and none is true, so the rule returns no rows (checked with == false).
+// Recommended rule: frequency 5 min, window 1 h, severity by AttemptCount.
 let lookback = 1h;
 CopilotActivity
 | where TimeGenerated > ago(lookback)
@@ -27,9 +27,9 @@ CopilotActivity
 | extend AtlasTechnique = "AML.T0051"
 | project-reorder Severity, LastAttempt, ActorName, AgentName, AttemptCount
 
-// ── Query 2: Inyeccion indirecta (XPIA) marcada por la plataforma: que recurso la traia ─────────────────────────
-// El flag XPIADetected viaja en cada recurso de LLMEventData.AccessedResources, no en el mensaje: la inyeccion llega en contenido que el
-// usuario nunca escribio. Misma senal que KQL Library P05-Q10. Validado: la clave existe en los 2 recursos que Copilot listo en 90 dias, ambos false.
+// ── Query 2: Indirect injection (XPIA) flagged by the platform: which resource carried it ────────────────────────
+// The XPIADetected flag travels on each resource of LLMEventData.AccessedResources, not on the message: the injection arrives in content the
+// user never typed. Same signal as KQL Library P05-Q10. Validated: the key exists on the 2 resources Copilot listed in 90 days, both false.
 CopilotActivity
 | where TimeGenerated > ago(1h)
 | where RecordType == "CopilotInteraction"
@@ -47,14 +47,14 @@ CopilotActivity
     ResourceType = tostring(Resource.Type),
     RecordId,
     AtlasTechnique = "AML.T0051",
-    RiskNote = "Recurso marcado como fuente de inyeccion indirecta: revisar y limpiar el contenido"
+    RiskNote = "Resource flagged as an indirect injection source: review and clean the content"
 | sort by TimeGenerated desc
 
-// ── Query 3: Alertas de jailbreak o inyeccion de prompt de Defender (agentes y modelos) y de tus reglas ──────────
-// Cubre tres origenes en SecurityAlert: alertas de Defender for Cloud sobre modelos de Azure OpenAI y Foundry (AlertType
-// AI.Azure_Jailbreak.ContentFiltering.BlockedAttempt y .DetectedAttempt), alertas de Defender XDR sobre agentes administrados con Agent 365
-// (jailbreak, XPIA, reconocimiento de LLM; preview) y reglas propias de Sentinel. Validado: devolvio filas de una regla propia del workspace;
-// no habia alertas de Defender for Cloud ni de Defender XDR de este tipo.
+// ── Query 3: Defender jailbreak or prompt injection alerts (agents and models) and alerts from your own rules ───
+// Covers three sources in SecurityAlert: Defender for Cloud alerts on Azure OpenAI and Foundry models (AlertType
+// AI.Azure_Jailbreak.ContentFiltering.BlockedAttempt and .DetectedAttempt), Defender XDR alerts on agents managed with Agent 365
+// (jailbreak, XPIA, LLM reconnaissance; preview) and your own Sentinel rules. Validated: it returned rows from a rule of the workspace itself;
+// there were no Defender for Cloud or Defender XDR alerts of this type.
 SecurityAlert
 | where TimeGenerated > ago(24h)
 | where AlertType startswith "AI.Azure_Jailbreak" or AlertName has_any ("jailbreak", "prompt injection", "prompt attack", "XPIA")
@@ -62,12 +62,12 @@ SecurityAlert
 | project TimeGenerated, ProductName, AlertName, AlertType, AlertSeverity, Status, CompromisedEntity
 | order by TimeGenerated desc
 
-// ── Query 4: Eventos de proteccion en tiempo real de Defender (Advanced Hunting) ─────────────────────────────
-// NO VERIFICADO: ejecutar en el portal de Defender (Advanced Hunting). Learn dice que las reglas de proteccion en tiempo real de Defender
-// registran sus eventos de auditoria y bloqueo como comportamientos en BehaviorInfo, tambien los bloqueos de Prompt Shields de Foundry y de
-// Agent Builder (todavia no los de Copilot Studio). En el tenant de validacion no habia comportamientos de ese tipo y no se vieron los valores de
-// ActionType, asi que el filtro por texto es una conjetura: revisa ActionType y Title en tu tenant y ajustalo. En el workspace de Sentinel esta
-// tabla tiene otro esquema (sin Title ni Timestamp), por eso esta consulta no corre ahi.
+// ── Query 4: Defender real-time protection events (Advanced Hunting) ────────────────────────────────────────────
+// NOT VERIFIED: run it in the Defender portal (Advanced Hunting). Learn says Defender real-time protection rules record their audit and block
+// events as behaviors in BehaviorInfo, including the Prompt Shields blocks from Foundry and Agent Builder (not yet from Copilot Studio). The
+// validation tenant had no behaviors of this kind and the ActionType values were not seen, so the text filter is a guess: check ActionType and
+// Title in your tenant and adjust it. In the Sentinel workspace this table has a different schema (no Title or Timestamp), which is why this
+// query does not run there.
 BehaviorInfo
 | where Timestamp > ago(24h)
 | where Title has_any ("jailbreak", "prompt injection", "prompt attack", "XPIA")
@@ -75,10 +75,10 @@ BehaviorInfo
 | project Timestamp, BehaviorId, ActionType, Title, Description, Categories, ServiceSource, DetectionSource, AccountUpn, AdditionalFields
 | order by Timestamp desc
 
-// ── Query 5: Heuristica de frases en telemetria propia de agentes de Copilot Studio (baja fidelidad) ───────────
-// NO VERIFICADO: AppEvents (Application Insights basado en workspace) esta vacia en el workspace de validacion. Solo sirve si el agente envia
-// telemetria a Application Insights con "Log conversation details" activo (Learn: el texto del mensaje llega en customDimensions.text del evento
-// BotMessageReceived). Es una heuristica: la plataforma ya tiene un clasificador (Prompt Shields), y las frases no cubren codificaciones ni otros idiomas.
+// ── Query 5: Phrase heuristic on own Copilot Studio agent telemetry (low fidelity) ───────────────────────────────
+// NOT VERIFIED: AppEvents (workspace-based Application Insights) is empty in the validation workspace. It only works if the agent sends
+// telemetry to Application Insights with "Log conversation details" enabled (Learn: the message text arrives in customDimensions.text of the
+// BotMessageReceived event). It is a heuristic: the platform already has a classifier (Prompt Shields), and phrases do not cover encodings or other languages.
 let injection_patterns = dynamic([
     "ignore previous instructions", "ignore all previous", "forget your instructions",
     "disregard your", "override your instructions",
