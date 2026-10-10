@@ -77,7 +77,7 @@ flowchart LR
 Configuration:
 - **Name**: `AISEC-Agent-SignIn-Unknown-IP`
 - **Frequency**: every 5 minutes
-- **Severity**: High (`Baseline` = `IP nueva`, the agent has a baseline and this IP is not in it). Medium when the agent has no baseline in the previous 14 days (`sin linea base`)
+- **Severity**: High (`Baseline` = `New IP`, the agent has a baseline and this IP is not in it). Medium when the agent has no baseline in the previous 14 days (`no baseline`)
 - **Alert grouping**: group by `ServicePrincipalId` and `IPAddress`. A sign-in stays in the 1-hour window, so without grouping it alerts at every run
 
 ### Step 2 — Create rule: agent spawning (agent creates new apps/SPs)
@@ -149,7 +149,7 @@ context from the Pillar 1 risk register.
 
 The queries were run against a Sentinel workspace in October 2026 (90 days of data: 1 agent identity and 1 blueprint principal, 9 sign-ins in total):
 
-- Query 1, run with a 20-day window instead of 1 hour so there was data, returned 9 rows labeled `sin linea base`. The `IP nueva` branch and Query 4 were checked with a test datatable (a new IP, and a US to DE move in 20 minutes)
+- Query 1, run with a 20-day window instead of 1 hour so there was data, returned 9 rows labeled `no baseline`. The `New IP` branch and Query 4 were checked with a test datatable (a new IP, and a US to DE move in 20 minutes)
 - Query 2 returned 0 of 82 application-initiated creations from an agent identity. The earlier name-based filter returned 5 rows, all Microsoft services
 - Query 3 read 47 role events with role and principal, none to an agent. Query 4 returned 0 rows (a single country)
 

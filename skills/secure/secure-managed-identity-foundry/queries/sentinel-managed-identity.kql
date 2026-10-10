@@ -1,44 +1,44 @@
 // skill: secure-managed-identity-foundry
-// workspace: {workspace-name} | conectores: Azure Activity, Microsoft Entra ID (inicios de sesion de identidades administradas y de entidades de servicio), diagnosticos de la cuenta Foundry; Q1 corre en Azure Resource Graph
-// Validado en un workspace Sentinel y en Azure Resource Graph (oct 2026): la version anterior leia FoundryAgents_CL, una tabla personalizada que no existe en ese workspace, y daba por hecho que un
-// endpoint Foundry tiene un modo de autenticacion key o aad_token (eso es un concepto de los endpoints en linea de Azure Machine Learning). En Foundry la autenticacion por clave es una propiedad de la
-// cuenta (disableLocalAuth) y la clave se obtiene con la operacion listKeys, que el Activity Log si registra. Q1 a Q6 compilan y se ejecutaron; el resultado de la cuenta de validacion esta junto a cada consulta.
+// workspace: {workspace-name} | connectors: Azure Activity, Microsoft Entra ID (sign-ins of managed identities and service principals), Foundry account diagnostics; Q1 runs in Azure Resource Graph
+// Validated on a Sentinel workspace and in Azure Resource Graph (Oct 2026): the previous version read FoundryAgents_CL, a custom table that does not exist in that workspace, and assumed that a
+// Foundry endpoint has an authentication mode of key or aad_token (that is a concept of Azure Machine Learning online endpoints). In Foundry, key authentication is a property of the
+// account (disableLocalAuth) and the key is obtained with the listKeys operation, which the Activity Log does record. Q1 to Q6 compile and ran; the result on the validation account is next to each query.
 
-// ── Query 1 (Azure Resource Graph, no Log Analytics): cuentas Foundry que todavia aceptan claves ────────────────────
-// Resultado en la cuenta de validacion: 1 cuenta, disableLocalAuth falso, identidad SystemAssigned.
+// ── Query 1 (Azure Resource Graph, not Log Analytics): Foundry accounts that still accept keys ──────────────────────
+// Result on the validation account: 1 account, disableLocalAuth false, SystemAssigned identity.
 resources
 | where type =~ "microsoft.cognitiveservices/accounts" and kind =~ "AIServices"
 | extend LocalAuthDisabled = tobool(properties.disableLocalAuth), IdentityType = tostring(identity.type)
 | project name, resourceGroup, subscriptionId, LocalAuthDisabled, IdentityType
-| extend Gap = iff(LocalAuthDisabled == true, "Solo Entra ID", "Acepta claves (disableLocalAuth falso o ausente)")
+| extend Gap = iff(LocalAuthDisabled == true, "Entra ID only", "Accepts keys (disableLocalAuth false or absent)")
 
-// ── Query 2: Quien obtiene las claves de la cuenta (listKeys) ──────────────────────────────────────────────────────
-// La operacion es MICROSOFT.COGNITIVESERVICES/ACCOUNTS/LISTKEYS/ACTION. Quien tenga un rol que permita listar claves puede usarlas sin pasar por RBAC en cada llamada.
-// Resultado en la cuenta de validacion: 19 llamadas de un usuario en 30 dias, desde 13 direcciones IP (el Activity Log no trae el recurso en Resource: se lee de Properties.entity).
+// ── Query 2: Who gets the account keys (listKeys) ──────────────────────────────────────────────────────────────────
+// The operation is MICROSOFT.COGNITIVESERVICES/ACCOUNTS/LISTKEYS/ACTION. Anyone with a role that allows listing keys can use them without going through RBAC on each call.
+// Result on the validation account: 19 calls from one user in 30 days, from 13 IP addresses (the Activity Log does not carry the resource in Resource: it is read from Properties.entity).
 let lookback = 30d;
 AzureActivity
 | where TimeGenerated > ago(lookback)
 | where OperationNameValue =~ "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/LISTKEYS/ACTION" and ActivityStatusValue == "Success"
 | extend Account = tostring(split(tolower(tostring(parse_json(Properties).entity)), "/")[-1])
-| extend CallerKind = case(Caller matches regex @"^[0-9a-fA-F-]{36}$", "Identidad de aplicacion", Caller has "@", "Usuario", "Otro")
+| extend CallerKind = case(Caller matches regex @"^[0-9a-fA-F-]{36}$", "Application identity", Caller has "@", "User", "Other")
 | summarize ListKeyCalls = count(), FirstCall = min(TimeGenerated), LastCall = max(TimeGenerated), IPs = dcount(CallerIpAddress) by Caller, CallerKind, Account
 | order by ListKeyCalls desc
 
-// ── Query 3: Asignaciones de rol sobre Foundry y roles que no corresponden ─────────────────────────────────────────
-// El cuerpo de la peticion solo esta en el evento Start, asi que se une con el Success por CorrelationId para quedarse con las asignaciones que si se crearon. Los IDs son los del
-// articulo de RBAC de Foundry (los nombres cambiaron de Azure AI User a Foundry User: por eso se usa el ID) y los de los roles integrados de Cognitive Services y Azure AI Developer.
-// Resultado en la cuenta de validacion: 3 filas en 90 dias (Foundry User en la cuenta y en el proyecto, y Azure AI Developer en la cuenta, que Learn dice que no aplica a proyectos Foundry).
+// ── Query 3: Role assignments on Foundry and roles that do not belong ──────────────────────────────────────────────
+// The request body is only in the Start event, so it is joined with the Success event by CorrelationId to keep the assignments that were actually created. The IDs are those from the
+// Foundry RBAC article (the names changed from Azure AI User to Foundry User: that is why the ID is used) and those of the built-in Cognitive Services and Azure AI Developer roles.
+// Result on the validation account: 3 rows in 90 days (Foundry User on the account and on the project, and Azure AI Developer on the account, which Learn says does not apply to Foundry projects).
 let foundry_roles = datatable(RoleDefinitionId: string, Role: string, Review: string)[
-    "53ca6127-db72-4b80-b1b0-d745d6d5456d", "Foundry User", "Esperado",
-    "eed3b665-ab3a-47b6-8f48-c9382fb1dad6", "Foundry Agent Consumer", "Esperado",
-    "eadc314b-1a2d-4efa-be10-5d325db5065e", "Foundry Project Manager", "Esperado",
-    "e47c6f54-e4a2-4754-9501-8e0985b135e1", "Foundry Account Owner", "Alto privilegio",
-    "c883944f-8b7b-4483-af10-35834be79c4a", "Foundry Owner", "Alto privilegio",
-    "a97b65f3-24c7-4388-baec-2e87135dc908", "Cognitive Services User", "Puede listar claves",
-    "25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68", "Cognitive Services Contributor", "Puede listar y regenerar claves",
-    "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd", "Cognitive Services OpenAI User", "Solo llamadas directas al modelo de la cuenta",
-    "a001fd3d-188f-4b5d-821b-7da978bf7442", "Cognitive Services OpenAI Contributor", "Revisar",
-    "64702f94-c441-49e6-a78b-ef80e0188fee", "Azure AI Developer", "No aplica a proyectos Foundry"
+    "53ca6127-db72-4b80-b1b0-d745d6d5456d", "Foundry User", "Expected",
+    "eed3b665-ab3a-47b6-8f48-c9382fb1dad6", "Foundry Agent Consumer", "Expected",
+    "eadc314b-1a2d-4efa-be10-5d325db5065e", "Foundry Project Manager", "Expected",
+    "e47c6f54-e4a2-4754-9501-8e0985b135e1", "Foundry Account Owner", "High privilege",
+    "c883944f-8b7b-4483-af10-35834be79c4a", "Foundry Owner", "High privilege",
+    "a97b65f3-24c7-4388-baec-2e87135dc908", "Cognitive Services User", "Can list keys",
+    "25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68", "Cognitive Services Contributor", "Can list and regenerate keys",
+    "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd", "Cognitive Services OpenAI User", "Direct calls to the account model only",
+    "a001fd3d-188f-4b5d-821b-7da978bf7442", "Cognitive Services OpenAI Contributor", "Review",
+    "64702f94-c441-49e6-a78b-ef80e0188fee", "Azure AI Developer", "Does not apply to Foundry projects"
 ];
 let lookback = 90d;
 let succeeded = AzureActivity
@@ -58,9 +58,9 @@ AzureActivity
 | project TimeGenerated, Caller, Role, Review, PrincipalType, PrincipalId, Scope
 | order by TimeGenerated desc
 
-// ── Query 4: Escrituras sobre la cuenta Foundry (puede reactivar las claves o abrir la red) ────────────────────────
-// El Activity Log no trae el cuerpo de esta operacion en el workspace de validacion: dice quien escribio la cuenta y cuando, no que propiedad cambio. Compara siempre con Q1 (estado actual).
-// Resultado en la cuenta de validacion: 1 fila en 90 dias (la creacion de la cuenta).
+// ── Query 4: Writes on the Foundry account (can re-enable keys or open the network) ────────────────────────────────
+// The Activity Log does not carry the body of this operation in the validation workspace: it says who wrote the account and when, not which property changed. Always compare with Q1 (current state).
+// Result on the validation account: 1 row in 90 days (the account creation).
 let lookback = 90d;
 AzureActivity
 | where TimeGenerated > ago(lookback)
@@ -69,10 +69,10 @@ AzureActivity
 | project TimeGenerated, Caller, CallerIpAddress, Account, CorrelationId
 | order by TimeGenerated desc
 
-// ── Query 5: Inicios de sesion con identidad administrada o con identidad de agente (la migracion avanza) ─────────
-// Muestra a que recursos piden token las identidades administradas y las identidades de agente. Sirve para confirmar que las aplicaciones migradas usan tokens. El nombre con el que aparece Foundry
-// como recurso en estos registros NO esta verificado (en la cuenta de validacion no hay inicios de sesion de identidades administradas hacia Foundry).
-// Resultado en la cuenta de validacion: 11 recursos para identidades administradas (por ejemplo Azure Storage y Azure Key Vault) y 2 filas de identidades de agente, sin fallos.
+// ── Query 5: Sign-ins with managed identity or agent identity (the migration is advancing) ────────────────────────
+// Shows which resources managed identities and agent identities request tokens for. It is useful to confirm that migrated applications use tokens. The name under which Foundry
+// appears as a resource in these logs is NOT VERIFIED (in the validation account there are no managed identity sign-ins to Foundry).
+// Result on the validation account: 11 resources for managed identities (for example Azure Storage and Azure Key Vault) and 2 agent identity rows, with no failures.
 let lookback = 30d;
 union
     (AADManagedIdentitySignInLogs | extend Kind = "Managed identity"),
@@ -84,10 +84,10 @@ union
 | summarize SignIns = count(), Failures = countif(ResultType != "0"), Principals = dcount(ServicePrincipalId) by Kind, ResourceDisplayName
 | order by SignIns desc
 
-// ── Query 6: Quien sigue llamando a la cuenta (impacto antes de desactivar las claves) ─────────────────────────────
-// Antes de poner disableLocalAuth en true, mira que trafico de datos hay y desde donde. El diagnostico RequestResponse trae la IP del llamador (con los ultimos octetos enmascarados) y el nombre de la API.
-// No distingue clave de token: callerObjectId viene vacio en el 100% de los registros de la cuenta de validacion (598 en 30 dias), asi que no sirve para separar ambos. Para eso decide disableLocalAuth.
-// Resultado en la cuenta de validacion: 10 combinaciones de IP y API en las primeras filas (Azure AI Projects API y Azure OpenAI API).
+// ── Query 6: Who is still calling the account (impact before disabling keys) ───────────────────────────────────────
+// Before setting disableLocalAuth to true, look at what data traffic there is and from where. The RequestResponse diagnostic carries the caller IP (with the last octets masked) and the API name.
+// It does not distinguish key from token: callerObjectId is empty in 100% of the records of the validation account (598 in 30 days), so it cannot separate the two. That is decided by disableLocalAuth.
+// Result on the validation account: 10 combinations of IP and API in the first rows (Azure AI Projects API and Azure OpenAI API).
 AzureDiagnostics
 | where TimeGenerated > ago(30d)
 | where ResourceProvider == "MICROSOFT.COGNITIVESERVICES" and Category == "RequestResponse"

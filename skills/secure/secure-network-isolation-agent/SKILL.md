@@ -238,7 +238,7 @@ Copilot Studio is not isolated by the Foundry controls. Learn documents two netw
 
 ## Verification
 
-- [ ] Query 1 shows `Sin acceso publico` (or `Redes seleccionadas` with the intended ranges), at least one Approved private endpoint, and the outbound model you chose
+- [ ] Query 1 shows `No public access` (or `Selected networks` with the intended ranges), at least one Approved private endpoint, and the outbound model you chose
 - [ ] `nslookup` of the Foundry endpoint from inside the virtual network returns the private IP; from outside it returns the public address
 - [ ] BYO: the agent subnet shows the delegation to `Microsoft.App/environments`; managed: `managed-network show` returns the chosen isolation mode and `outbound-rule list` the expected rules
 - [ ] A basic agent created and run inside the isolated project completes

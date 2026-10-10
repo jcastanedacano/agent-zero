@@ -1,45 +1,45 @@
 // skill: detect-respond-playbook-agent-containment
 // workspace: {workspace-name}
-// Uso: consultas de hunting durante la respuesta a incidentes y para preservar evidencia forense
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia CopilotStudio_CL y PurviewAuditLog, que no existen en ese workspace.
-// Ahora usa CopilotActivity (por AgentName), AADServicePrincipalSignInLogs, MicrosoftGraphActivityLogs, AuditLogs y OfficeActivity. Todas compilan y se
-// ejecutaron con valores reales sustituidos en las variables; Q1 devolvio actividad de Graph y de OfficeActivity de una aplicacion, y no devolvio filas de
-// CopilotActivity ni de AuditLogs para ese valor. Sustituye {agent-name}, {agent-sp-id} (object id del service principal) y {agent-app-id} (appId).
+// Use: hunting queries during incident response and to preserve forensic evidence
+// Validated on a Sentinel workspace (Oct 2026): the previous version read CopilotStudio_CL and PurviewAuditLog, which do not exist in that workspace.
+// It now uses CopilotActivity (by AgentName), AADServicePrincipalSignInLogs, MicrosoftGraphActivityLogs, AuditLogs and OfficeActivity. All compile and
+// ran with real values substituted in the variables; Q1 returned Graph and OfficeActivity activity for an application, and returned no rows from
+// CopilotActivity or AuditLogs for that value. Replace {agent-name}, {agent-sp-id} (service principal object id) and {agent-app-id} (appId).
 
-// ── Query 1: Linea de tiempo completa de actividad de un agente (ultimas 72 h) ───────────────────────────────────
-let agent_name = "{agent-name}";      // displayName del agente
-let agent_sp   = "{agent-sp-id}";     // object ID del service principal
-let agent_app  = "{agent-app-id}";    // appId del agente
+// ── Query 1: Full activity timeline of an agent (last 72 h) ──────────────────────────────────────────────────────
+let agent_name = "{agent-name}";      // agent displayName
+let agent_sp   = "{agent-sp-id}";     // service principal object ID
+let agent_app  = "{agent-app-id}";    // agent appId
 let ir_window  = 72h;
 union
-    // Interacciones con el agente (Copilot Studio y Agent Builder)
+    // Interactions with the agent (Copilot Studio and Agent Builder)
     (CopilotActivity
     | where TimeGenerated > ago(ir_window)
     | where AgentName == agent_name
     | project TimeGenerated, Source = "CopilotActivity", Event = RecordType, Detail = strcat(AppIdentity, " ", AgentId), Actor = ActorName),
-    // Inicios de sesion del service principal
+    // Service principal sign-ins
     (AADServicePrincipalSignInLogs
     | where TimeGenerated > ago(ir_window)
     | where ServicePrincipalId == agent_sp
     | project TimeGenerated, Source = "EntraSignIn", Event = strcat("SignIn-", ResultType), Detail = ResourceDisplayName, Actor = IPAddress),
-    // Cambios en el directorio hechos por el service principal
+    // Directory changes made by the service principal
     (AuditLogs
     | where TimeGenerated > ago(ir_window)
     | where tostring(InitiatedBy.app.servicePrincipalId) == agent_sp
     | project TimeGenerated, Source = "AuditLog", Event = OperationName, Detail = tostring(TargetResources[0].displayName), Actor = "SP"),
-    // Llamadas a Microsoft Graph del service principal
+    // Microsoft Graph calls by the service principal
     (MicrosoftGraphActivityLogs
     | where TimeGenerated > ago(ir_window)
     | where ServicePrincipalId == agent_sp
     | project TimeGenerated, Source = "GraphApi", Event = strcat(RequestMethod, " ", ResponseStatusCode), Detail = tostring(split(RequestUri, "?")[0]), Actor = IPAddress),
-    // Acceso a archivos y envio de correo con la identidad de la aplicacion
+    // File access and mail sending with the application identity
     (OfficeActivity
     | where TimeGenerated > ago(ir_window)
     | where ApplicationId == agent_app or ClientAppId == agent_app
     | project TimeGenerated, Source = "OfficeActivity", Event = Operation, Detail = coalesce(SourceFileName, OfficeObjectId), Actor = UserId)
 | order by TimeGenerated asc
 
-// ── Query 2: Todos los recursos a los que accedio el agente (alcance del impacto) ─────────────────────────────────
+// ── Query 2: All resources the agent accessed (scope of impact) ───────────────────────────────────────────────────
 let agent_sp  = "{agent-sp-id}";
 let ir_window = 72h;
 union
@@ -59,13 +59,13 @@ union
     | extend Channel = "GraphApi")
 | order by CallCount desc
 
-// ── Query 3: Archivos a los que accedio el agente despues del compromiso, con su etiqueta ───────────────────────
-// SensitivityLabelId es un GUID. El nombre se resuelve con los eventos de MicrosoftPurviewInformationProtection que listan la etiqueta, y no todas
-// resuelven: en el workspace de validacion 339 de 6,634 accesos tenian una etiqueta sin nombre resuelto, y el resto no tenia etiqueta. Resuelve los GUID
-// restantes en Purview (Information protection, Labels).
+// ── Query 3: Files the agent accessed after the compromise, with their label ────────────────────────────────────
+// SensitivityLabelId is a GUID. The name is resolved from the MicrosoftPurviewInformationProtection events that list the label, and not all labels
+// resolve: in the validation workspace 339 of 6,634 accesses had a label with no resolved name, and the rest had no label. Resolve the remaining GUIDs
+// in Purview (Information protection, Labels).
 let agent_app        = "{agent-app-id}";
 let agent_name       = "{agent-name}";
-let compromise_time  = datetime("{YYYY-MM-DDTHH:MM:SSZ}");  // sustituir por el momento del compromiso
+let compromise_time  = datetime("{YYYY-MM-DDTHH:MM:SSZ}");  // replace with the time of the compromise
 let labels = MicrosoftPurviewInformationProtection
     | where isnotempty(SensitivityLabelId) and isnotempty(LabelName)
     | summarize LabelName = any(LabelName) by SensitivityLabelId;
@@ -84,13 +84,13 @@ OfficeActivity
     LabelName
 | extend Sensitivity = case(
     isnotempty(LabelName), LabelName,
-    isnotempty(LabelId), "Etiqueta sin nombre resuelto",
-    "Sin clasificar")
+    isnotempty(LabelId), "Label with no resolved name",
+    "Unclassified")
 | order by TimeGenerated asc
 
-// ── Query 4: Entidades creadas por el agente comprometido (sub-agentes, aplicaciones, service principals) ─────────
-// Un agente de Entra aparece en AuditLogs como "Add service principal" y su blueprint como "Add application"; la propiedad agentType de
-// TargetResources distingue las entidades de agente (notAgentic para las demas).
+// ── Query 4: Entities created by the compromised agent (sub-agents, applications, service principals) ─────────────
+// An Entra agent appears in AuditLogs as "Add service principal" and its blueprint as "Add application"; the agentType property of
+// TargetResources distinguishes agent entities (notAgentic for the rest).
 let agent_sp  = "{agent-sp-id}";
 let ir_window = 72h;
 AuditLogs
@@ -104,25 +104,25 @@ AuditLogs
     EntityType    = tostring(TargetResources[0].type),
     EntityId      = tostring(TargetResources[0].id),
     AgentType     = tostring(TargetResources[0].agentType)
-| extend Alert = "Entidad creada por el agente comprometido: revisar y revocar"
+| extend Alert = "Entity created by the compromised agent: review and revoke"
 
-// ── Query 5: Verificar la contencion: inicios de sesion del service principal despues del bloqueo ────────────────
-// Un service principal deshabilitado falla con AADSTS7000112 ("Application is disabled"), que en el registro aparece como ResultType 7000112 (Learn,
-// error AADSTS7000112). Cualquier ResultType 0 despues de la contencion significa que la identidad todavia obtiene tokens (o que sigue usando uno emitido antes).
+// ── Query 5: Verify containment: service principal sign-ins after the block ──────────────────────────────────────
+// A disabled service principal fails with AADSTS7000112 ("Application is disabled"), which appears in the log as ResultType 7000112 (Learn,
+// error AADSTS7000112). Any ResultType 0 after containment means the identity still obtains tokens (or is still using one issued before).
 let agent_sp         = "{agent-sp-id}";
-let containment_time = datetime("{YYYY-MM-DDTHH:MM:SSZ}");  // momento de la contencion
+let containment_time = datetime("{YYYY-MM-DDTHH:MM:SSZ}");  // time of containment
 AADServicePrincipalSignInLogs
 | where TimeGenerated > containment_time
 | where ServicePrincipalId == agent_sp
 | project TimeGenerated, ResultType, ResultDescription, IPAddress, ResourceDisplayName
 | extend Status = case(
-    ResultType == "0", "Acceso exitoso despues de la contencion: revisar",
-    ResultType == "7000112", "Bloqueado: la aplicacion esta deshabilitada",
-    strcat("Rechazado por otro motivo (", ResultType, ")"))
+    ResultType == "0", "Successful access after containment: review",
+    ResultType == "7000112", "Blocked: the application is disabled",
+    strcat("Rejected for another reason (", ResultType, ")"))
 | order by TimeGenerated desc
 
-// ── Query 6: Correo enviado con la identidad del agente (alcance de la exfiltracion por correo) ───────────────────
-// Los destinatarios estan en Item.Recipients del evento Send de Exchange.
+// ── Query 6: Mail sent with the agent identity (scope of email exfiltration) ──────────────────────────────────────
+// The recipients are in Item.Recipients of the Exchange Send event.
 let agent_app        = "{agent-app-id}";
 let compromise_time  = datetime("{YYYY-MM-DDTHH:MM:SSZ}");
 OfficeActivity

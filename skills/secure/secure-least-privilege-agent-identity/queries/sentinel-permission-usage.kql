@@ -1,14 +1,14 @@
 // skill: secure-least-privilege-agent-identity
-// workspace: {workspace-name} | conectores: Microsoft Entra ID (AADServicePrincipalSignInLogs, AuditLogs), MicrosoftGraphActivityLogs
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia una columna Scopes que AADServicePrincipalSignInLogs no tiene (Q1 y Q2 no compilaban) y sacaba los permisos
-// de AuditLogs con tostring(AdditionalDetails). Ahora Q1 cruza los permisos de aplicacion que lleva el token (columna Roles de MicrosoftGraphActivityLogs) con lo que la aplicacion hace,
-// Q2 usa los recursos y el tipo de credencial de los inicios de sesion, Q3 busca los 401 y 403 despues de un recorte y Q4 lee los permisos concedidos en AuditLogs.
-// Q1 a Q4 compilan y se ejecutaron; el resultado de la cuenta de validacion esta junto a cada consulta.
+// workspace: {workspace-name} | connectors: Microsoft Entra ID (AADServicePrincipalSignInLogs, AuditLogs), MicrosoftGraphActivityLogs
+// Validated on a Sentinel workspace (Oct 2026): the previous version read a Scopes column that AADServicePrincipalSignInLogs does not have (Q1 and Q2 did not compile) and took the permissions
+// from AuditLogs with tostring(AdditionalDetails). Now Q1 cross-references the application permissions the token carries (Roles column of MicrosoftGraphActivityLogs) with what the application does,
+// Q2 uses the resources and the credential type of the sign-ins, Q3 looks for the 401s and 403s after a cutback and Q4 reads the granted permissions in AuditLogs.
+// Q1 to Q4 compile and ran; the result from the validation account is next to each query.
 
-// ── Query 1: Permisos de escritura que la aplicacion tiene y no usa (Microsoft Graph, 30 dias) ────────────────────────
-// Roles es la lista de permisos de aplicacion del ultimo token, separados por espacio. WriteRoles son los que por nombre permiten escribir o actuar (ReadWrite, Write, Manage, FullControl, Create,
-// Send, Remove, Invite, EnableDisable, RevokeSessions). NonGetCalls = 0 es una buena senal de que solo leyo; NonGetCalls > 0 no prueba que escriba (hay POST que solo leen, como las busquedas y los lotes).
-// Solo cubre Microsoft Graph: lo que la aplicacion haga contra otras APIs no sale aqui. Resultado en la cuenta de validacion: las 12 primeras filas (las de mas permisos de escritura) son todas candidatas, sin una sola llamada que no sea GET en 30 dias.
+// ── Query 1: Write permissions the application has and does not use (Microsoft Graph, 30 days) ────────────────────────
+// Roles is the list of application permissions of the latest token, separated by spaces. WriteRoles are those that by name allow writing or acting (ReadWrite, Write, Manage, FullControl, Create,
+// Send, Remove, Invite, EnableDisable, RevokeSessions). NonGetCalls = 0 is a good signal that it only read; NonGetCalls > 0 does not prove that it writes (some POSTs only read, such as searches and batches).
+// It only covers Microsoft Graph: what the application does against other APIs does not show up here. Result in the validation account: the first 12 rows (those with the most write permissions) are all candidates, without a single non-GET call in 30 days.
 let lookback = 30d;
 let write_roles = @"(\S*(?:ReadWrite|Write|Manage|FullControl|Create|Send|Remove|Invite|EnableDisable|RevokeSessions)\S*)";
 MicrosoftGraphActivityLogs
@@ -17,14 +17,14 @@ MicrosoftGraphActivityLogs
 | summarize Calls = count(), NonGetCalls = countif(RequestMethod != "GET"), Endpoints = dcount(tostring(split(RequestUri, "?")[0])), arg_max(TimeGenerated, Roles) by AppId, ServicePrincipalId
 | extend WriteRoles = extract_all(write_roles, Roles)
 | extend WriteRoleCount = array_length(WriteRoles)
-| extend Verdict = case(WriteRoleCount > 0 and NonGetCalls == 0, "Candidato: tiene permisos de escritura y solo leyo", WriteRoleCount > 0, "Usa escritura: revisar el alcance", "Solo lectura")
+| extend Verdict = case(WriteRoleCount > 0 and NonGetCalls == 0, "Candidate: has write permissions and only read", WriteRoleCount > 0, "Uses write: review the scope", "Read only")
 | project AppId, ServicePrincipalId, Calls, NonGetCalls, Endpoints, WriteRoleCount, WriteRoles, Verdict
 | order by Verdict asc, WriteRoleCount desc
 
-// ── Query 2: A que recursos pide token cada entidad de servicio y con que credencial ────────────────────────────────
-// Sustituye a la consulta que leia Scopes. ClientCredentialType dice con que se autentica (clientSecret, clientAssertion, federatedIdentityCredential, certificado): un secreto es un
-// candidato a pasar a identidad administrada o a federacion (ver secure-managed-identity-foundry y secure-secret-management-keyvault). AgentType separa los agentes del resto.
-// Resultado en la cuenta de validacion: decenas de combinaciones con secretos, afirmaciones de cliente y credenciales federadas; una sola identidad de agente (federada).
+// ── Query 2: Which resources each service principal requests a token for, and with which credential ─────────────────
+// Replaces the query that read Scopes. ClientCredentialType says what it authenticates with (clientSecret, clientAssertion, federatedIdentityCredential, certificate): a secret is a
+// candidate to move to managed identity or to federation (see secure-managed-identity-foundry and secure-secret-management-keyvault). AgentType separates the agents from the rest.
+// Result in the validation account: dozens of combinations with secrets, client assertions and federated credentials; a single agent identity (federated).
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
 | where ResultType == "0"
@@ -32,9 +32,9 @@ AADServicePrincipalSignInLogs
 | summarize SignIns = count(), LastSignIn = max(TimeGenerated), Credentials = make_set(ClientCredentialType, 3), IPs = dcount(IPAddress) by ServicePrincipalName, AppId, AgentType, ResourceDisplayName
 | order by SignIns desc
 
-// ── Query 3: Llamadas denegadas a Microsoft Graph despues de reducir permisos ───────────────────────────────────────
-// Un permiso de aplicacion recortado no rompe el inicio de sesion: el token se sigue emitiendo y la llamada falla con 403 en Graph. Por eso se busca aqui y no en los inicios de sesion.
-// El token ya emitido conserva sus permisos hasta que caduca (60 a 90 minutos por defecto): mira despues de ese tiempo. Resultado en la cuenta de validacion: 2 combinaciones de aplicacion y endpoint en 3 dias.
+// ── Query 3: Denied calls to Microsoft Graph after reducing permissions ─────────────────────────────────────────────
+// A cut application permission does not break sign-in: the token is still issued and the call fails with 403 in Graph. That is why it is searched here and not in the sign-ins.
+// The already issued token keeps its permissions until it expires (60 to 90 minutes by default): look after that time. Result in the validation account: 2 combinations of application and endpoint in 3 days.
 let after = 3d;
 MicrosoftGraphActivityLogs
 | where TimeGenerated > ago(after)
@@ -43,10 +43,10 @@ MicrosoftGraphActivityLogs
 | summarize Denied = count(), FirstDenied = min(TimeGenerated), LastDenied = max(TimeGenerated), Methods = make_set(RequestMethod, 4) by AppId, Endpoint = tostring(split(RequestUri, "?")[0]), ResponseStatusCode
 | order by Denied desc
 
-// ── Query 4: Permisos concedidos (de aplicacion y delegados) en los ultimos 90 dias ──────────────────────────────────
-// Lee los eventos "Add app role assignment to service principal" y "Add delegated permission grant": el permiso esta en las propiedades modificadas del primer recurso objetivo
-// (AppRole.Value o DelegatedPermissionGrant.Scope) y quien lo recibe en el segundo objetivo. HighPrivilegePermissions lista los permisos con ReadWrite, FullControl, Manage, AccessAsUser, RoleManagement o Directory.
-// Resultado en la cuenta de validacion: 31 concesiones en 90 dias, 24 delegadas (varias con consentimiento de administrador para todos los usuarios y listas de hasta 140 permisos, la mitad de ellos de alto privilegio) y 7 de aplicacion.
+// ── Query 4: Permissions granted (application and delegated) in the last 90 days ─────────────────────────────────────
+// Reads the "Add app role assignment to service principal" and "Add delegated permission grant" events: the permission is in the modified properties of the first target resource
+// (AppRole.Value or DelegatedPermissionGrant.Scope) and who receives it in the second target. HighPrivilegePermissions lists the permissions with ReadWrite, FullControl, Manage, AccessAsUser, RoleManagement or Directory.
+// Result in the validation account: 31 grants in 90 days, 24 delegated (several with admin consent for all users and lists of up to 140 permissions, half of them high privilege) and 7 application.
 let grants_lookback = 90d;
 let high = @"(\S*(?:ReadWrite|FullControl|Manage|AccessAsUser|RoleManagement|Directory)\S*)";
 AuditLogs
@@ -58,7 +58,7 @@ AuditLogs
               GranteeName = take_anyif(trim(@'"', tostring(P.newValue)), tostring(P.displayName) == "ServicePrincipal.DisplayName"),
               GranteeId = take_anyif(trim(@'"', tostring(P.newValue)), tostring(P.displayName) == "ServicePrincipal.ObjectID"),
               ConsentType = take_anyif(trim(@'"', tostring(P.newValue)), tostring(P.displayName) == "DelegatedPermissionGrant.ConsentType"))
-| extend GrantType = iff(OperationName has "delegated", "Delegada", "Aplicacion")
+| extend GrantType = iff(OperationName has "delegated", "Delegated", "Application")
 | extend Grantee = coalesce(GranteeName, Grantee2, GranteeId)
 | extend Initiator = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
 | extend PermissionCount = array_length(extract_all(@"(\S+)", Permission)), HighPrivilegePermissions = extract_all(high, Permission)

@@ -1,16 +1,16 @@
 // skill: detect-data-exfiltration-agent
-// workspace: {workspace-name} | conectores: Microsoft 365 (OfficeActivity), diagnosticos de Foundry (AzureDiagnostics), Application Insights (AppDependencies, opcional)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia PurviewAuditLog, MicrosoftDataLossPrevention y FoundryAgents_CL, tablas que no
-// existen en ese workspace. Los eventos de SharePoint, OneDrive y Exchange estan en OfficeActivity (conector Microsoft 365): una aplicacion o agente con
-// permisos de aplicacion aparece con UserType Application (UserId app@sharepoint y ApplicationId en SharePoint y OneDrive; ClientAppId en Exchange), y las
-// coincidencias de DLP de Exchange y SharePoint son operaciones DLPRuleMatch o DlpRuleMatch. Q1, Q2 y Q4 compilan y devolvieron filas, Q5 devolvio filas con un
-// umbral bajo, y Q3 compila y no tiene filas (AppDependencies esta vacia): NO VERIFICADO.
-// OfficeActivity no distingue lo que Copilot lee en nombre del usuario: eso esta en CopilotActivity (KQL Library P04-Q6).
+// workspace: {workspace-name} | connectors: Microsoft 365 (OfficeActivity), Foundry diagnostics (AzureDiagnostics), Application Insights (AppDependencies, optional)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read PurviewAuditLog, MicrosoftDataLossPrevention and FoundryAgents_CL, tables that do not
+// exist in that workspace. SharePoint, OneDrive and Exchange events are in OfficeActivity (Microsoft 365 connector): an application or agent with
+// application permissions appears with UserType Application (UserId app@sharepoint and ApplicationId in SharePoint and OneDrive; ClientAppId in Exchange), and the
+// DLP matches for Exchange and SharePoint are DLPRuleMatch or DlpRuleMatch operations. Q1, Q2 and Q4 compile and returned rows, Q5 returned rows with a low
+// threshold, and Q3 compiles and has no rows (AppDependencies is empty): NOT VERIFIED.
+// OfficeActivity does not distinguish what Copilot reads on behalf of the user: that is in CopilotActivity (KQL Library P04-Q6).
 
-// ── Query 1: Acceso masivo a archivos por una aplicacion o un usuario en ventana corta ───────────────────────────
-// Validado: devolvio acceso masivo de una aplicacion de terceros (cliente Java) con cientos de archivos en 30 minutos. Las aplicaciones de Microsoft de
-// sincronizacion y cache tambien pueden cruzar el umbral: llena allowed_apps con los ApplicationId que ya conoces.
-// Para vigilar solo agentes, filtra por UserType == "Application".
+// ── Query 1: Bulk file access by an application or a user in a short window ───────────────────────────
+// Validated: it returned bulk access by a third-party application (Java client) with hundreds of files in 30 minutes. Microsoft sync and cache
+// applications can also cross the threshold: fill allowed_apps with the ApplicationId values you already know.
+// To watch agents only, filter by UserType == "Application".
 let detection_window = 2h;
 let bulk_threshold   = 50;
 let allowed_apps     = dynamic([]);
@@ -19,7 +19,7 @@ OfficeActivity
 | where OfficeWorkload in ("SharePoint", "OneDrive")
 | where Operation in ("FileAccessed", "FileDownloaded")
 | where isempty(ApplicationId) or ApplicationId !in (allowed_apps)
-| extend Initiator = iff(UserType == "Application", "Aplicacion o agente", "Usuario")
+| extend Initiator = iff(UserType == "Application", "Application or agent", "User")
 | extend Actor = iff(UserType == "Application", strcat("app:", ApplicationId), UserId)
 | summarize
     FileCount     = dcount(OfficeObjectId),
@@ -32,15 +32,15 @@ OfficeActivity
   by Actor, Initiator, Window = bin(TimeGenerated, 30m)
 | where FileCount > bulk_threshold
 | extend TimeSpanMin = datetime_diff("minute", LastSeen, FirstSeen)
-| extend Alert = strcat("Acceso masivo: ", FileCount, " archivos unicos en ", TimeSpanMin, " minutos")
+| extend Alert = strcat("Bulk access: ", FileCount, " unique files in ", TimeSpanMin, " minutes")
 | extend Severity = case(FileCount > 200, "High", FileCount > 100, "Medium", "Low")
 | order by FileCount desc
 
-// ── Query 2: Correo enviado por una aplicacion o agente a dominios externos ──────────────────────────────────────
-// Los destinatarios estan en Item.Recipients del evento Send de Exchange (Address y Name). El correo lo envia una aplicacion con permiso Mail.Send
-// por la REST de Graph: UserId es el buzon, UserType es Application y ClientAppId identifica la aplicacion.
+// ── Query 2: Mail sent by an application or agent to external domains ──────────────────────────────────────
+// Recipients are in Item.Recipients of the Exchange Send event (Address and Name). The mail is sent by an application with the Mail.Send permission
+// through the Graph REST API: UserId is the mailbox, UserType is Application and ClientAppId identifies the application.
 let lookback         = 24h;
-let internal_domains = dynamic(["contoso.com"]);   // ajustar al tenant
+let internal_domains = dynamic(["contoso.com"]);   // adjust to the tenant
 OfficeActivity
 | where TimeGenerated > ago(lookback)
 | where OfficeWorkload == "Exchange"
@@ -53,12 +53,12 @@ OfficeActivity
 | where RecipientDomain !in (internal_domains)
 | summarize ExternalRecipients = make_set(RecipientAddress, 10)
     by TimeGenerated, Mailbox = UserId, ClientAppId, Subject = tostring(ItemJson.Subject), MessageId = tostring(ItemJson.InternetMessageId)
-| extend Alert = "Una aplicacion o agente envio correo a un dominio externo: posible exfiltracion"
+| extend Alert = "An application or agent sent mail to an external domain: possible exfiltration"
 | order by TimeGenerated desc
 
-// ── Query 3: Llamadas HTTP salientes de agentes instrumentados hacia dominios que no son de Microsoft ─────────────
-// NO VERIFICADO: AppDependencies (Application Insights basado en workspace) esta vacia en el workspace de validacion. Que herramientas del agente
-// emiten una dependencia HTTP depende de la instrumentacion: si el agente no emite spans de sus llamadas HTTP, esta consulta no ve nada.
+// ── Query 3: Outbound HTTP calls from instrumented agents to non-Microsoft domains ─────────────
+// NOT VERIFIED: AppDependencies (workspace-based Application Insights) is empty in the validation workspace. Which agent tools
+// emit an HTTP dependency depends on the instrumentation: if the agent does not emit spans for its HTTP calls, this query sees nothing.
 AppDependencies
 | where TimeGenerated > ago(24h)
 | where DependencyType has "HTTP"
@@ -74,14 +74,14 @@ AppDependencies
   by Domain
 | where CallCount > 5
 | extend Risk = case(
-    Domain has_any ("pastebin", "ngrok", "webhook.site", "requestbin"), "Alto: destino sospechoso",
-    "Revisar: destino externo no catalogado")
+    Domain has_any ("pastebin", "ngrok", "webhook.site", "requestbin"), "High: suspicious destination",
+    "Review: external destination not cataloged")
 | order by CallCount desc
 
-// ── Query 4: Correo enviado por una aplicacion o agente que coincidio con una regla de DLP ───────────────────────
-// Une el evento Send de una aplicacion con el evento DlpRuleMatch de Exchange por el identificador del mensaje (Item.InternetMessageId en Send y
-// OfficeObjectId en DlpRuleMatch). Validado: la clave coincide, 41 coincidencias en 90 dias de correos enviados por usuarios y por aplicaciones, y la
-// consulta devolvio correos enviados por una aplicacion. El evento de DLP trae el usuario y el tipo de registro, no el nombre de la politica.
+// ── Query 4: Mail sent by an application or agent that matched a DLP rule ───────────────────────
+// Joins the Send event of an application with the Exchange DlpRuleMatch event by the message identifier (Item.InternetMessageId in Send and
+// OfficeObjectId in DlpRuleMatch). Validated: the key matches, 41 matches in 90 days of mail sent by users and by applications, and the
+// query returned mail sent by an application. The DLP event carries the user and the record type, not the policy name.
 let lookback = 24h;
 let app_sent = OfficeActivity
     | where TimeGenerated > ago(lookback)
@@ -97,14 +97,14 @@ OfficeActivity
 | project DlpTime = TimeGenerated, DlpUser = UserId, MessageId = OfficeObjectId
 | join kind=inner app_sent on MessageId
 | project SentTime, DlpTime, Mailbox, ClientAppId, Subject, MessageId
-| extend Alert = "Correo de una aplicacion o agente coincide con una regla de DLP: posible exfiltracion de datos sensibles"
+| extend Alert = "Mail from an application or agent matches a DLP rule: possible exfiltration of sensitive data"
 | order by SentTime desc
 
-// ── Query 5: Volumen de respuesta por llamador en una cuenta de Foundry (diagnosticos de Azure OpenAI) ──────────────
-// Los registros RequestResponse de MICROSOFT.COGNITIVESERVICES (tabla AzureDiagnostics) traen requestLength y responseLength en bytes dentro de
-// properties_s, mas OperationName, CallerIPAddress y callerObjectId. No traen tokens ni contenido. Validado: corre sobre 596 registros de 30 dias; en esa
-// cuenta las llamadas observadas son de administracion (listar almacenes de vectores, proyectos) y el volumen es de KB, asi que el umbral de 10 MB no
-// dispara. Ajusta el umbral a tu uso normal. El estimado por tokens de la version anterior no era una medida de bytes.
+// ── Query 5: Response volume per caller in a Foundry account (Azure OpenAI diagnostics) ──────────────
+// The RequestResponse records of MICROSOFT.COGNITIVESERVICES (AzureDiagnostics table) carry requestLength and responseLength in bytes inside
+// properties_s, plus OperationName, CallerIPAddress and callerObjectId. They carry no tokens or content. Validated: it runs over 596 records from 30 days; in that
+// account the observed calls are administrative (listing vector stores, projects) and the volume is KB, so the 10 MB threshold does not
+// fire. Adjust the threshold to your normal usage. The token-based estimate of the previous version was not a measure of bytes.
 let lookback  = 24h;
 let threshold_mb = 10.0;
 AzureDiagnostics
@@ -121,5 +121,5 @@ AzureDiagnostics
     LastSeen   = max(TimeGenerated)
   by Resource, CallerObjectId, CallerIPAddress
 | where ResponseMB > threshold_mb
-| extend Alert = strcat("Alto volumen de respuesta: ", ResponseMB, " MB en la ventana")
+| extend Alert = strcat("High response volume: ", ResponseMB, " MB in the window")
 | order by ResponseMB desc

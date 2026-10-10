@@ -1,16 +1,16 @@
 // skill: discover-inventory-agents-copilot-studio
 // workspace: {workspace-name} | tenant: {tenant-domain}
-// conectores: Microsoft Power Platform Admin Activity (PowerPlatformAdminActivity), Microsoft Copilot (CopilotActivity)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia CopilotStudio_CL, una tabla personalizada que
-// no existe en ese workspace (Q1 y Q3 no podian ejecutarse), y usaba el export de la pestana Requests como lista de
-// agentes "aprobados", pero Requests solo muestra lo que espera aprobacion. Las consultas ahora leen tablas documentadas.
-// Las tres compilan y se ejecutaron en el workspace; Q1 y Q2 no devolvieron filas (las tablas de Power Platform estan
-// vacias y ninguna interaccion trae AgentId o AgentName), Q3 se probo con una tabla de ejemplo.
+// connectors: Microsoft Power Platform Admin Activity (PowerPlatformAdminActivity), Microsoft Copilot (CopilotActivity)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read CopilotStudio_CL, a custom table that
+// does not exist in that workspace (Q1 and Q3 could not run), and used the export of the Requests tab as the list of
+// "approved" agents, but Requests only shows what is awaiting approval. The queries now read documented tables.
+// All three compile and ran on the workspace; Q1 and Q2 returned no rows (the Power Platform tables are
+// empty and no interaction carries AgentId or AgentName), Q3 was tested with a sample table.
 
-// ── Query 1: Agentes de Copilot Studio creados, publicados o compartidos en 30 dias ───────────────────────────
-// NO VERIFICADO: PowerPlatformAdminActivity existe con las columnas que documenta Learn, pero no tiene filas. Los
-// nombres de operacion son los de Learn ("Audit Copilot Studio activities in Microsoft Purview"); las claves dentro de
-// Properties no se vieron en eventos reales. Misma consulta que KQL Library P02-Q2.
+// ── Query 1: Copilot Studio agents created, published or shared in 30 days ────────────────────────────────────
+// NOT VERIFIED: PowerPlatformAdminActivity exists with the columns that Learn documents, but it has no rows. The
+// operation names are the ones from Learn ("Audit Copilot Studio activities in Microsoft Purview"); the keys inside
+// Properties were not seen in real events. Same query as KQL Library P02-Q2.
 PowerPlatformAdminActivity
 | where TimeGenerated > ago(30d)
 | where EventOriginalType in (
@@ -27,10 +27,10 @@ PowerPlatformAdminActivity
     Properties
 | order by TimeGenerated desc
 
-// ── Query 2: Agentes que la gente usa de verdad (registro de auditoria de Copilot) ──────────────────────────────
-// Cubre los agentes de Copilot Studio y de Agent Builder que reciben interacciones: AgentName y AgentId son columnas
-// documentadas de CopilotActivity (por ejemplo AgentId CopilotStudio.Declarative.<guid>). NO VERIFICADO: en el
-// workspace de validacion ninguna interaccion trae AgentName ni AgentId, asi que no se vio un agente real.
+// ── Query 2: Agents that people actually use (Copilot audit record) ─────────────────────────────────────────────
+// Covers the Copilot Studio and Agent Builder agents that receive interactions: AgentName and AgentId are documented
+// columns of CopilotActivity (for example AgentId CopilotStudio.Declarative.<guid>). NOT VERIFIED: in the
+// validation workspace no interaction carries AgentName or AgentId, so a real agent was not seen.
 CopilotActivity
 | where TimeGenerated > ago(30d)
 | where RecordType == "CopilotInteraction"
@@ -44,12 +44,12 @@ CopilotActivity
     by AgentId, AgentName
 | order by Interactions desc
 
-// ── Query 3: Prioridad de revision, agentes compartidos por su creador que estan en uso ──────────────────────────
-// Pegar en SharedByCreator los nombres exportados de Microsoft 365 admin center → Agents → All agents → Registry
-// (filtro "Shared by creator"). Devuelve cuales de ellos se usan y cuanto, para revisar primero los mas usados.
-// Probada con una tabla de ejemplo: solo devuelve los agentes que estan en la lista y tienen interacciones.
+// ── Query 3: Review priority: agents shared by their creator that are in use ─────────────────────────────────────
+// Paste into SharedByCreator the names exported from Microsoft 365 admin center → Agents → All agents → Registry
+// (filter "Shared by creator"). It returns which of them are in use and how much, so the most used are reviewed first.
+// Tested with a sample table: it only returns the agents that are in the list and have interactions.
 let SharedByCreator = datatable(AgentName: string) [
-    // poblar desde el export del Registry (Shared by creator)
+    // populate from the Registry export (Shared by creator)
     "__placeholder__"
 ];
 CopilotActivity
@@ -63,5 +63,5 @@ CopilotActivity
     by AgentId, AgentName
 | join kind=inner SharedByCreator on AgentName
 | project AgentName, AgentId, Interactions, Users, LastSeen
-| extend Classification = "Compartido por su creador y en uso: revisar propietario, datos y conectores"
+| extend Classification = "Shared by its creator and in use: review owner, data and connectors"
 | order by Interactions desc

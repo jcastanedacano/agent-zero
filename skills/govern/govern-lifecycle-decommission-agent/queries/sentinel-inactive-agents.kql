@@ -1,13 +1,13 @@
 // skill: govern-lifecycle-decommission-agent
-// workspace: {workspace-name} | Q2 y Q5 corren en Advanced Hunting (AgentsInfo, IdentityInfo)
-// Validado en un workspace Sentinel y en Advanced Hunting (oct 2026): la version anterior leia CopilotStudio_CL y FoundryAgents_CL, tablas personalizadas que no
-// existen en el workspace de validacion, y buscaba service principals de agentes por texto en AuditLogs. Ahora: Q1 usa CopilotActivity (por AgentId), Q3 el
-// diagnostico de la cuenta Foundry, Q4 la columna Agent de AADServicePrincipalSignInLogs, y Q2 y Q5 el inventario AgentsInfo y IdentityInfo. Todas compilan y se
-// ejecutaron; Q1 y Q3 no devolvieron filas (ningun agente ni cuenta inactivos en el tenant de validacion), Q4 y Q5 se ejercitaron con filas.
-// Ninguna consulta mide "uso" de un agente que nunca aparece en una tabla de actividad: cruza siempre con el inventario.
+// workspace: {workspace-name} | Q2 and Q5 run in Advanced Hunting (AgentsInfo, IdentityInfo)
+// Validated on a Sentinel workspace and in Advanced Hunting (Oct 2026): the previous version read CopilotStudio_CL and FoundryAgents_CL, custom tables that do not
+// exist in the validation workspace, and looked for agent service principals by text in AuditLogs. Now: Q1 uses CopilotActivity (by AgentId), Q3 the
+// diagnostics of the Foundry account, Q4 the Agent column of AADServicePrincipalSignInLogs, and Q2 and Q5 the AgentsInfo and IdentityInfo inventory. All compile and
+// ran; Q1 and Q3 returned no rows (no inactive agent or account in the validation tenant), Q4 and Q5 were exercised with rows.
+// No query measures the "use" of an agent that never appears in an activity table: always cross-check with the inventory.
 
-// ── Query 1: Agentes con interacciones registradas que llevan 30 dias sin actividad (Copilot Studio y Agent Builder) ───────
-// CopilotActivity solo conoce a los agentes que tuvieron al menos una interaccion dentro de la retencion del workspace.
+// ── Query 1: Agents with recorded interactions that have had no activity for 30 days (Copilot Studio and Agent Builder) ────
+// CopilotActivity only knows the agents that had at least one interaction within the workspace retention.
 let inactive_days = 30;
 CopilotActivity
 | where RecordType == "CopilotInteraction"
@@ -17,9 +17,9 @@ CopilotActivity
 | where DaysInactive > inactive_days
 | order by DaysInactive desc
 
-// ── Query 2: Agentes activos sin cambios en 90 dias (Advanced Hunting) ───────────────────────────────────────────
-// LastUpdatedDateTime es el ultimo cambio de configuracion, no el ultimo uso: sirve como candidatos a revisar, no como prueba de inactividad. Se limita a las
-// plataformas que administras: en el tenant de validacion la mayoria del inventario es el catalogo de agentes de Microsoft y de partners (Platform "Other").
+// ── Query 2: Active agents with no changes in 90 days (Advanced Hunting) ─────────────────────────────────────────
+// LastUpdatedDateTime is the last configuration change, not the last use: it serves as candidates to review, not as proof of inactivity. It is limited to the
+// platforms you manage: in the validation tenant most of the inventory is the catalog of Microsoft and partner agents (Platform "Other").
 AgentsInfo
 | where Timestamp > ago(30d)
 | summarize arg_max(Timestamp, *) by AgentId
@@ -29,8 +29,8 @@ AgentsInfo
 | project Name, Platform, AgentId, PublishedStatus, LastUpdatedDateTime, LastPublishedDateTime, OwnerCount = array_length(parse_json(Owners))
 | order by LastUpdatedDateTime asc
 
-// ── Query 3: Cuentas Foundry sin llamadas en 30 dias ───────────────────────────────────────────────────────────
-// El diagnostico no trae nombre de agente: la inactividad es de la cuenta Foundry, no de un agente.
+// ── Query 3: Foundry accounts with no calls in 30 days ─────────────────────────────────────────────────────────
+// The diagnostics carry no agent name: the inactivity is of the Foundry account, not of an agent.
 AzureDiagnostics
 | where ResourceProvider == "MICROSOFT.COGNITIVESERVICES" and Category == "RequestResponse"
 | summarize LastCall = max(TimeGenerated), Requests = count() by Resource
@@ -38,9 +38,9 @@ AzureDiagnostics
 | where DaysInactive > 30
 | order by DaysInactive desc
 
-// ── Query 4: Identidades de agente de Entra sin inicio de sesion en 30 dias ─────────────────────────────────────────
-// La columna Agent de AADServicePrincipalSignInLogs es un JSON con agentType (agenticAppInstance, agentIdentityBlueprintPrincipal o notAgentic).
-// Solo ve identidades que iniciaron sesion dentro de la retencion: una identidad que nunca inicio sesion no aparece, comparala con la lista de Entra.
+// ── Query 4: Entra agent identities with no sign-in in 30 days ──────────────────────────────────────────────────────
+// The Agent column of AADServicePrincipalSignInLogs is a JSON with agentType (agenticAppInstance, agentIdentityBlueprintPrincipal or notAgentic).
+// It only sees identities that signed in within the retention: an identity that never signed in does not appear, compare it with the Entra list.
 AADServicePrincipalSignInLogs
 | extend AgentType = tostring(parse_json(Agent).agentType)
 | where isnotempty(AgentType) and AgentType != "notAgentic"
@@ -49,9 +49,9 @@ AADServicePrincipalSignInLogs
 | where DaysSinceSignIn > 30
 | order by DaysSinceSignIn desc
 
-// ── Query 5: Agentes cuyo propietario ya no es una cuenta activa (Advanced Hunting) ──────────────────────────────────
-// Une AgentsInfo.Owners (ids de objeto de usuario) con IdentityInfo. Un GUID nulo no es un propietario. En el tenant de validacion la consulta devolvio agentes
-// locales y de Copilot Studio con propietario de GUID nulo, y ninguna cuenta de propietario deshabilitada o eliminada.
+// ── Query 5: Agents whose owner is no longer an active account (Advanced Hunting) ────────────────────────────────────
+// Joins AgentsInfo.Owners (user object ids) with IdentityInfo. A null GUID is not an owner. In the validation tenant the query returned local agents
+// and Copilot Studio agents with a null-GUID owner, and no disabled or deleted owner account.
 let agents = AgentsInfo
     | where Timestamp > ago(30d)
     | summarize arg_max(Timestamp, *) by AgentId
@@ -66,11 +66,11 @@ let people = IdentityInfo
 agents
 | join kind=leftouter people on OwnerId
 | extend OwnerState = case(
-    OwnerId == "00000000-0000-0000-0000-000000000000", "Sin propietario real (identificador nulo)",
-    isempty(OwnerUpn), "Propietario no resuelto en el directorio",
-    IsAccountEnabled == false, "Cuenta del propietario deshabilitada",
-    isnotnull(DeletedDateTime), "Cuenta del propietario eliminada",
-    "Activo")
-| where OwnerState != "Activo"
+    OwnerId == "00000000-0000-0000-0000-000000000000", "No real owner (null identifier)",
+    isempty(OwnerUpn), "Owner not resolved in the directory",
+    IsAccountEnabled == false, "Owner account disabled",
+    isnotnull(DeletedDateTime), "Owner account deleted",
+    "Active")
+| where OwnerState != "Active"
 | project Name, Platform, AgentId, OwnerId, OwnerUpn, OwnerState, LastUpdatedDateTime
 | order by Platform asc, Name asc

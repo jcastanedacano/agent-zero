@@ -1,18 +1,18 @@
 // skill: govern-pim-agent-roles
-// workspace: {workspace-name} | conector requerido: AuditLogs-EntraID, AzureActivity
-// Validado en un workspace Sentinel (oct 2026): Q1 a Q4 reescritas.
-//  - En los eventos PIM el rol y el principal llegan en TargetResources en un orden que cambia según la operación:
-//    se eligen por type, no por índice. Las asignaciones directas fuera de PIM ("Add member to role") tienen otra
-//    forma (el rol viene en la propiedad Role.DisplayName y el usuario en userPrincipalName): se leen en la Q3 de
-//    sentinel-identity-abuse.kql, y estas consultas solo usan las operaciones de PIM.
-//  - AdditionalDetails es un arreglo de {key, value} (Justification, StartTime, ExpirationTime): se lee por clave.
-//  - Cada activación genera tres eventos (requested, completed, expired) y el evento completed lo inicia una
-//    aplicación (el servicio PIM), no la persona: el principal es el target de tipo User, ServicePrincipal o Group.
+// workspace: {workspace-name} | required connector: AuditLogs-EntraID, AzureActivity
+// Validated on a Sentinel workspace (Oct 2026): Q1 to Q4 rewritten.
+//  - In PIM events the role and the principal arrive in TargetResources in an order that changes with the operation:
+//    they are selected by type, not by index. Direct assignments outside PIM ("Add member to role") have a different
+//    shape (the role comes in the Role.DisplayName property and the user in userPrincipalName): they are read in Q3 of
+//    sentinel-identity-abuse.kql, and these queries only use the PIM operations.
+//  - AdditionalDetails is an array of {key, value} (Justification, StartTime, ExpirationTime): it is read by key.
+//  - Each activation generates three events (requested, completed, expired) and the completed event is initiated by an
+//    application (the PIM service), not by the person: the principal is the target of type User, ServicePrincipal or Group.
 
-// ── Query 1: Activaciones PIM completadas, por principal y rol ────────────────
-// Para ver solo agentes, filtrar PrincipalType == "ServicePrincipal". La versión anterior mezclaba las
-// asignaciones elegibles ("Add eligible member to role") con las activaciones y leía el principal y el rol por
-// índice; la justificación salía como el arreglo completo de AdditionalDetails.
+// ── Query 1: Completed PIM activations, by principal and role ─────────────────
+// To see only agents, filter PrincipalType == "ServicePrincipal". The previous version mixed the
+// eligible assignments ("Add eligible member to role") with the activations and read the principal and the role by
+// index; the justification came out as the full AdditionalDetails array.
 AuditLogs
 | where TimeGenerated > ago(30d)
 | where OperationName == "Add member to role completed (PIM activation)"
@@ -29,11 +29,11 @@ AuditLogs
 | project TimeGenerated, TargetPrincipal, PrincipalType, RoleName, Justification, StartTime, ExpirationTime
 | order by TimeGenerated desc
 
-// ── Query 2: Activaciones fuera de horario laboral (posible anomalía) ─────────
+// ── Query 2: Activations outside business hours (possible anomaly) ────────────
 let business_hours_start = 8;
 let business_hours_end   = 20;
-// Solo el evento completed: con "has PIM activation" cada activación se contaba tres veces (requested,
-// completed, expired), y el iniciador del evento completed es el servicio PIM, no la persona.
+// Only the completed event: with "has PIM activation" each activation was counted three times (requested,
+// completed, expired), and the initiator of the completed event is the PIM service, not the person.
 AuditLogs
 | where TimeGenerated > ago(30d)
 | where OperationName == "Add member to role completed (PIM activation)"
@@ -45,15 +45,15 @@ AuditLogs
         TargetPrincipal = take_anyif(tostring(TR.displayName), tostring(TR.type) in ("User", "ServicePrincipal", "Group")),
         PrincipalType   = take_anyif(tostring(TR.type), tostring(TR.type) in ("User", "ServicePrincipal", "Group")))
 | project TimeGenerated, HourUTC, TargetPrincipal, RoleName
-| extend Alert = "Activación PIM fuera de horario — revisar"
+| extend Alert = "PIM activation outside business hours: review"
 | order by TimeGenerated desc
 
-// ── Query 3: Service principals con roles Azure RBAC directos (sin PIM) ───────
-// Detectar assignments permanentes que deberían ser elegibles
-// Las asignaciones de roles Azure RBAC no están en AuditLogs (Entra): están en AzureActivity. La versión anterior
-// leía una operación "Create role assignment" y un AdditionalDetails que no existen en AuditLogs, así que nunca
-// devolvía filas. El cuerpo de la petición (principalType, roleDefinitionId) solo viene en el evento "Start";
-// el evento "Success" no lo trae. El rol se resuelve por el GUID del rol integrado.
+// ── Query 3: Service principals with direct Azure RBAC roles (no PIM) ─────────
+// Detect permanent assignments that should be eligible
+// Azure RBAC role assignments are not in AuditLogs (Entra): they are in AzureActivity. The previous version
+// read a "Create role assignment" operation and an AdditionalDetails that do not exist in AuditLogs, so it never
+// returned rows. The request body (principalType, roleDefinitionId) only comes in the "Start" event;
+// the "Success" event does not carry it. The role is resolved by the GUID of the built-in role.
 let HighPrivilegeRoles = datatable(RoleGuid: string, RoleAssigned: string) [
     "8e3af657-a8ff-443c-a75c-2fe8c4bcb635", "Owner",
     "b24988ac-6180-42a0-ab88-20f7382dd24c", "Contributor",
@@ -75,15 +75,15 @@ AzureActivity
     Scope      = extract(@"^(.*)/providers/Microsoft\.Authorization/roleAssignments", 1, tostring(Props.entity)),
     AssignedBy = Caller
 | project TimeGenerated, AssignedTo, RoleAssigned, Scope, AssignedBy
-| extend Risk = "Rol de alto privilegio asignado directamente: evaluar migración a PIM"
+| extend Risk = "High-privilege role assigned directly: evaluate migration to PIM"
 | order by TimeGenerated desc
 
-// ── Query 4: Duración y frecuencia de activaciones PIM (detectar activaciones largas) ──
-// La versión anterior calculaba la duración con toint(tostring(AdditionalDetails)), que no es un número (es un
-// arreglo de {key, value}), y agrupaba por el iniciador, que en el evento completed es el servicio PIM. La duración
-// sale de StartTime y ExpirationTime. En el workspace de validación hay 1 activación en 90 días (1 hora), por lo
-// que ningún umbral se cumple: la lógica de umbrales no se ejercitó con datos.
-let long_activation_hrs = 8;  // ajustar a la duración máxima configurada en la política del rol
+// ── Query 4: Duration and frequency of PIM activations (detect long activations) ───────
+// The previous version computed the duration with toint(tostring(AdditionalDetails)), which is not a number (it is an
+// array of {key, value}), and grouped by the initiator, which in the completed event is the PIM service. The duration
+// comes from StartTime and ExpirationTime. In the validation workspace there is 1 activation in 90 days (1 hour), so
+// no threshold is met: the threshold logic was not exercised with data.
+let long_activation_hrs = 8;  // adjust to the maximum duration configured in the role policy
 AuditLogs
 | where TimeGenerated > ago(30d)
 | where OperationName == "Add member to role completed (PIM activation)"

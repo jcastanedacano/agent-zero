@@ -1,14 +1,14 @@
 // skill: protect-data-loss-prevention-agent-outputs
-// workspace: {workspace-name} | conector: Microsoft 365 (OfficeActivity)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia MicrosoftDataLossPrevention y PurviewAuditLog, tablas que no existen en ese workspace.
-// Todo sale de OfficeActivity: las coincidencias DLP son operaciones DLPRuleMatch (SharePoint y OneDrive) o DlpRuleMatch (Exchange), la etiqueta de un archivo va
-// en SensitivityLabelId, y los destinatarios de un correo van en Item.Recipients. Un evento DLP trae el usuario y el tipo de registro, no el nombre de la politica
-// (el nombre llega en las alertas de SecurityAlert: ver govern-dlp-policy-copilot-prompts Q3). Todas compilan y se ejecutaron: Q1, Q2, Q4 y Q5 devolvieron filas, y Q3
-// devolvio filas con un GUID de etiqueta real (con la lista vacia no devuelve nada).
-// ai_label_ids es la lista de GUID de tus etiquetas para contenido de IA: sustituyela.
-let ai_label_ids = dynamic([]);   // GUID de la etiqueta Confidential \ AI-Generated y sus equivalentes
+// workspace: {workspace-name} | connector: Microsoft 365 (OfficeActivity)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read MicrosoftDataLossPrevention and PurviewAuditLog, tables that do not exist in that workspace.
+// Everything comes from OfficeActivity: DLP matches are DLPRuleMatch operations (SharePoint and OneDrive) or DlpRuleMatch (Exchange), the label of a file goes
+// in SensitivityLabelId, and the recipients of an email go in Item.Recipients. A DLP event carries the user and the record type, not the policy name
+// (the name arrives in the SecurityAlert alerts: see govern-dlp-policy-copilot-prompts Q3). All of them compile and ran: Q1, Q2, Q4 and Q5 returned rows, and Q3
+// returned rows with a real label GUID (with the empty list it returns nothing).
+// ai_label_ids is the list of GUIDs of your labels for AI content: replace it.
+let ai_label_ids = dynamic([]);   // GUID of the Confidential \ AI-Generated label and its equivalents
 
-// ── Query 1: Coincidencias DLP en SharePoint, OneDrive y Exchange (7 dias) ──────────────────────────────────────────
+// ── Query 1: DLP matches in SharePoint, OneDrive and Exchange (7 days) ──────────────────────────────────────────────
 OfficeActivity
 | where TimeGenerated > ago(7d)
 | where OfficeWorkload in ("SharePoint", "OneDrive", "Exchange")
@@ -16,9 +16,9 @@ OfficeActivity
 | project TimeGenerated, UserId, UserType, Workload = OfficeWorkload, RecordType, OfficeObjectId
 | order by TimeGenerated desc
 
-// ── Query 2: Enlaces anonimos o invitaciones a invitados creados en SharePoint y OneDrive (7 dias) ────────────────────
-// Validado: los eventos AnonymousLinkCreated existen en el workspace y traen el archivo. La etiqueta no viaja en el evento de compartir: cruza el archivo con
-// la etiqueta por Query 3 o con el inventario de etiquetas.
+// ── Query 2: Anonymous links or guest invitations created in SharePoint and OneDrive (7 days) ─────────────────────────
+// Validated: AnonymousLinkCreated events exist in the workspace and carry the file. The label does not travel in the sharing event: cross-reference the file with
+// the label through Query 3 or with the label inventory.
 OfficeActivity
 | where TimeGenerated > ago(7d)
 | where OfficeWorkload in ("SharePoint", "OneDrive")
@@ -27,8 +27,8 @@ OfficeActivity
 | project TimeGenerated, UserId, Operation, FileName = SourceFileName, Site = Site_Url, SharedWith = TargetUserOrGroupName
 | order by TimeGenerated desc
 
-// ── Query 3: Volumen de acceso a archivos con etiqueta de IA por usuario o aplicacion (ventana de 30 minutos) ─────────────
-// Un usuario o una aplicacion que lee muchos archivos con la etiqueta de IA en poco tiempo. Para vigilar solo agentes, filtra por UserType == "Application".
+// ── Query 3: Access volume to files with an AI label per user or application (30-minute window) ───────────────────────────
+// A user or an application that reads many files with the AI label in a short time. To watch only agents, filter by UserType == "Application".
 OfficeActivity
 | where TimeGenerated > ago(1d)
 | where OfficeWorkload in ("SharePoint", "OneDrive")
@@ -36,15 +36,15 @@ OfficeActivity
 | where SensitivityLabelId in (ai_label_ids)
 | extend Actor = iff(UserType == "Application", strcat("app:", ApplicationId), UserId)
 | summarize FileCount = dcount(OfficeObjectId), Events = count(), LastSeen = max(TimeGenerated) by Actor, Window = bin(TimeGenerated, 30m)
-| where FileCount > 20   // ajustar segun la linea base del tenant
-| extend Alert = strcat("Volumen anomalo: ", FileCount, " archivos con etiqueta de IA en la ventana")
+| where FileCount > 20   // adjust to the tenant baseline
+| extend Alert = strcat("Anomalous volume: ", FileCount, " files with an AI label in the window")
 | order by FileCount desc
 
-// ── Query 4: Correo con coincidencia DLP enviado a dominios externos ─────────────────────────────────────────────────
-// Une el evento Send (Item.InternetMessageId, Item.Recipients) con el DlpRuleMatch de Exchange (OfficeObjectId). Incluye correo de usuarios y de aplicaciones:
-// para solo aplicaciones, filtra por SenderType == "Application".
+// ── Query 4: Email with a DLP match sent to external domains ─────────────────────────────────────────────────────────
+// Joins the Send event (Item.InternetMessageId, Item.Recipients) with the Exchange DlpRuleMatch (OfficeObjectId). Includes email from users and from applications:
+// for applications only, filter by SenderType == "Application".
 let lookback = 7d;
-let internal_domains = dynamic(["contoso.com"]);   // ajustar al tenant
+let internal_domains = dynamic(["contoso.com"]);   // adjust to the tenant
 let sent = OfficeActivity
     | where TimeGenerated > ago(lookback)
     | where OfficeWorkload == "Exchange" and Operation in ("Send", "SendAs", "SendOnBehalf")
@@ -61,11 +61,11 @@ OfficeActivity
 | project DlpTime = TimeGenerated, MessageId = OfficeObjectId
 | join kind=inner sent on MessageId
 | project SentTime, DlpTime, Sender, SenderType, Subject, ExternalRecipients
-| extend Risk = "Correo con coincidencia DLP enviado a un dominio externo"
+| extend Risk = "Email with a DLP match sent to an external domain"
 | order by SentTime desc
 
-// ── Query 5: Objetos con mas coincidencias DLP (7 dias) ──────────────────────────────────────────────────────────
-// OfficeObjectId es el identificador del archivo en SharePoint y OneDrive y el InternetMessageId en Exchange.
+// ── Query 5: Objects with the most DLP matches (7 days) ──────────────────────────────────────────────────────────
+// OfficeObjectId is the file identifier in SharePoint and OneDrive and the InternetMessageId in Exchange.
 OfficeActivity
 | where TimeGenerated > ago(7d)
 | where OfficeWorkload in ("SharePoint", "OneDrive", "Exchange")

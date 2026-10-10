@@ -1,11 +1,12 @@
 // skill: discover-enumerate-foundry-agents
-// workspace: {workspace-name} | conectores: diagnosticos de la cuenta Foundry (AzureDiagnostics); Q4 corre en Advanced Hunting (AgentsInfo)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia FoundryAgents_CL, una tabla personalizada de un conector que no existe en ese
-// workspace. Lo que si existe es el diagnostico de la cuenta Foundry (categorias RequestResponse y Audit de MICROSOFT.COGNITIVESERVICES en AzureDiagnostics):
-// operacion, IP del llamador, estado y tamanos, sin contenido, sin tokens y sin nombre de agente. Por eso Q1 a Q3 miran la cuenta, no el agente. Q1 a Q3
-// compilan y se ejecutaron (598 registros en 30 dias de una cuenta; Q3 sin filas). Q4 se ejecuto en Advanced Hunting y devolvio los 6 agentes de Foundry del tenant.
+// workspace: {workspace-name} | connectors: Foundry account diagnostics (AzureDiagnostics); Q4 runs in Advanced Hunting (AgentsInfo)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read FoundryAgents_CL, a custom table from a connector that does not exist in
+// that workspace. What does exist is the Foundry account diagnostics (RequestResponse and Audit categories of MICROSOFT.COGNITIVESERVICES in
+// AzureDiagnostics): operation, caller IP, status and sizes, with no content, no tokens and no agent name. That is why Q1 to Q3 look at the account,
+// not the agent. Q1 to Q3 compile and ran (598 records in 30 days from one account; Q3 returned no rows). Q4 ran in Advanced Hunting and returned the
+// 6 Foundry agents of the tenant.
 
-// ── Query 1: Actividad por cuenta Foundry (30 dias) ─────────────────────────────────────────────────────────────
+// ── Query 1: Activity per Foundry account (30 days) ─────────────────────────────────────────────────────────────
 let lookback = 30d;
 AzureDiagnostics
 | where TimeGenerated > ago(lookback)
@@ -20,10 +21,10 @@ AzureDiagnostics
 | extend DaysSinceActivity = datetime_diff("day", now(), LastActivity)
 | order by Requests desc
 
-// ── Query 2: Llamadas sin identificador de Entra en el registro (pista de autenticacion por clave) ────────────────────
-// HEURISTICA: el registro RequestResponse trae callerObjectId dentro de properties_s. En la cuenta de validacion el 100% de los 598 registros lo trae vacio, y la
-// cuenta tiene la autenticacion por clave activa (disableLocalAuth false). Que el campo este vacio no prueba el uso de claves: el control que lo decide es
-// disableLocalAuth en la cuenta (paso 2 del skill).
+// ── Query 2: Calls without an Entra identifier in the record (key authentication hint) ────────────────────────────────
+// HEURISTIC: the RequestResponse record carries callerObjectId inside properties_s. On the validation account 100% of the 598 records have it empty,
+// and the account has key authentication enabled (disableLocalAuth false). An empty field does not prove key use: the control that decides it is
+// disableLocalAuth on the account (step 2 of the skill).
 AzureDiagnostics
 | where TimeGenerated > ago(30d)
 | where ResourceProvider == "MICROSOFT.COGNITIVESERVICES" and Category == "RequestResponse"
@@ -37,7 +38,7 @@ AzureDiagnostics
 | extend ShareWithoutCaller = round(100.0 * WithoutEntraCaller / Total, 1)
 | order by Total desc
 
-// ── Query 3: Volumen inusual de llamadas a la cuenta (anomalia sobre 14 dias) ───────────────────────────────────────
+// ── Query 3: Unusual call volume to the account (anomaly over 14 days) ──────────────────────────────────────────────
 let baseline_window = 14d;
 let alert_window    = 1d;
 let baseline = AzureDiagnostics
@@ -52,19 +53,19 @@ AzureDiagnostics
 | summarize TodayRequests = count() by Resource
 | join kind=inner baseline on Resource
 | extend Ratio = round(TodayRequests / AvgDailyRequests, 2)
-| where Ratio > 3   // mas del triple del promedio diario
-| extend Alert = strcat("Volumen anomalo: ", Ratio, "x sobre la linea base")
+| where Ratio > 3   // more than triple the daily average
+| extend Alert = strcat("Anomalous volume: ", Ratio, "x over baseline")
 | project Alert, Resource, TodayRequests, AvgDailyRequests, Ratio
 | order by Ratio desc
 
-// ── Query 4: Agentes de Foundry del inventario de Defender y su propietario e identidad (Advanced Hunting) ───────────────
-// AgentsInfo trae Platform, EntraAgentID, EntraBlueprintID, Owners, PublishedStatus y LifecycleStatus. Un propietario con GUID nulo (00000000-...) no es un
-// propietario real: aqui se cuenta como "Sin propietario".
+// ── Query 4: Foundry agents in the Defender inventory with their owner and identity (Advanced Hunting) ───────────────────
+// AgentsInfo carries Platform, EntraAgentID, EntraBlueprintID, Owners, PublishedStatus and LifecycleStatus. An owner with a null GUID (00000000-...)
+// is not a real owner: here it counts as "No owner".
 AgentsInfo
 | where Timestamp > ago(30d)
 | summarize arg_max(Timestamp, *) by AgentId
 | where Platform == "Microsoft Foundry" and LifecycleStatus != "Deleted"
 | extend RealOwners = array_length(set_difference(parse_json(Owners), dynamic(["00000000-0000-0000-0000-000000000000"])))
 | project Name, AgentId, PublishedStatus, LifecycleStatus, EntraAgentID, EntraBlueprintID, RealOwners, ToolsAuthenticationType, CreatedDateTime, LastUpdatedDateTime
-| extend Gap = case(RealOwners == 0, "Sin propietario", isempty(EntraAgentID), "Sin identidad Entra Agent ID", "Con propietario e identidad")
+| extend Gap = case(RealOwners == 0, "No owner", isempty(EntraAgentID), "No Entra Agent ID identity", "Has owner and identity")
 | order by Gap asc, LastUpdatedDateTime desc

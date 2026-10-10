@@ -1,22 +1,25 @@
 // skill: secure-network-isolation-agent
-// workspace: {workspace-name} | conectores: Azure Activity, diagnosticos de la cuenta Foundry, flujos de VNet (NTANetAnalytics), Azure Firewall (AZFWApplicationRule); Q1 corre en Azure Resource Graph
-// Validado en un workspace Sentinel y en Azure Resource Graph (oct 2026): la version anterior leia AzureNetworkAnalytics_CL (analisis de trafico de los flujos de NSG, que se retiran con los NSG flow logs el 30 de
-// septiembre de 2027; los flujos de VNet escriben en NTANetAnalytics) y FoundryAgents_CL (no existe en el workspace). Q1, Q4, Q5 y Q6 se ejecutaron contra datos reales. Q2 y Q3 leen tablas que no existen en el
-// workspace de validacion (NTANetAnalytics y AZFWApplicationRule): se probaron con un datatable construido con el esquema de Learn y estan marcadas NO VERIFICADAS con datos reales.
+// workspace: {workspace-name} | connectors: Azure Activity, Foundry account diagnostics, VNet flows (NTANetAnalytics), Azure Firewall (AZFWApplicationRule); Q1 runs in Azure Resource Graph
+// Validated on a Sentinel workspace and in Azure Resource Graph (Oct 2026): the previous version read AzureNetworkAnalytics_CL (traffic analytics of
+// NSG flows, which are retired together with the NSG flow logs on September 30, 2027; VNet flows write to NTANetAnalytics) and FoundryAgents_CL (it
+// does not exist in the workspace). Q1, Q4, Q5 and Q6 ran against real data.
+// Q2 and Q3 read tables that do not exist in the validation workspace (NTANetAnalytics and AZFWApplicationRule): they were tested with a datatable
+// built with the Learn schema and are marked NOT VERIFIED with real data.
 
-// ── Query 1 (Azure Resource Graph, no Log Analytics): exposicion de red de las cuentas Foundry ─────────────────────
-// Resultado en la cuenta de validacion: acceso publico habilitado, sin private endpoints y sin inyeccion de red de salida.
+// ── Query 1 (Azure Resource Graph, not Log Analytics): network exposure of Foundry accounts ────────────────────────
+// Result on the validation account: public access enabled, no private endpoints and no outbound network injection.
 resources
 | where type =~ "microsoft.cognitiveservices/accounts" and kind =~ "AIServices"
 | extend PublicNetworkAccess = tostring(properties.publicNetworkAccess), DefaultAction = tostring(properties.networkAcls.defaultAction), PrivateEndpoints = array_length(properties.privateEndpointConnections), OutboundInjection = array_length(properties.networkInjections)
 | project name, resourceGroup, subscriptionId, PublicNetworkAccess, DefaultAction, PrivateEndpoints, OutboundInjection
-| extend Inbound = case(PublicNetworkAccess =~ "Disabled", "Sin acceso publico", DefaultAction =~ "Deny", "Redes seleccionadas", "Abierta a internet")
-| extend Outbound = iff(isnull(OutboundInjection) or OutboundInjection == 0, "Sin inyeccion de red de salida", "Con inyeccion de red de salida")
+| extend Inbound = case(PublicNetworkAccess =~ "Disabled", "No public access", DefaultAction =~ "Deny", "Selected networks", "Open to the internet")
+| extend Outbound = iff(isnull(OutboundInjection) or OutboundInjection == 0, "No outbound network injection", "With outbound network injection")
 
-// ── Query 2: Flujos de la subred de agentes hacia internet (NO VERIFICADA con datos reales) ────────────────────────
-// Requiere flujos de VNet con analisis de trafico hacia un Log Analytics workspace. Con la red administrada de Foundry no hay registro del trafico de salida (Learn: "no logging of outbound traffic support yet"),
-// asi que esta consulta solo sirve con una VNet propia. Columnas y valores de FlowType y SubType segun el esquema de NTANetAnalytics en Learn; Learn muestra FlowDirection como I u O en el esquema y como
-// Inbound u Outbound en sus consultas de ejemplo, por eso se aceptan las dos formas. Reemplaza agent_subnet por ResourceGroup/VirtualNetwork/Subnet de la subred delegada.
+// ── Query 2: Flows from the agent subnet to the internet (NOT VERIFIED with real data) ─────────────────────────────
+// Requires VNet flows with traffic analytics sent to a Log Analytics workspace. With the Foundry managed network there is no record of outbound
+// traffic (Learn: "no logging of outbound traffic support yet"), so this query is only useful with your own VNet. FlowType and SubType columns and
+// values follow the NTANetAnalytics schema in Learn; Learn shows FlowDirection as I or O in the schema and as Inbound or Outbound in its sample
+// queries, so both forms are accepted. Replace agent_subnet with ResourceGroup/VirtualNetwork/Subnet of the delegated subnet.
 let lookback = 24h;
 let agent_subnet = "rg-foundry/vnet-foundry/snet-agents";
 NTANetAnalytics
@@ -31,25 +34,29 @@ NTANetAnalytics
     DeniedFlows   = sum(DeniedOutFlows),
     Destinations  = make_set(DestPublicIps, 10)
   by SrcSubnet, DestPort, L7Protocol
-| extend RiskLevel = case(BytesSent > 10000000, "Alto", BytesSent > 1000000, "Medio", "Bajo")
+| extend RiskLevel = case(BytesSent > 10000000, "High", BytesSent > 1000000, "Medium", "Low")
 | order by BytesSent desc
 
-// ── Query 3: Destinos (FQDN) que piden los agentes a traves del Azure Firewall (NO VERIFICADA con datos reales) ────
-// Requiere Azure Firewall con registros de estructura (tabla AZFWApplicationRule) enviados al workspace. Columnas segun el esquema de Learn. Reemplaza agent_subnet_cidr por el CIDR de la subred delegada.
-// Un FQDN permitido que no este en la lista aprobada, o un Deny repetido, es lo que hay que revisar. Los destinos de HTTPS sin inspeccion TLS aparecen solo como FQDN.
+// ── Query 3: Destinations (FQDN) requested by the agents through Azure Firewall (NOT VERIFIED with real data) ──────
+// Requires Azure Firewall with structured logs (AZFWApplicationRule table) sent to the workspace. Columns follow the Learn schema. Replace
+// agent_subnet_cidr with the CIDR of the delegated subnet.
+// An allowed FQDN that is not on the approved list, or a repeated Deny, is what needs review. HTTPS destinations without TLS inspection appear only as FQDN.
 let lookback = 7d;
 let agent_subnet_cidr = "192.168.0.0/24";
 AZFWApplicationRule
 | where TimeGenerated > ago(lookback)
 | where ipv4_is_in_range(SourceIp, agent_subnet_cidr)
 | summarize Requests = count(), LastRequest = max(TimeGenerated), Rules = make_set(Rule, 5) by Fqdn, Action
-| extend Review = case(Action =~ "Deny", "Bloqueado por el firewall: confirmar si era un intento no autorizado", "Permitido: confirmar que el destino esta en la lista aprobada")
+| extend Review = case(Action =~ "Deny", "Blocked by the firewall: confirm whether it was an unauthorized attempt", "Allowed: confirm that the destination is on the approved list")
 | order by Requests desc
 
-// ── Query 4: Reglas de NSG que abren la red (entrada desde internet o salida a internet o AzureCloud) ──────────────
-// Lee el cuerpo de la regla del evento Start y lo une con el Success por CorrelationId. La version anterior buscaba "Allow" e "Internet" como texto en todo el cuerpo y marcaba tambien reglas de entrada acotadas.
-// AzureCloud como destino de salida se marca porque cubre las direcciones de todos los clientes de Azure: no limita la exfiltracion (Learn: una etiqueta de servicio no se puede acotar a un tenant ni a un recurso).
-// Resultado en la cuenta de validacion: la regla de entrada que existe en 180 dias tiene un origen concreto, asi que la consulta devuelve 0 filas (quitando el ultimo where se ve la regla con Nsg y Rule bien extraidos).
+// ── Query 4: NSG rules that open the network (inbound from the internet or outbound to the internet or AzureCloud) ───
+// Reads the rule body from the Start event and joins it with the Success event by CorrelationId. The previous version looked for "Allow" and
+// "Internet" as text in the whole body and also flagged narrowly scoped inbound rules.
+// AzureCloud as an outbound destination is flagged because it covers the addresses of all Azure customers: it does not limit exfiltration (Learn: a
+// service tag cannot be scoped to a tenant or to a resource).
+// Result on the validation account: the inbound rule that exists in 180 days has a specific source, so the query returns 0 rows (removing the last
+// where shows the rule with Nsg and Rule correctly extracted).
 let lookback = 30d;
 let succeeded = AzureActivity
     | where TimeGenerated > ago(lookback)
@@ -64,17 +71,17 @@ AzureActivity
          SourcePrefix = tostring(Body.properties.sourceAddressPrefix), DestinationPrefix = tostring(Body.properties.destinationAddressPrefix),
          DestinationPort = tostring(Body.properties.destinationPortRange), Nsg = tostring(split(Entity, "/")[-3])
 | extend Exposure = case(
-    Access == "Allow" and Direction == "Inbound" and SourcePrefix in ("*", "Internet", "0.0.0.0/0"), "Entrada abierta a internet",
-    Access == "Allow" and Direction == "Outbound" and DestinationPrefix in ("*", "Internet", "AzureCloud"), "Salida abierta (Internet o AzureCloud)",
+    Access == "Allow" and Direction == "Inbound" and SourcePrefix in ("*", "Internet", "0.0.0.0/0"), "Inbound open to the internet",
+    Access == "Allow" and Direction == "Outbound" and DestinationPrefix in ("*", "Internet", "AzureCloud"), "Outbound open (Internet or AzureCloud)",
     "")
 | where isnotempty(Exposure)
 | project TimeGenerated, Caller, Nsg, Rule, Direction, SourcePrefix, DestinationPrefix, DestinationPort, Exposure
 | order by TimeGenerated desc
 
-// ── Query 5: Cambios en private endpoints de la red y de la cuenta Foundry ─────────────────────────────────────────
-// Crear, borrar o aprobar un private endpoint cambia quien puede llegar a la cuenta. Un cambio de publicNetworkAccess en la cuenta aparece como ACCOUNTS/WRITE (ver Q4 del skill secure-managed-identity-foundry) y
-// el Activity Log no trae la propiedad: comparalo con Q1.
-// Resultado en la cuenta de validacion: 0 filas en 180 dias (coherente con Q1: sin private endpoints).
+// ── Query 5: Changes to private endpoints of the network and of the Foundry account ────────────────────────────────
+// Creating, deleting or approving a private endpoint changes who can reach the account. A publicNetworkAccess change on the account appears as
+// ACCOUNTS/WRITE (see Q4 of the secure-managed-identity-foundry skill) and the Activity Log does not carry the property: compare it with Q1.
+// Result on the validation account: 0 rows in 180 days (consistent with Q1: no private endpoints).
 let lookback = 180d;
 AzureActivity
 | where TimeGenerated > ago(lookback)
@@ -84,10 +91,11 @@ AzureActivity
 | project TimeGenerated, Caller, OperationNameValue, Target
 | order by TimeGenerated desc
 
-// ── Query 6: Llamadas a la cuenta desde direcciones que no son privadas ────────────────────────────────────────────
-// Con acceso publico deshabilitado y un private endpoint, lo esperado es 0 filas. La IP del llamador viene con los ultimos octetos enmascarados, asi que se compara solo el prefijo. Que IP registra el
-// diagnostico para el trafico que entra por el private endpoint NO esta verificado: la cuenta de validacion tiene el acceso publico habilitado.
-// Resultado en la cuenta de validacion: 598 llamadas en 30 dias desde 17 prefijos publicos (la cuenta esta abierta a internet).
+// ── Query 6: Calls to the account from non-private addresses ───────────────────────────────────────────────────────
+// With public access disabled and a private endpoint, the expected result is 0 rows. The caller IP comes with the last octets masked, so only the
+// prefix is compared. Which IP the diagnostics record for traffic entering through the private endpoint is NOT verified: the validation account has
+// public access enabled.
+// Result on the validation account: 598 calls in 30 days from 17 public prefixes (the account is open to the internet).
 AzureDiagnostics
 | where TimeGenerated > ago(30d)
 | where ResourceProvider == "MICROSOFT.COGNITIVESERVICES" and Category == "RequestResponse"

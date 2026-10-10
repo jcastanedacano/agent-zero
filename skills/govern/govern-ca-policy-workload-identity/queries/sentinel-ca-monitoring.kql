@@ -1,12 +1,12 @@
 // skill: govern-ca-policy-workload-identity
-// workspace: {workspace-name} | conectores: Microsoft Entra ID (AADServicePrincipalSignInLogs)
-// Validado en un workspace Sentinel (oct 2026). La version anterior: leia solo la primera politica evaluada (ConditionalAccessPolicies[0]) y exigia que fuera la AISEC; buscaba un resultado
-// reportOnlyBlock que no existe (los resultados reales llevan el prefijo reportOnly, por ejemplo reportOnlyFailure y reportOnlyNotApplied); y decidia "fuera de la red corporativa" con
-// prefijos privados (10., 172.16., 192.168.), que nunca aparecen como IP de origen de una solicitud de token. Q1 a Q4 compilan y se ejecutaron; el resultado de la cuenta de validacion esta junto a cada consulta.
+// workspace: {workspace-name} | connectors: Microsoft Entra ID (AADServicePrincipalSignInLogs)
+// Validated on a Sentinel workspace (Oct 2026). The previous version: read only the first evaluated policy (ConditionalAccessPolicies[0]) and required it to be the AISEC one; looked for a result
+// reportOnlyBlock that does not exist (the real results carry the reportOnly prefix, for example reportOnlyFailure and reportOnlyNotApplied); and decided "outside the corporate network" with
+// private prefixes (10., 172.16., 192.168.), which never appear as the source IP of a token request. Q1 to Q4 compile and ran; the result from the validation account is next to each query.
 
-// ── Query 1: Que politicas evaluaron los inicios de sesion de entidades de servicio, y con que resultado ───────────────
-// ConditionalAccessPolicies es un arreglo con todas las politicas evaluadas en el inicio de sesion. Filtrar por el nombre de la politica AISEC para ver solo la de este skill.
-// Resultado en la cuenta de validacion: 4 politicas, todas de agentes (una activa con notApplied y tres en solo informe con reportOnlyNotApplied), cada una con 2351 evaluaciones en 8 entidades de servicio en 90 dias.
+// ── Query 1: Which policies evaluated service principal sign-ins, and with what result ─────────────────────────────────
+// ConditionalAccessPolicies is an array with all the policies evaluated at sign-in. Filter by the name of the AISEC policy to see only the one for this skill.
+// Result in the validation account: 4 policies, all for agents (one active with notApplied and three in report-only with reportOnlyNotApplied), each with 2351 evaluations across 8 service principals in 90 days.
 let lookback = 90d;
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
@@ -14,9 +14,9 @@ AADServicePrincipalSignInLogs
 | summarize Evaluations = count(), ServicePrincipals = dcount(ServicePrincipalId) by Policy = tostring(Pol.displayName), PolicyResult = tostring(Pol.result)
 | order by Evaluations desc
 
-// ── Query 2: Solo informe, accesos que la politica habria bloqueado (antes de activarla) ─────────────────────────────
-// reportOnlyFailure es "Report-only: Failure" en el portal: se cumplen las condiciones de la politica y el control es Block. Revisar las IPs y ubicaciones antes de pasar la politica a enabled.
-// Resultado en la cuenta de validacion: 0 filas (ninguna politica de este tipo en solo informe).
+// ── Query 2: Report-only, accesses the policy would have blocked (before enabling it) ────────────────────────────────
+// reportOnlyFailure is "Report-only: Failure" in the portal: the conditions of the policy are met and the control is Block. Review the IPs and locations before moving the policy to enabled.
+// Result in the validation account: 0 rows (no policy of this type in report-only).
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
 | mv-expand Pol = parse_json(ConditionalAccessPolicies)
@@ -24,19 +24,19 @@ AADServicePrincipalSignInLogs
 | summarize WouldBeBlocked = count(), IPs = make_set(IPAddress, 10), Locations = make_set(Location, 5), LastSeen = max(TimeGenerated) by ServicePrincipalName, Policy = tostring(Pol.displayName)
 | order by WouldBeBlocked desc
 
-// ── Query 3: Bloqueos aplicados por Conditional Access ───────────────────────────────────────────────────────────────
-// 53003 es el codigo que Entra devuelve cuando una politica de Conditional Access bloquea el acceso.
-// Resultado en la cuenta de validacion: 0 filas en 90 dias (ninguna politica llego a bloquear).
+// ── Query 3: Blocks enforced by Conditional Access ───────────────────────────────────────────────────────────────────
+// 53003 is the code Entra returns when a Conditional Access policy blocks access.
+// Result in the validation account: 0 rows in 90 days (no policy ever blocked).
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
 | where ResultType == "53003"
 | project TimeGenerated, ServicePrincipalName, AppId, IPAddress, Location, ResourceDisplayName, ResultDescription
 | order by TimeGenerated desc
 
-// ── Query 4: Accesos exitosos desde fuera de los rangos de confianza (validar la Named Location antes de activar) ─────
-// Sustituir trusted_ranges por los rangos PUBLICOS de salida de los agentes (203.0.113.0/24 es un rango de documentacion). ipv4_is_in_any_range devuelve null para una direccion IPv6;
-// coalesce las deja en la lista en lugar de descartarlas en silencio. Resultado en la cuenta de validacion: con el rango de documentacion todo cae fuera; las filas incluyen dos entidades de
-// servicio propias desde una sola IP publica y trafico IPv6 interno de Microsoft Cloud App Security.
+// ── Query 4: Successful accesses from outside the trusted ranges (validate the Named Location before enabling) ────────
+// Replace trusted_ranges with the PUBLIC egress ranges of the agents (203.0.113.0/24 is a documentation range). ipv4_is_in_any_range returns null for an IPv6 address;
+// coalesce leaves them in the list instead of silently dropping them. Result in the validation account: with the documentation range everything falls outside; the rows include
+// two service principals of the account itself from a single public IP and internal IPv6 traffic from Microsoft Cloud App Security.
 let trusted_ranges = dynamic(["203.0.113.0/24"]);
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)

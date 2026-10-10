@@ -1,13 +1,13 @@
 // skill: protect-purview-ai-hub-monitoring
-// workspace: {workspace-name} | conector: Microsoft Copilot (CopilotActivity)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia PurviewAuditLog y MicrosoftDataLossPrevention, tablas que no existen en ese workspace, y
-// buscaba Workload "AIHub". Las interacciones de Copilot, de agentes y de aplicaciones de IA llegan a CopilotActivity (conector Microsoft Copilot): RecordType
-// CopilotInteraction y AIAppInteraction, Workload, AppIdentity, AppHost y los recursos a los que accedio Copilot (AccessedResources). Lo que solo vive en el
-// explorador de actividad de DSPM for AI es el texto de los prompts y respuestas, los tipos de informacion confidencial detectados y las coincidencias de DLP:
-// no estan en ninguna tabla de Sentinel. Todas las consultas compilan y se ejecutaron en el workspace (245 filas en CopilotActivity); Q3 no devolvio filas
-// porque los 2 recursos listados en 90 dias no traen etiqueta.
+// workspace: {workspace-name} | connector: Microsoft Copilot (CopilotActivity)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read PurviewAuditLog and MicrosoftDataLossPrevention, tables that do not exist in that workspace, and
+// looked for Workload "AIHub". The interactions of Copilot, agents and AI applications arrive in CopilotActivity (Microsoft Copilot connector): RecordType
+// CopilotInteraction and AIAppInteraction, Workload, AppIdentity, AppHost and the resources Copilot accessed (AccessedResources). What only lives in the
+// DSPM for AI activity explorer is the text of prompts and responses, the sensitive information types detected and the DLP matches:
+// they are not in any Sentinel table. All queries compile and ran on the workspace (245 rows in CopilotActivity); Q3 returned no rows
+// because the 2 resources listed in 90 days carry no label.
 
-// ── Query 1: Volumen de interacciones por aplicacion de IA (30 dias) ─────────────────────────────────────────────
+// ── Query 1: Interaction volume by AI application (30 days) ──────────────────────────────────────────────────────
 let lookback = 30d;
 CopilotActivity
 | where TimeGenerated > ago(lookback)
@@ -19,7 +19,7 @@ CopilotActivity
   by RecordType, Workload, AppIdentity
 | order by Interactions desc
 
-// ── Query 2: Usuarios con mayor volumen de interacciones con IA ──────────────────────────────────────────────────
+// ── Query 2: Users with the highest volume of AI interactions ────────────────────────────────────────────────────
 CopilotActivity
 | where TimeGenerated > ago(lookback)
 | where RecordType in ("CopilotInteraction", "AIAppInteraction")
@@ -31,9 +31,9 @@ CopilotActivity
   by ActorName
 | top 20 by TotalInteractions
 
-// ── Query 3: Etiquetas de sensibilidad de los recursos que Copilot leyo ──────────────────────────────────────────
-// El registro de auditoria trae SensitivityLabelId por recurso (el GUID, no el nombre). Sustituye la deteccion de tipos de informacion confidencial, que el
-// registro no trae. Misma fuente que KQL Library P04-Q6.
+// ── Query 3: Sensitivity labels of the resources Copilot read ────────────────────────────────────────────────────
+// The audit record carries SensitivityLabelId per resource (the GUID, not the name). It replaces the detection of sensitive information types, which the
+// record does not carry. Same source as KQL Library P04-Q6.
 CopilotActivity
 | where TimeGenerated > ago(lookback)
 | where RecordType == "CopilotInteraction"
@@ -43,7 +43,7 @@ CopilotActivity
 | summarize Reads = count(), Users = dcount(ActorUserId), LastRead = max(TimeGenerated) by LabelId
 | order by Reads desc
 
-// ── Query 4: Interacciones con IA fuera de horario laboral (UTC) ────────────────────────────────────────────────
+// ── Query 4: AI interactions outside working hours (UTC) ────────────────────────────────────────────────────────
 CopilotActivity
 | where TimeGenerated > ago(7d)
 | where RecordType in ("CopilotInteraction", "AIAppInteraction")
@@ -52,7 +52,7 @@ CopilotActivity
 | summarize OffHoursCount = count(), UniqueUsers = dcount(ActorUserId) by Day = bin(TimeGenerated, 1d), Workload
 | order by Day desc
 
-// ── Query 5: Tendencia diaria de interacciones (linea base de actividad normal) ──────────────────────────────────
+// ── Query 5: Daily interaction trend (baseline of normal activity) ───────────────────────────────────────────────
 CopilotActivity
 | where TimeGenerated > ago(30d)
 | where RecordType in ("CopilotInteraction", "AIAppInteraction")

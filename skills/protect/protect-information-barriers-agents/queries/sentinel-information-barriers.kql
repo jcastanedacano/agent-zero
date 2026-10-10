@@ -1,13 +1,13 @@
 // skill: protect-information-barriers-agents
-// workspace: {workspace-name} | conector: Microsoft 365 (OfficeActivity)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia PurviewAuditLog y buscaba operaciones InformationBarrierPolicyViolation, IBPolicyViolation y
-// CrossSegmentAccess, que no figuran en la lista de actividades de auditoria de Learn. Las actividades documentadas de Information Barriers son de SharePoint y
-// OneDrive: SPOIBIsEnabled, SPOIBIsDisabled, SiteIBModeSet, SiteIBModeChanged, SiteIBSegmentsSet, SiteIBSegmentsChanged, SiteIBSegmentsRemoved y
-// AppBypassInformationBarrier (Q1). Learn no documenta un evento de "violacion": un acceso bloqueado por IB no llega como evento. Por eso Q2 y Q3 cruzan los accesos
-// de OfficeActivity con TU mapa de segmentos. Q2 y Q3 compilan y se ejecutaron con un mapa de ejemplo; Q1 compila y no tiene filas (NO VERIFICADO).
+// workspace: {workspace-name} | connector: Microsoft 365 (OfficeActivity)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read PurviewAuditLog and looked for InformationBarrierPolicyViolation, IBPolicyViolation and
+// CrossSegmentAccess operations, which are not in the Learn list of audit activities. The documented Information Barriers activities are from SharePoint and
+// OneDrive: SPOIBIsEnabled, SPOIBIsDisabled, SiteIBModeSet, SiteIBModeChanged, SiteIBSegmentsSet, SiteIBSegmentsChanged, SiteIBSegmentsRemoved and
+// AppBypassInformationBarrier (Q1). Learn does not document a "violation" event: an access blocked by IB does not arrive as an event. That is why Q2 and Q3 cross-reference the accesses
+// from OfficeActivity with YOUR segment map. Q2 and Q3 compile and ran with a sample map; Q1 compiles and has no rows (NOT VERIFIED).
 
-// ── Query 1: Cambios administrativos de Information Barriers en SharePoint y OneDrive ─────────────────────────────────
-// SPOIBIsDisabled y AppBypassInformationBarrier son las dos que debilitan el control: alerta siempre.
+// ── Query 1: Administrative changes to Information Barriers in SharePoint and OneDrive ────────────────────────────────
+// SPOIBIsDisabled and AppBypassInformationBarrier are the two that weaken the control: always alert.
 OfficeActivity
 | where TimeGenerated > ago(90d)
 | where Operation in (
@@ -18,12 +18,12 @@ OfficeActivity
 | project TimeGenerated, UserId, Operation, Site_Url, Parameters
 | order by TimeGenerated desc
 
-// ── Query 2: Usuarios de un segmento que acceden a sitios de un segmento bloqueado ───────────────────────────────────
-// Sustituye los tres datatable por tu mapa: usuario a segmento, sitio a segmento y pares bloqueados. El nombre del sitio es el cuarto fragmento de la URL
-// (https://tenant.sharepoint.com/sites/<sitio>/). Para listas largas, usa un Watchlist de Sentinel con _GetWatchlist().
+// ── Query 2: Users in one segment who access sites in a blocked segment ──────────────────────────────────────────────
+// Replace the three datatables with your map: user to segment, site to segment and blocked pairs. The site name is the fourth fragment of the URL
+// (https://tenant.sharepoint.com/sites/<site>/). For long lists, use a Sentinel Watchlist with _GetWatchlist().
 let UserSegment = datatable(UserId: string, Segment: string) [
-    "usuario1@contoso.com", "Finance",
-    "usuario2@contoso.com", "Legal"
+    "user1@contoso.com", "Finance",
+    "user2@contoso.com", "Legal"
 ];
 let SiteSegment = datatable(SiteName: string, Segment: string) [
     "finance-reports", "Finance",
@@ -44,12 +44,12 @@ OfficeActivity
 | join kind=inner BlockedPairs on $left.Segment == $right.SegmentA and $left.SiteSegmentName == $right.SegmentB
 | summarize AccessCount = count(), Files = dcount(OfficeObjectId), Operations = make_set(Operation, 5)
     by UserId, UserSegment = Segment, SiteName, SiteSegment = SiteSegmentName
-| extend Alert = "Acceso a un sitio de un segmento que la politica de Information Barriers separa del segmento del usuario"
+| extend Alert = "Access to a site in a segment that the Information Barriers policy separates from the segment of the user"
 | order by AccessCount desc
 
-// ── Query 3: Aplicaciones o agentes con acceso a sitios de mas de un segmento ───────────────────────────────────────
-// Information Barriers segmenta usuarios y grupos (atributos de Entra o Exchange): Learn no documenta un segmento para un service principal ni para una identidad de
-// agente. Esta consulta lista las aplicaciones que tocan sitios de mas de un segmento, que son las que IB no separa. Usa el mismo SiteSegment de Q2.
+// ── Query 3: Applications or agents with access to sites in more than one segment ───────────────────────────────────
+// Information Barriers segments users and groups (Entra or Exchange attributes): Learn does not document a segment for a service principal or for an agent
+// identity. This query lists the applications that touch sites in more than one segment, which are the ones IB does not separate. It uses the same SiteSegment as Q2.
 let SiteSegment = datatable(SiteName: string, Segment: string) [
     "finance-reports", "Finance",
     "legal-cases",     "Legal"
@@ -63,5 +63,5 @@ OfficeActivity
 | summarize Segments = make_set(Segment), Sites = dcount(SiteName), Events = count(), Files = dcount(OfficeObjectId) by ApplicationId
 | extend SegmentCount = array_length(Segments)
 | where SegmentCount > 1
-| extend Alert = "Aplicacion con acceso a sitios de mas de un segmento: IB no la separa"
+| extend Alert = "Application with access to sites in more than one segment: IB does not separate it"
 | order by Events desc

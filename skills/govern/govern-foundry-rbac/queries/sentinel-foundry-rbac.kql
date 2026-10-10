@@ -1,12 +1,12 @@
 // skill: govern-foundry-rbac
-// workspace: {workspace-name} | conectores: Azure Activity; Q1 y Q2 corren en Azure Resource Graph (no en Log Analytics)
-// Validado en un workspace Sentinel y en Azure Resource Graph (oct 2026): la version anterior del skill apuntaba a un archivo que no existia y su consulta leia MICROSOFT.MACHINELEARNINGSERVICES y una
-// propiedad agentId que el Activity Log no trae. Foundry es Microsoft.CognitiveServices/accounts (kind AIServices) y sus proyectos son recursos hijos. Las conexiones y los despliegues NO estan en Resource Graph (solo
-// cuentas y proyectos): se leen con la CLI (pasos 3 y 4 del skill). Q1 a Q4 compilan y se ejecutaron; el resultado de la cuenta de validacion esta junto a cada consulta.
+// workspace: {workspace-name} | connectors: Azure Activity; Q1 and Q2 run in Azure Resource Graph (not in Log Analytics)
+// Validated on a Sentinel workspace and in Azure Resource Graph (Oct 2026): the previous version of the skill pointed to a file that did not exist and its query read MICROSOFT.MACHINELEARNINGSERVICES and an
+// agentId property that the Activity Log does not carry. Foundry is Microsoft.CognitiveServices/accounts (kind AIServices) and its projects are child resources. Connections and deployments are NOT in Resource Graph (only
+// accounts and projects): they are read with the CLI (steps 3 and 4 of the skill). Q1 to Q4 compile and ran; the result on the validation account is next to each query.
 
-// ── Query 1 (Azure Resource Graph): matriz de roles relevantes para Foundry por nivel de alcance y tipo de principal ──
-// Los IDs son los de los roles integrados (los roles Foundry cambiaron de nombre: por eso se usa el ID). Un rol Foundry en Grupo de recursos o Suscripcion aplica a todas las cuentas Foundry de ese alcance.
-// Resultado en la cuenta de validacion: 10 filas (incluye Foundry User a nivel de suscripcion, Azure AI Developer en la cuenta y Contributor y Owner de varias entidades de servicio).
+// ── Query 1 (Azure Resource Graph): matrix of Foundry-relevant roles by scope level and principal type ────────────────
+// The IDs are those of the built-in roles (the Foundry roles were renamed: that is why the ID is used). A Foundry role at Resource group or Subscription level applies to all Foundry accounts in that scope.
+// Result on the validation account: 10 rows (includes Foundry User at subscription level, Azure AI Developer on the account, and Contributor and Owner for several service principals).
 authorizationresources
 | where type =~ "microsoft.authorization/roleassignments"
 | extend Scope = tolower(tostring(properties.scope)), RoleId = tolower(tostring(split(tostring(properties.roleDefinitionId), "/")[-1])), PrincipalType = tostring(properties.principalType)
@@ -29,18 +29,18 @@ authorizationresources
     "")
 | where isnotempty(Role)
 | extend ScopeLevel = case(
-    Scope contains "/agents/", "Agente",
-    Scope contains "/projects/", "Proyecto",
-    Scope contains "microsoft.cognitiveservices/accounts", "Cuenta Foundry",
-    Scope contains "/resourcegroups/", "Grupo de recursos",
-    "Suscripcion")
+    Scope contains "/agents/", "Agent",
+    Scope contains "/projects/", "Project",
+    Scope contains "microsoft.cognitiveservices/accounts", "Foundry account",
+    Scope contains "/resourcegroups/", "Resource group",
+    "Subscription")
 | summarize Assignments = count() by Role, ScopeLevel, PrincipalType
 | order by ScopeLevel asc, Role asc
 
-// ── Query 2 (Azure Resource Graph): asignaciones que requieren una decision ─────────────────────────────────────────
-// Marca los roles de Cognitive Services (listan claves), Azure AI Developer (es de Azure Machine Learning), Azure AI Inference Deployment Operator (crea despliegues, no llama), Owner y Contributor (gestionan la cuenta
-// y, con las claves activas, pueden listarlas), y cualquier rol Foundry con alcance mayor que la cuenta. Owner y Contributor a nivel de suscripcion no son especificos de Foundry: son ruido esperado en un tenant de laboratorio.
-// Resultado en la cuenta de validacion: 13 filas en 3 grupos de recursos y la suscripcion; PrincipalId es el objeto de Entra (resuelvelo en el directorio).
+// ── Query 2 (Azure Resource Graph): assignments that require a decision ─────────────────────────────────────────────
+// Flags Cognitive Services roles (list keys), Azure AI Developer (belongs to Azure Machine Learning), Azure AI Inference Deployment Operator (creates deployments, does not call), Owner and Contributor (manage the account
+// and, with keys enabled, can list them), and any Foundry role with a scope broader than the account. Owner and Contributor at subscription level are not specific to Foundry: they are expected noise in a lab tenant.
+// Result on the validation account: 13 rows in 3 resource groups and the subscription; PrincipalId is the Entra object (resolve it in the directory).
 authorizationresources
 | where type =~ "microsoft.authorization/roleassignments"
 | extend Scope = tolower(tostring(properties.scope)), RoleId = tolower(tostring(split(tostring(properties.roleDefinitionId), "/")[-1])), PrincipalType = tostring(properties.principalType), PrincipalId = tostring(properties.principalId), CreatedOn = todatetime(properties.createdOn)
@@ -59,26 +59,26 @@ authorizationresources
     "")
 | where isnotempty(Role)
 | extend ScopeLevel = case(
-    Scope contains "/agents/", "Agente",
-    Scope contains "/projects/", "Proyecto",
-    Scope contains "microsoft.cognitiveservices/accounts", "Cuenta Foundry",
-    Scope contains "/resourcegroups/", "Grupo de recursos",
-    "Suscripcion")
+    Scope contains "/agents/", "Agent",
+    Scope contains "/projects/", "Project",
+    Scope contains "microsoft.cognitiveservices/accounts", "Foundry account",
+    Scope contains "/resourcegroups/", "Resource group",
+    "Subscription")
 | extend Risk = case(
-    RoleId in ("a97b65f3-24c7-4388-baec-2e87135dc908", "25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68"), "Rol de Cognitive Services: puede listar las claves de la cuenta",
-    RoleId == "64702f94-c441-49e6-a78b-ef80e0188fee", "Azure AI Developer: es de Azure Machine Learning y hubs, no de proyectos Foundry",
-    RoleId == "3afb7f49-54cb-416e-8c09-6dc049efa503", "Crea despliegues, no es un rol para llamar a agentes ni modelos",
-    RoleId in ("8e3af657-a8ff-443c-a75c-2fe8c4bcb635", "b24988ac-6180-42a0-ab88-20f7382dd24c"), "Gestiona la cuenta; con las claves activas puede listarlas y llamar sin pasar por RBAC",
-    ScopeLevel in ("Grupo de recursos", "Suscripcion"), "Rol Foundry con alcance mayor que la cuenta: aplica a todas las cuentas Foundry de ese alcance",
+    RoleId in ("a97b65f3-24c7-4388-baec-2e87135dc908", "25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68"), "Cognitive Services role: can list the account keys",
+    RoleId == "64702f94-c441-49e6-a78b-ef80e0188fee", "Azure AI Developer: belongs to Azure Machine Learning and hubs, not to Foundry projects",
+    RoleId == "3afb7f49-54cb-416e-8c09-6dc049efa503", "Creates deployments, it is not a role for calling agents or models",
+    RoleId in ("8e3af657-a8ff-443c-a75c-2fe8c4bcb635", "b24988ac-6180-42a0-ab88-20f7382dd24c"), "Manages the account; with keys enabled it can list them and call without going through RBAC",
+    ScopeLevel in ("Resource group", "Subscription"), "Foundry role with a scope broader than the account: applies to all Foundry accounts in that scope",
     "")
 | where isnotempty(Risk)
 | project CreatedOn, Role, ScopeLevel, PrincipalType, PrincipalId, Scope, Risk
 | order by ScopeLevel asc, Role asc
 
-// ── Query 3: Cambios de gestion en Foundry (cuentas, proyectos, conexiones y despliegues de modelos) ────────────────
-// Una conexion nueva o un despliegue nuevo cambian que puede alcanzar un agente. Quien los hace deberia ser alguien con rol de gestion (Foundry Account Owner o Foundry Owner), no una identidad de aplicacion inesperada.
-// El Activity Log no trae el cuerpo de estas operaciones en el workspace de validacion: dice quien, cuando y sobre que recurso, no que propiedad cambio. El nombre se lee de Properties.entity.
-// Resultado en la cuenta de validacion: 6 filas en 90 dias (la cuenta, un despliegue, dos conexiones y dos escrituras de proyecto).
+// ── Query 3: Management changes in Foundry (accounts, projects, connections and model deployments) ──────────────────
+// A new connection or a new deployment changes what an agent can reach. Whoever makes them should be someone with a management role (Foundry Account Owner or Foundry Owner), not an unexpected application identity.
+// The Activity Log does not carry the body of these operations in the validation workspace: it says who, when and on which resource, not which property changed. The name is read from Properties.entity.
+// Result on the validation account: 6 rows in 90 days (the account, a deployment, two connections and two project writes).
 let lookback = 90d;
 AzureActivity
 | where TimeGenerated > ago(lookback)
@@ -91,20 +91,20 @@ AzureActivity
     "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/DEPLOYMENTS/WRITE", "MICROSOFT.COGNITIVESERVICES/ACCOUNTS/DEPLOYMENTS/DELETE")
 | extend Entity = tostring(parse_json(Properties).entity)
 | extend Kind = case(
-        OperationNameValue has "CONNECTIONS", "Conexion",
-        OperationNameValue has "DEPLOYMENTS", "Despliegue de modelo",
-        OperationNameValue has "PROJECTS", "Proyecto",
-        "Cuenta Foundry"),
-    Action = iff(OperationNameValue endswith "DELETE", "Borrado", "Alta o cambio"),
+        OperationNameValue has "CONNECTIONS", "Connection",
+        OperationNameValue has "DEPLOYMENTS", "Model deployment",
+        OperationNameValue has "PROJECTS", "Project",
+        "Foundry account"),
+    Action = iff(OperationNameValue endswith "DELETE", "Deletion", "Creation or change"),
     Name = tostring(split(Entity, "/")[-1]),
-    CallerKind = case(Caller matches regex @"^[0-9a-fA-F-]{36}$", "Identidad de aplicacion", Caller has "@", "Usuario", "Otro")
+    CallerKind = case(Caller matches regex @"^[0-9a-fA-F-]{36}$", "Application identity", Caller has "@", "User", "Other")
 | project TimeGenerated, Caller, CallerKind, Kind, Action, Name, CallerIpAddress
 | order by TimeGenerated desc
 
-// ── Query 4: Asignaciones y retiradas de roles bajo el alcance de una cuenta Foundry ────────────────────────────────
-// Solo cubre las asignaciones hechas en la cuenta, un proyecto o un agente; las de grupo de recursos o suscripcion salen en Q2 de Resource Graph, no aqui. El rol concreto de una asignacion
-// nueva esta en el evento Start (ver Q3 del skill secure-managed-identity-foundry); una retirada no trae cuerpo.
-// Resultado en la cuenta de validacion: 3 asignaciones en 180 dias (dos en la cuenta y una en el proyecto), ninguna retirada.
+// ── Query 4: Role assignments and removals under the scope of a Foundry account ─────────────────────────────────────
+// It only covers the assignments made on the account, a project or an agent; those at resource group or subscription level appear in Q2 of Resource Graph, not here. The specific role of a new
+// assignment is in the Start event (see Q3 of the skill secure-managed-identity-foundry); a removal carries no body.
+// Result on the validation account: 3 assignments in 180 days (two on the account and one on the project), no removals.
 let lookback = 180d;
 AzureActivity
 | where TimeGenerated > ago(lookback)
@@ -112,7 +112,7 @@ AzureActivity
 | extend Entity = tostring(parse_json(Properties).entity)
 | where tolower(Entity) contains "microsoft.cognitiveservices/accounts"
 | extend Scope = tolower(tostring(split(Entity, "/providers/Microsoft.Authorization")[0]))
-| extend ScopeLevel = case(Scope contains "/agents/", "Agente", Scope contains "/projects/", "Proyecto", "Cuenta Foundry"),
-         Action = iff(OperationNameValue endswith "DELETE", "Retirada", "Asignacion")
+| extend ScopeLevel = case(Scope contains "/agents/", "Agent", Scope contains "/projects/", "Project", "Foundry account"),
+         Action = iff(OperationNameValue endswith "DELETE", "Removal", "Assignment")
 | project TimeGenerated, Caller, Action, ScopeLevel, Scope, CallerIpAddress
 | order by TimeGenerated desc

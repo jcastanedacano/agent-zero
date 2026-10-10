@@ -1,19 +1,19 @@
 // skill: govern-dlp-policy-copilot-prompts
-// workspace: {workspace-name} | conectores: Microsoft 365 (OfficeActivity), Defender XDR o Purview (SecurityAlert), Microsoft Copilot (CopilotActivity)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia MicrosoftDataLossPrevention, una tabla que no existe en ese workspace, y esperaba Workload
-// "CopilotExperiences". Las coincidencias de DLP de Exchange, SharePoint y OneDrive estan en OfficeActivity (operacion DLPRuleMatch o DlpRuleMatch), y las alertas
-// de DLP de Purview llegan a SecurityAlert (ProductName "Microsoft Data Loss Prevention", la politica va dentro de AlertName). Las coincidencias de DLP durante
-// interacciones con Copilot estan en el explorador de actividad de DSPM for AI, no en una tabla de Sentinel: el registro de auditoria de Copilot solo muestra los
-// recursos restringidos por una politica en AccessedResources.PolicyDetails (Q4). Q1 a Q3 compilan y devolvieron filas; Q4 compila y no tiene filas (NO VERIFICADO).
+// workspace: {workspace-name} | connectors: Microsoft 365 (OfficeActivity), Defender XDR or Purview (SecurityAlert), Microsoft Copilot (CopilotActivity)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read MicrosoftDataLossPrevention, a table that does not exist in that workspace, and expected Workload
+// "CopilotExperiences". The DLP matches for Exchange, SharePoint and OneDrive are in OfficeActivity (operation DLPRuleMatch or DlpRuleMatch), and the Purview
+// DLP alerts arrive in SecurityAlert (ProductName "Microsoft Data Loss Prevention", the policy is inside AlertName). The DLP matches during
+// Copilot interactions are in the DSPM for AI activity explorer, not in a Sentinel table: the Copilot audit record only shows the
+// resources restricted by a policy in AccessedResources.PolicyDetails (Q4). Q1 to Q3 compile and returned rows; Q4 compiles and has no rows (NOT VERIFIED).
 
-// ── Query 1: Coincidencias de reglas DLP por carga de trabajo (30 dias) ──────────────────────────────────────────
+// ── Query 1: DLP rule matches by workload (30 days) ──────────────────────────────────────────
 OfficeActivity
 | where TimeGenerated > ago(30d)
 | where Operation in ("DLPRuleMatch", "DlpRuleMatch")
 | summarize Matches = count(), Users = dcount(UserId), LastMatch = max(TimeGenerated) by Workload = OfficeWorkload, RecordType
 | order by Matches desc
 
-// ── Query 2: Usuarios con mas coincidencias DLP (posible exfiltracion) ───────────────────────────────────────────
+// ── Query 2: Users with the most DLP matches (possible exfiltration) ───────────────────────────────────────────
 OfficeActivity
 | where TimeGenerated > ago(30d)
 | where Operation in ("DLPRuleMatch", "DlpRuleMatch")
@@ -24,13 +24,13 @@ OfficeActivity
   by User = tolower(UserId)
 | where ViolationCount >= 3
 | extend RiskLevel = case(
-    ViolationCount >= 10, "Alto",
-    ViolationCount >= 5,  "Medio",
-    "Bajo")
+    ViolationCount >= 10, "High",
+    ViolationCount >= 5,  "Medium",
+    "Low")
 | order by ViolationCount desc
 
-// ── Query 3: Alertas de DLP de Purview por politica ──────────────────────────────────────────────────────────────
-// El nombre de la politica va dentro de AlertName: "DLP policy (<politica>) matched for ...".
+// ── Query 3: Purview DLP alerts by policy ──────────────────────────────────────────────────────────────
+// The policy name is inside AlertName: "DLP policy (<policy>) matched for ...".
 SecurityAlert
 | where TimeGenerated > ago(30d)
 | where ProductName == "Microsoft Data Loss Prevention"
@@ -39,9 +39,9 @@ SecurityAlert
 | summarize Alerts = count(), LastAlert = max(TimeGenerated) by PolicyName, AlertSeverity
 | order by Alerts desc
 
-// ── Query 4: Recursos que Copilot no pudo usar por una politica (DLP para Copilot) ──────────────────────────────────
-// NO VERIFICADO: Learn dice que AccessedResources[].PolicyDetails se usa cuando el acceso de Copilot a un recurso se bloqueo o restringio por una politica, y
-// Status distingue exito y fallo. En el workspace de validacion la clave PolicyDetails existe y esta vacia en los 2 recursos listados en 90 dias.
+// ── Query 4: Resources Copilot could not use because of a policy (DLP for Copilot) ──────────────────────────────────
+// NOT VERIFIED: Learn says AccessedResources[].PolicyDetails is used when Copilot's access to a resource was blocked or restricted by a policy, and
+// Status distinguishes success and failure. In the validation workspace the PolicyDetails key exists and is empty on the 2 resources listed in 90 days.
 CopilotActivity
 | where TimeGenerated > ago(30d)
 | where RecordType == "CopilotInteraction"

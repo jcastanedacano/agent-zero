@@ -1,14 +1,14 @@
 // skill: protect-sensitivity-labels-ai-outputs
-// workspace: {workspace-name} | conectores: Microsoft 365 (OfficeActivity), Microsoft Purview Information Protection (MicrosoftPurviewInformationProtection)
-// Validado en un workspace Sentinel (oct 2026): la version anterior leia PurviewAuditLog y MicrosoftDataLossPrevention, tablas que no existen en ese workspace.
-// Los eventos de etiquetado estan en MicrosoftPurviewInformationProtection (Operation FileSensitivityLabelApplied, SensitivityLabelApplied y
-// AutoSensitivityLabelRuleMatch, con SensitivityLabelId, ActionSource y a veces LabelName) y la etiqueta de cada archivo que se toca esta en OfficeActivity
-// (SensitivityLabelId). Una aplicacion o agente con permisos de aplicacion aparece con UserType Application. El nombre de la etiqueta solo viene en algunos eventos
-// de Purview: el resto queda como GUID y se resuelve en Purview (Information protection, Labels). Todas compilan y se ejecutaron: Q1 a Q3 y Q5 devolvieron filas, y Q4
-// devolvio filas con un GUID de etiqueta real (con la lista vacia no devuelve nada).
-// hc_label_ids es la lista de GUID de tus etiquetas Highly Confidential: sustituyela.
+// workspace: {workspace-name} | connectors: Microsoft 365 (OfficeActivity), Microsoft Purview Information Protection (MicrosoftPurviewInformationProtection)
+// Validated on a Sentinel workspace (Oct 2026): the previous version read PurviewAuditLog and MicrosoftDataLossPrevention, tables that do not exist in that workspace.
+// The labeling events are in MicrosoftPurviewInformationProtection (Operation FileSensitivityLabelApplied, SensitivityLabelApplied and
+// AutoSensitivityLabelRuleMatch, with SensitivityLabelId, ActionSource and sometimes LabelName) and the label of each file that is touched is in OfficeActivity
+// (SensitivityLabelId). An application or agent with application permissions appears with UserType Application. The label name only comes in some Purview
+// events: the rest stays as a GUID and is resolved in Purview (Information protection, Labels). All compile and ran: Q1 to Q3 and Q5 returned rows, and Q4
+// returned rows with a real label GUID (with the empty list it returns nothing).
+// hc_label_ids is the list of GUIDs of your Highly Confidential labels: replace it.
 
-// ── Query 1: Etiquetas aplicadas o coincidencias de auto-etiquetado en 30 dias ───────────────────────────────────────
+// ── Query 1: Labels applied or auto-labeling matches in 30 days ──────────────────────────────────────────────────────
 MicrosoftPurviewInformationProtection
 | where TimeGenerated > ago(30d)
 | where Operation in ("FileSensitivityLabelApplied", "SensitivityLabelApplied", "AutoSensitivityLabelRuleMatch")
@@ -16,8 +16,8 @@ MicrosoftPurviewInformationProtection
     by Workload, Operation, ActionSource, SensitivityLabelId, LabelName
 | order by Events desc
 
-// ── Query 2: Archivos tocados por aplicaciones o agentes sin etiqueta ───────────────────────────────────────────────
-// Un archivo sin SensitivityLabelId que una aplicacion lee o escribe en SharePoint u OneDrive.
+// ── Query 2: Files touched by applications or agents without a label ────────────────────────────────────────────────
+// A file with no SensitivityLabelId that an application reads or writes in SharePoint or OneDrive.
 OfficeActivity
 | where TimeGenerated > ago(30d)
 | where OfficeWorkload in ("SharePoint", "OneDrive")
@@ -28,7 +28,7 @@ OfficeActivity
 | order by UnlabeledEvents desc
 | take 50
 
-// ── Query 3: Distribucion de etiquetas en el contenido que tocan las aplicaciones ───────────────────────────────────
+// ── Query 3: Distribution of labels on the content that applications touch ──────────────────────────────────────────
 let labels = MicrosoftPurviewInformationProtection
     | where isnotempty(SensitivityLabelId) and isnotempty(LabelName)
     | summarize LabelName = any(LabelName) by SensitivityLabelId;
@@ -38,28 +38,28 @@ OfficeActivity
 | where UserType == "Application"
 | where isnotempty(SensitivityLabelId)
 | join kind=leftouter labels on SensitivityLabelId
-| extend LabelShown = iff(isnotempty(LabelName), LabelName, "Etiqueta sin nombre resuelto")
+| extend LabelShown = iff(isnotempty(LabelName), LabelName, "Label with no resolved name")
 | summarize Events = count(), Files = dcount(OfficeObjectId) by SensitivityLabelId, LabelShown
 | order by Events desc
 
-// ── Query 4: Aplicaciones o agentes que accedieron a archivos Highly Confidential ───────────────────────────────────
-// Alta prioridad: un agente no deberia acceder a Highly Confidential sin aprobacion explicita.
-let hc_label_ids = dynamic([]);   // GUID de tus etiquetas Highly Confidential
+// ── Query 4: Applications or agents that accessed Highly Confidential files ─────────────────────────────────────────
+// High priority: an agent should not access Highly Confidential without explicit approval.
+let hc_label_ids = dynamic([]);   // GUIDs of your Highly Confidential labels
 OfficeActivity
 | where TimeGenerated > ago(30d)
 | where Operation in ("FileAccessed", "FileDownloaded")
 | where UserType == "Application"
 | where SensitivityLabelId in (hc_label_ids)
 | summarize Events = count(), Files = dcount(OfficeObjectId), LastSeen = max(TimeGenerated) by ApplicationId
-| extend Alert = "Aplicacion o agente accedio a contenido Highly Confidential: revisar"
+| extend Alert = "Application or agent accessed Highly Confidential content: review"
 | order by Events desc
 
-// ── Query 5: Cobertura de etiquetas (% de eventos de archivo sobre contenido etiquetado), por dia y tipo de actor ────────
+// ── Query 5: Label coverage (% of file events on labeled content), by day and actor type ─────────────────────────────────
 OfficeActivity
 | where TimeGenerated > ago(30d)
 | where OfficeWorkload in ("SharePoint", "OneDrive")
 | where Operation in ("FileModified", "FileUploaded", "FileAccessed")
 | summarize Total = count(), Labeled = countif(isnotempty(SensitivityLabelId))
-    by Day = bin(TimeGenerated, 1d), Initiator = iff(UserType == "Application", "Aplicacion", "Usuario")
+    by Day = bin(TimeGenerated, 1d), Initiator = iff(UserType == "Application", "Application", "User")
 | extend CoveragePct = round(100.0 * Labeled / Total, 1)
 | order by Day asc, Initiator asc
