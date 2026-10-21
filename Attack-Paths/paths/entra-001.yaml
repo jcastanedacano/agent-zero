@@ -87,9 +87,9 @@ lab:
   estimatedMinutes: 30
   costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access. Not measured otherwise."
   licenses:
-    - A demo tenant with two throwaway applications: one target with a privileged Microsoft Graph application permission (read-only is enough to prove the point) and no app management policy, one identical target protected by an app management policy that blocks password credentials
+    - "A demo tenant with two throwaway applications: one target with a privileged Microsoft Graph application permission (read-only is enough to prove the point) and no app management policy, one identical target protected by an app management policy that blocks password credentials"
     - An account with Application.ReadWrite.All, or Application Administrator / Cloud Application Administrator, scoped to the demo tenant
-    - Microsoft Graph PowerShell SDK (New-MgApplicationPassword or New-MgServicePrincipalPasswordCredential, and Connect-MgGraph with a client secret credential)
+    - Microsoft Graph PowerShell SDK (Add-MgApplicationPassword or Add-MgServicePrincipalPassword, and Connect-MgGraph with a client secret credential)
   safety:
     scope: Demo tenant only. Target only throwaway applications you create for this exercise, never a real one, even in a demo tenant.
     writes: Two throwaway applications, each with one added client secret (the hardened target's add is expected to be rejected, not to land).
@@ -114,7 +114,7 @@ lab:
       - Create lab-entra001-target with one privileged, read-only Graph application permission granted (admin consent completed), and confirm no app management policy is applied to it.
       - Create lab-entra001-target-hardened identically, then apply an app management policy to it that restricts or forbids password credentials, and confirm the policy is in effect.
     attack:
-      - step: Against lab-entra001-target, add a new client secret with New-MgApplicationPassword (or New-MgServicePrincipalPasswordCredential against its service principal).
+      - step: Against lab-entra001-target, add a new client secret with Add-MgApplicationPassword (or Add-MgServicePrincipalPassword against its service principal).
         evidence: The call succeeds and returns a new secret value.
       - step: Authenticate as lab-entra001-target using the new secret (Connect-MgGraph with a client secret credential) and call the Graph endpoint the privileged permission grants access to.
         evidence: The call succeeds, proving the new credential inherited the target's existing privilege with no change to the target's own permission grants.
@@ -130,7 +130,7 @@ lab:
     prevent:
       - Treat Application.ReadWrite.All and the application administrator roles as tier-0 for every privileged application in the tenant, not only for directory-role holders.
       - Use Application.ReadWrite.OwnedBy instead, wherever an application only needs to manage applications it owns.
-      - Enforce app management policies tenant-wide or per-application: no password credentials, short certificate lifetimes, as demonstrated by the hardened target in this lab.
+      - "Enforce app management policies tenant-wide or per-application: no password credentials, short certificate lifetimes, as demonstrated by the hardened target in this lab."
       - Require Conditional Access for workload identities where supported, and review credential age on every privileged application on a schedule.
     detect:
       events:

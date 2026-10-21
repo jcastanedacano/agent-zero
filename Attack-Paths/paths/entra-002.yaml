@@ -78,7 +78,7 @@ lab:
   estimatedMinutes: 25
   costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access. Not measured otherwise."
   licenses:
-    - A demo tenant with two throwaway service principals: one holding AppRoleAssignment.ReadWrite.All, one without it
+    - "A demo tenant with two throwaway service principals: one holding AppRoleAssignment.ReadWrite.All, one without it"
     - Microsoft Graph PowerShell SDK (New-MgServicePrincipalAppRoleAssignment, Connect-MgGraph with a client secret credential per service principal)
   safety:
     scope: Demo tenant only. Grant yourself a read-only application permission for the demonstration (for example Directory.Read.All), not a write or admin-equivalent one, so the proof-of-concept does not itself create a standing risk.
@@ -124,7 +124,7 @@ lab:
     prevent:
       - Treat AppRoleAssignment.ReadWrite.All as tier-0; grant it to no automation unless assigning roles is that automation's actual job.
       - Review every service principal that holds it on a schedule, and prefer Conditional Access for workload identities plus an app management policy on those service principals.
-      - Remember the blast radius is bounded by what app roles exist to assign: removing an unused high-privilege app role from a resource application removes it as a target for this attack, independent of who holds AppRoleAssignment.ReadWrite.All.
+      - "Remember the blast radius is bounded by what app roles exist to assign: removing an unused high-privilege app role from a resource application removes it as a target for this attack, independent of who holds AppRoleAssignment.ReadWrite.All."
     detect:
       events:
         - source: AuditLogs

@@ -140,13 +140,16 @@ lab:
     writes: Read access to Key Vault secrets and environment variables, a bulk copy or download of 20+ files, and one attempted (and ideally rejected) group or role membership change.
     revert: Remove any group or role membership the attempt actually succeeded in creating, and delete the copied files from wherever the agent placed them.
   architecture:
-    summary: "The same ungoverned agent created in builder-001 is driven through four of the seven JadePuffer stages by hand, one legitimate-looking tool call at a time, inside a 60-minute window, so the correlation query has something to correlate. Stage 1 (the real Langflow CVE-2025-3248 exploit) and the final encryption/ransom stages are out of scope: this lab tests the detection signal, not the exploit chain."
+    summary: "The same ungoverned agent created in builder-001 is extended with the specific tools each simulated stage needs, then driven through four of the seven JadePuffer stages by hand, one legitimate-looking tool call at a time, inside a 60-minute window, so the correlation query has something to correlate. Builder-001's bare agent has only an unrestricted system prompt: it holds none of these tools or permissions on its own, so provisioning them is part of this lab's own setup, not something inherited for free. Stage 1 (the real Langflow CVE-2025-3248 exploit) and the final encryption/ransom stages are out of scope: this lab tests the detection signal, not the exploit chain."
     resources:
       - name: red-team-test-agent (from builder-001)
         purpose: Drives all four simulated stages under one AgentId, which is what the correlation query keys on.
         createdBy: existing
+      - name: Additional tools and permissions on the agent's identity
+        purpose: "Four capabilities builder-001's bare agent does not have: a SharePoint search/enumeration tool, a Key Vault secret-read tool, directory permission to add itself to a group or role, and a bulk file download/copy tool. Added for this exercise only."
+        createdBy: manual
       - name: Key Vault
-        purpose: Target for the simulated credential-access stage (a read of an existing secret, nothing new provisioned).
+        purpose: Target for the simulated credential-access stage (a read of an existing secret, nothing new provisioned on the vault itself).
         createdBy: existing
       - name: SharePoint sites
         purpose: Target for the discovery and bulk-file-operation stages.
@@ -157,11 +160,12 @@ lab:
     principals:
       - name: red-team-test-agent's identity
         required:
-          - Whatever broad permissions it already holds from the builder-001 exercise (the point of this lab is that no additional grant is needed)
+          - SharePoint read/search access, Key Vault secret-read access, directory permission to add itself (or a service principal it controls) to a group or role, and a bulk file download/copy tool — none of this is present from builder-001 alone and must be granted for this exercise
         helpful: []
   flow:
     setup:
       - Confirm the agent from builder-001 is still available and that you can drive it through a conversation that results in real tool calls, not just text.
+      - "Add the four capabilities listed under architecture.resources to the agent: without them the simulated stages below have nothing real to call, and the correlation query has nothing to correlate."
       - Note the agent's AgentId if you can find it, so you can filter the correlation query to it specifically while other tenant activity is happening.
     attack:
       - step: 'Stage 2, discovery: ask the agent to enumerate SharePoint sites, list users, and list connected services, through its own tool calls, not through you doing it manually.'
@@ -172,18 +176,19 @@ lab:
         evidence: 'The attempt is made and its result (accepted or rejected) is recorded; a rejection is itself useful evidence about where the chain would actually stop.'
       - step: 'Stage 7, bulk file operation: ask the agent to download or copy 20 or more files, from more than one site, in a single session.'
         evidence: A bulk copy or download tool call completes against the demo sites, and the files land somewhere you can delete them from afterward.
-      - step: Run the chain-correlation query, scoped to the agent's AgentId if you captured it, before and after the four simulated stages.
-        evidence: Whether UniqueActionTypes reaches the rule's threshold (5) for that AgentId, and at which stage count it first does.
+      - step: Run P05-Q8 (the real chain-correlation query from the KQL library, not the simplified one in builder-001/chain-001's own workshop.verificationQuery fields), scoped to the agent's AgentId if you captured it, before and after the four simulated stages.
+        evidence: "P05-Q8's own output field is StagesPresent, a count of 0-4 of its four action-category buckets (discovery, credential access, lateral movement, encryption/destruction signals) seen for that AgentId; the query filters to StagesPresent >= 3. Record the value and which of the four simulated stages it corresponds to, not a different field or threshold from an unrelated query."
     cleanup:
       - Delete or revert any file copies the bulk-operation stage produced.
       - Remove the group or role membership from Stage 4 if it was accepted.
+      - Remove the four tools and permissions added in setup from the agent's identity; they do not belong on it outside this exercise.
     teardown:
-      - No infrastructure beyond builder-001's agent was created; tearing that agent down (see builder-001's lab) removes the identity this lab drove.
+      - No infrastructure beyond builder-001's agent and the tools added to it was created; tearing that agent down (see builder-001's lab) removes the identity this lab drove, once the tool removal in cleanup is done.
   defend:
     prevent:
-      - Close the entry point this chain assumes: Agent Builder governance (builder-001's own defend.prevent) stops the ungoverned agent that makes stages 2-7 possible in the first place.
+      - "Close the entry point this chain assumes: Agent Builder governance (builder-001's own defend.prevent) stops the ungoverned agent that makes stages 2-7 possible in the first place."
       - Patch and harden any internet-exposed AI development platform (Langflow, Flowise, n8n, Dify) with the same rigor as a production system; do not expose one without a WAF.
-      - Monitor for compressed multi-stage chains from a single agent identity: the signal is how many distinct action types appear close together in time, not the severity of any one action.
+      - "Monitor for compressed multi-stage chains from a single agent identity: the signal is how many distinct action types appear close together in time, not the severity of any one action."
     detect:
       queries:
         - P05-Q8

@@ -120,7 +120,7 @@ lab:
         helpful: []
   flow:
     setup:
-      - Before creating anything, check the Microsoft 365 admin center setting for who can share Agent Builder agents with the organization. Note it: this is the control the exercise tests, not a variable you set up.
+      - "Before creating anything, check the Microsoft 365 admin center setting for who can share Agent Builder agents with the organization. Note it: this is the control the exercise tests, not a variable you set up."
     attack:
       - step: In M365 Copilot, open Agent Builder (not Copilot Studio) as the standard user.
         evidence: The agent-creation screen opens with no admin-role or elevated-permission prompt.
@@ -137,7 +137,7 @@ lab:
     cleanup:
       - Unshare and delete red-team-test-agent from Agent Builder.
     teardown:
-      - No additional resources to remove: the agent's deletion in cleanup is the whole teardown.
+      - "No additional resources to remove: the agent's deletion in cleanup is the whole teardown."
   defend:
     prevent:
       - Restrict in the Microsoft 365 admin center who can share Agent Builder agents with the organization (open to all users by default); with it restricted, an admin must approve and deploy the agent before anyone else can use it.
