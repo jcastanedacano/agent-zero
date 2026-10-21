@@ -79,3 +79,68 @@ validation:
   status: not-verified
   date: 2026-10-20
   notes: Written from documentation and public research. Nothing was run against a tenant; the audit operation names and the current effect of app management policies must be checked before relying on them.
+
+lab:
+  kind: tenant-exercise
+  title: A credential that borrows someone else's privilege
+  objective: Add a client secret to an application that holds more privilege than you do, sign in as it, and confirm the new credential inherits that privilege with no change to the target's own permissions — then repeat it against a target protected by an app management policy and show the add itself gets rejected.
+  estimatedMinutes: 30
+  costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access. Not measured otherwise."
+  licenses:
+    - "A demo tenant with two throwaway applications: one target with a privileged Microsoft Graph application permission (read-only is enough to prove the point) and no app management policy, one identical target protected by an app management policy that blocks password credentials"
+    - An account with Application.ReadWrite.All, or Application Administrator / Cloud Application Administrator, scoped to the demo tenant
+    - Microsoft Graph PowerShell SDK (Add-MgApplicationPassword or Add-MgServicePrincipalPassword, and Connect-MgGraph with a client secret credential)
+  safety:
+    scope: Demo tenant only. Target only throwaway applications you create for this exercise, never a real one, even in a demo tenant.
+    writes: Two throwaway applications, each with one added client secret (the hardened target's add is expected to be rejected, not to land).
+    revert: Delete both applications; this removes both the apps and the credentials in one step (see teardown).
+  architecture:
+    summary: Two otherwise-identical demo applications, each holding one privileged Microsoft Graph application permission. The only difference is that one has an app management policy applied to it that forbids password credentials.
+    resources:
+      - name: lab-entra001-target (application + service principal)
+        purpose: Holds a privileged Graph application permission (for example Directory.Read.All) and nothing else. No app management policy applied.
+        createdBy: manual
+      - name: lab-entra001-target-hardened (application + service principal)
+        purpose: Identical to the first, but with an app management policy applied that restricts or forbids password credentials.
+        createdBy: manual
+    principals:
+      - name: Account performing the credential add
+        required:
+          - Application.ReadWrite.All, or the Application Administrator / Cloud Application Administrator role
+        helpful:
+          - Application.Read.All, to find which applications hold privileged permissions in the first place
+  flow:
+    setup:
+      - Create lab-entra001-target with one privileged, read-only Graph application permission granted (admin consent completed), and confirm no app management policy is applied to it.
+      - Create lab-entra001-target-hardened identically, then apply an app management policy to it that restricts or forbids password credentials, and confirm the policy is in effect.
+    attack:
+      - step: Against lab-entra001-target, add a new client secret with Add-MgApplicationPassword (or Add-MgServicePrincipalPassword against its service principal).
+        evidence: The call succeeds and returns a new secret value.
+      - step: Authenticate as lab-entra001-target using the new secret (Connect-MgGraph with a client secret credential) and call the Graph endpoint the privileged permission grants access to.
+        evidence: The call succeeds, proving the new credential inherited the target's existing privilege with no change to the target's own permission grants.
+      - step: Re-check the target's API permissions in the admin center or via Get-MgServicePrincipal.
+        evidence: The permission list is unchanged; nothing about this step is visible from a permissions review, only from a credentials review.
+      - step: Repeat the same credential add against lab-entra001-target-hardened.
+        evidence: The call is rejected by the app management policy; record the exact error returned.
+    cleanup:
+      - Remove the added credential from lab-entra001-target if you want to keep the application for further testing; otherwise proceed to teardown.
+    teardown:
+      - Delete both lab-entra001-target and lab-entra001-target-hardened, and remove the app management policy created for the exercise.
+  defend:
+    prevent:
+      - Treat Application.ReadWrite.All and the application administrator roles as tier-0 for every privileged application in the tenant, not only for directory-role holders.
+      - Use Application.ReadWrite.OwnedBy instead, wherever an application only needs to manage applications it owns.
+      - "Enforce app management policies tenant-wide or per-application: no password credentials, short certificate lifetimes, as demonstrated by the hardened target in this lab."
+      - Require Conditional Access for workload identities where supported, and review credential age on every privileged application on a schedule.
+    detect:
+      events:
+        - source: AuditLogs
+          operation: Update application – Certificates and secrets management, and Add service principal credentials
+          note: "NOT VERIFIED. These operation names come from knowledge of Entra audit logs, not from a query run against a tenant for this file; confirm the exact operation names on your own tenant before building an alert on them. No query in this repository's KQL library covers credential changes on a non-agent application; P03's credential-change query (Q12) covers agent identity objects only."
+  transcript:
+    summary: Not run. This lab was written from the path's own description and from the app-management-policy control named in its limitations, not reproduced against a tenant for this file.
+    observations: []
+  validation:
+    status: not-verified
+    date: 2026-10-21
+    notes: Written from documentation and public research, same as the path itself. Nothing in this lab — the credential add, the sign-in, or the app management policy's current rejection behaviour — was run against a tenant for this file.

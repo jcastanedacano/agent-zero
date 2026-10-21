@@ -61,3 +61,75 @@ validation:
   notes: >-
     The app-role branch of the detection was validated against the real `AuditLogs` of the validation workspace (Oct 2026: 1 row in 30 days, the 2026-09-17 app-role
     assignment on a blueprint principal). The consent branch is not verified and the path itself was not reproduced for this file.
+
+lab:
+  kind: tenant-exercise
+  title: A permission the admin center never shows you
+  objective: Grant an application permission on an agent identity blueprint's own service principal, not on any individual agent identity, and show the permission in a minted agent identity's access token even though neither the Entra admin center nor Microsoft Graph lists it against that identity.
+  estimatedMinutes: 30
+  costEstimate: "None beyond the tenant's existing Entra Agent ID and Microsoft Graph PowerShell access. Not measured otherwise."
+  licenses:
+    - A demo tenant with at least one Microsoft Entra Agent ID blueprint already provisioned (created the normal way, for example by deploying a Foundry or Copilot Studio agent) and at least one resource application configured as inheritable for it
+    - An account that can grant consent or assign app roles on the blueprint's service principal (Application Administrator or Cloud Application Administrator, or the specific Graph permission)
+    - Microsoft Graph PowerShell SDK, for both the grant and for minting a token to inspect
+  safety:
+    scope: Demo tenant only. Choose a low-impact permission for the grant (read-only, on a resource that matters only to the demo) so the demonstration itself does not create a real exposure.
+    writes: One consent grant or app role assignment on the blueprint's service principal, and at least one agent identity created under that blueprint if one does not already exist.
+    revert: Remove the grant or assignment from the blueprint principal (see cleanup); this removes it from every agent identity under the blueprint, current and future, in one step.
+  architecture:
+    summary: One blueprint (an application) with its own service principal, one resource application already marked inheritable for that blueprint, and at least one agent identity created from the blueprint. The grant lands on the blueprint principal; the agent identity is only where the effect is observed.
+    resources:
+      - name: Agent identity blueprint (application)
+        purpose: Creates agent identities and holds the credentials that sign in as each one.
+        createdBy: existing
+      - name: Blueprint principal (service principal)
+        purpose: Where the consent or app role grant actually lands; this is the object under test, not any individual agent identity.
+        createdBy: existing
+      - name: Agent identity
+        purpose: One identity created from the blueprint, used only to read the resulting token claims. Create one if none exists yet.
+        createdBy: manual
+    principals:
+      - name: Account performing the grant
+        required:
+          - Ability to grant consent or assign app roles on the blueprint's service principal (Application Administrator, Cloud Application Administrator, or the specific Graph permission such as AppRoleAssignment.ReadWrite.All scoped to it)
+        helpful:
+          - Read access to Microsoft Entra Agent ID objects, to find the blueprint and confirm which resource application is marked inheritable for it
+  flow:
+    setup:
+      - Identify the blueprint, its service principal, and confirm which resource application is already configured as inheritable for it; this exercise observes an existing inheritable configuration rather than creating one, since the exact admin-center or Graph path to mark a resource inheritable was not checked for this file.
+      - Create (or reuse) one agent identity from the blueprint, and capture a way to request a token on its behalf.
+    attack:
+      - step: Grant consent, or assign an app role, for the inheritable resource application directly on the blueprint's service principal — not on the agent identity.
+        evidence: The grant appears in the blueprint principal's own permissions or app role assignments (in the admin center or via Get-MgServicePrincipalAppRoleAssignment against the blueprint principal's object id).
+      - step: Open the agent identity's own API permissions view in the Entra admin center, and separately query it via Microsoft Graph.
+        evidence: Neither surface lists the permission just granted; the agent identity's own permission list is unchanged.
+      - step: Mint or capture an access token for the agent identity (for example, sign in as it, or use the credential flow the blueprint exposes) and decode it.
+        evidence: The decoded token's scp (delegated) or roles (application) claim includes the permission granted on the blueprint principal, even though no surface showed it on the identity.
+      - step: If a second agent identity can be created from the same blueprint during the exercise, create it and repeat the token check.
+        evidence: The new identity's token carries the same inherited permission with no additional grant, confirming the reach extends to future identities, not just the one that existed at grant time.
+    cleanup:
+      - Remove the consent grant or app role assignment from the blueprint principal.
+      - Delete any agent identity created solely for this exercise.
+    teardown: []
+  defend:
+    prevent:
+      - Review grants at the blueprint principal itself, not only at each agent identity's own permissions view, since the admin center's per-identity view will not show an inherited grant.
+      - Treat every resource application marked inheritable for a blueprint as part of that blueprint's full reach, and keep the list of who can grant consent or assign app roles on blueprint principals to a minimum.
+      - Alert on any new consent or app role grant targeting a blueprint principal specifically, since that single event is the only point where the change is visible before it reaches a token.
+    detect:
+      queries:
+        - P03-Q13
+      events:
+        - source: AuditLogs
+          operation: Add app role assignment to service principal, matched to a blueprint principal
+          note: "The app-role branch of this query was validated against the real AuditLogs of this repository's own validation workspace (Oct 2026: 1 row in 30 days). Confirm the same operation names resolve correctly on your tenant before relying on the rule."
+        - source: AuditLogs
+          operation: Consent to application, matched to a blueprint principal
+          note: "NOT VERIFIED. A consent record names its target by display name only in the validation workspace used for this repository, and the agentType key held only notAgentic for every record checked in 90 days, so matching a consent event to a specific blueprint principal has not been confirmed to work."
+  transcript:
+    summary: Not run. This lab was written from the path's own description of inheritable blueprint permissions and from Microsoft Entra Agent ID's documented object model, not reproduced against a tenant for this file.
+    observations: []
+  validation:
+    status: documented
+    date: 2026-10-21
+    notes: Written from the path's description and from documented Entra Agent ID concepts (blueprint, blueprint principal, inheritable resource application). Nothing in this lab — the grant, the token inspection, or the exact admin-center navigation to mark a resource inheritable — was run against a tenant for this file.

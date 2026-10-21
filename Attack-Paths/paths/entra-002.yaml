@@ -70,3 +70,70 @@ validation:
   status: not-verified
   date: 2026-10-20
   notes: Written from documentation and public research. Nothing was run against a tenant.
+
+lab:
+  kind: tenant-exercise
+  title: Granting yourself a role nobody has to approve
+  objective: Use a service principal's AppRoleAssignment.ReadWrite.All to assign itself a Microsoft Graph application permission directly, with no consent screen and no admin in the loop, then confirm the effect with a fresh token — and show a service principal without that permission cannot do the same.
+  estimatedMinutes: 25
+  costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access. Not measured otherwise."
+  licenses:
+    - "A demo tenant with two throwaway service principals: one holding AppRoleAssignment.ReadWrite.All, one without it"
+    - Microsoft Graph PowerShell SDK (New-MgServicePrincipalAppRoleAssignment, Connect-MgGraph with a client secret credential per service principal)
+  safety:
+    scope: Demo tenant only. Grant yourself a read-only application permission for the demonstration (for example Directory.Read.All), not a write or admin-equivalent one, so the proof-of-concept does not itself create a standing risk.
+    writes: One app role assignment on each of the two throwaway service principals (the second is expected to be rejected, not to land).
+    revert: Remove the app role assignment from the first service principal, or delete both service principals (see teardown).
+  architecture:
+    summary: Two throwaway service principals, differing only in whether AppRoleAssignment.ReadWrite.All is granted to them. Each attempts to assign itself the same read-only Microsoft Graph application role.
+    resources:
+      - name: lab-entra002-actor (application + service principal)
+        purpose: Holds AppRoleAssignment.ReadWrite.All on Microsoft Graph, and nothing else to start.
+        createdBy: manual
+      - name: lab-entra002-control (application + service principal)
+        purpose: Identical setup, but without AppRoleAssignment.ReadWrite.All, to show the same self-assignment attempt fails without it.
+        createdBy: manual
+    principals:
+      - name: lab-entra002-actor's identity
+        required:
+          - AppRoleAssignment.ReadWrite.All (Microsoft Graph application permission)
+        helpful:
+          - Application.Read.All, to list which app roles the target resource application exposes
+      - name: lab-entra002-control's identity
+        required: []
+        helpful: []
+  flow:
+    setup:
+      - Create lab-entra002-actor and grant it AppRoleAssignment.ReadWrite.All on Microsoft Graph, with admin consent completed (this one grant does need the normal consent step; it is what the rest of the lab shows bypassing further consent for everything else).
+      - Create lab-entra002-control with no Microsoft Graph application permissions.
+      - Note the app role id for a read-only permission such as Directory.Read.All on the Microsoft Graph resource service principal, using Get-MgServicePrincipal and its AppRole list.
+    attack:
+      - step: Authenticate as lab-entra002-actor and call New-MgServicePrincipalAppRoleAssignment against its own service principal object id, assigning itself the read-only app role.
+        evidence: The call succeeds with no consent prompt of any kind, and returns the new assignment.
+      - step: Request a fresh access token for lab-entra002-actor and decode its roles claim.
+        evidence: The newly assigned permission appears in the token's roles claim.
+      - step: Call a Microsoft Graph endpoint that requires the newly assigned permission (for example listing directory objects, if Directory.Read.All was used).
+        evidence: The call succeeds, confirming the self-granted role is live, not just recorded.
+      - step: Repeat the same self-assignment attempt as lab-entra002-control.
+        evidence: The call is rejected with an authorization error; record the exact error returned.
+    cleanup:
+      - Remove the self-assigned app role from lab-entra002-actor if you want to keep it for further testing.
+    teardown:
+      - Delete both lab-entra002-actor and lab-entra002-control, and remove the AppRoleAssignment.ReadWrite.All grant if the application is kept for any reason.
+  defend:
+    prevent:
+      - Treat AppRoleAssignment.ReadWrite.All as tier-0; grant it to no automation unless assigning roles is that automation's actual job.
+      - Review every service principal that holds it on a schedule, and prefer Conditional Access for workload identities plus an app management policy on those service principals.
+      - "Remember the blast radius is bounded by what app roles exist to assign: removing an unused high-privilege app role from a resource application removes it as a target for this attack, independent of who holds AppRoleAssignment.ReadWrite.All."
+    detect:
+      events:
+        - source: AuditLogs
+          operation: Add app role assignment to service principal
+          note: "NOT VERIFIED. This operation name comes from knowledge of Entra audit logs, not from a query run against a tenant for this file. P03-Q13 in this repository's KQL library covers consent and app-role grants on agent identity blueprint principals specifically (its app-role branch was validated there); it does not cover an arbitrary service principal assigning itself a role, which is what this lab demonstrates. No query in this repository covers that case."
+  transcript:
+    summary: Not run. This lab was written from the path's own description of AppRoleAssignment.ReadWrite.All, not reproduced against a tenant for this file.
+    observations: []
+  validation:
+    status: not-verified
+    date: 2026-10-21
+    notes: Written from documentation and public research, same as the path itself. Nothing in this lab — the self-assignment, the token check, or the control's rejection — was run against a tenant for this file.

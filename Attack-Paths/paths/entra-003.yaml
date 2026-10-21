@@ -69,3 +69,69 @@ validation:
   status: not-verified
   date: 2026-10-20
   notes: Written from documentation and public research. Nothing was run against a tenant.
+
+lab:
+  kind: tenant-exercise
+  title: A role-management tool that can promote itself
+  objective: Use RoleManagement.ReadWrite.Directory to assign a privileged directory role to the same service principal that holds the permission, with no second approver, then show the identical call fails for a service principal that does not hold the permission.
+  estimatedMinutes: 25
+  costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access. Not measured otherwise."
+  licenses:
+    - A demo tenant where you are comfortable granting and then immediately revoking a privileged directory role
+    - "Two throwaway service principals: one that will briefly hold RoleManagement.ReadWrite.Directory, one that will not"
+    - Microsoft Graph PowerShell SDK (New-MgRoleManagementDirectoryRoleAssignment, Get-MgDirectoryRole, Get-MgRoleManagementDirectoryRoleAssignment)
+  safety:
+    scope: Demo tenant only, and only ever run as the final step of a session you can immediately clean up. Demonstrate with a privileged but not maximal role (this lab uses User Administrator); the path itself is rated on the worst case, Global Administrator, which the identical call reaches with a different role id — do not actually assign Global Administrator just to prove that point.
+    writes: One active directory role assignment on the throwaway service principal that holds the permission (the control attempt from the one that doesn't is expected to be rejected, not to land).
+    revert: Remove the role assignment the instant you have confirmed it (see cleanup); do not leave a service principal holding a privileged directory role for longer than the check itself takes.
+  architecture:
+    summary: "Two throwaway service principals, differing only in whether RoleManagement.ReadWrite.Directory is granted to them. Each attempts to assign the same privileged directory role directly (an active assignment, not a PIM-eligible one) to the actor's own principal id — no second approver, no PIM activation on either side. PIM eligibility is a property of how a role is chosen to be assigned, not an API-level restriction this permission respects on its own: a holder of RoleManagement.ReadWrite.Directory can still create an active assignment through this exact call regardless of a role's PIM configuration, and service principals cannot normally receive PIM-eligible directory-role assignments in the first place. The control this lab actually demonstrates is holding the permission itself, not a role's PIM setting."
+    resources:
+      - name: lab-entra003-actor (application + service principal)
+        purpose: Holds RoleManagement.ReadWrite.Directory and nothing else to start; the object under test.
+        createdBy: manual
+      - name: lab-entra003-control (application + service principal)
+        purpose: Identical setup, but without RoleManagement.ReadWrite.Directory, to show the same self-assignment attempt rejected for lack of the permission.
+        createdBy: manual
+    principals:
+      - name: lab-entra003-actor's identity
+        required:
+          - RoleManagement.ReadWrite.Directory (Microsoft Graph application permission), or the Privileged Role Administrator role
+        helpful:
+          - RoleManagement.Read.Directory, to list role definitions and current assignments before acting
+      - name: lab-entra003-control's identity
+        required: []
+        helpful: []
+  flow:
+    setup:
+      - Create lab-entra003-actor and grant it RoleManagement.ReadWrite.Directory, with admin consent completed (this one grant does need the normal consent step; everything after it needs none).
+      - Create lab-entra003-control with no Microsoft Graph directory-role permissions.
+      - Identify the role definition id for User Administrator.
+    attack:
+      - step: Authenticate as lab-entra003-actor and call New-MgRoleManagementDirectoryRoleAssignment, assigning User Administrator directly to lab-entra003-actor's own principal id.
+        evidence: The call succeeds immediately, with no approval step and no PIM activation, returning the new active assignment.
+      - step: List lab-entra003-actor's current directory role assignments.
+        evidence: User Administrator appears as an active (not eligible) assignment, held by the same principal that made the grant.
+      - step: Authenticate as lab-entra003-control and repeat the identical direct-assignment call, targeting its own principal id.
+        evidence: "The call is rejected with an authorization error (lacking RoleManagement.ReadWrite.Directory, not because the role is PIM-protected); record the exact error returned. This isolates the control to holding the permission itself."
+    cleanup:
+      - Remove the User Administrator assignment from lab-entra003-actor immediately after confirming it.
+    teardown:
+      - Delete lab-entra003-actor and lab-entra003-control, and remove the RoleManagement.ReadWrite.Directory grant.
+  defend:
+    prevent:
+      - Keep RoleManagement.ReadWrite.Directory off any automation whose actual job is not role assignment, and review every current holder; the permission is equivalent to whatever it can assign, not to some lesser "management" capability.
+      - "Do not rely on a role's PIM configuration to contain this permission: as this lab shows, a holder of RoleManagement.ReadWrite.Directory can create an active assignment directly, independent of whether the target role is normally PIM-eligible for human admins. PIM governs the elevation flow for principals who request it, not a boundary this permission itself respects."
+      - Use restricted management administrative units and role-assignable groups where available, and keep break-glass accounts monitored separately from this control.
+    detect:
+      events:
+        - source: AuditLogs
+          operation: Add member to role, and Add eligible member to role
+          note: "NOT VERIFIED. These operation names come from knowledge of Entra audit logs, not from a query run against a tenant for this file. No query in this repository's KQL library covers a directory role assignment made by a service principal; building one, alerting when the role is privileged or the actor is a service principal, is an open gap this lab's steps are meant to feed."
+  transcript:
+    summary: Not run. This lab was written from the path's own description of RoleManagement.ReadWrite.Directory, not reproduced against a tenant for this file.
+    observations: []
+  validation:
+    status: not-verified
+    date: 2026-10-21
+    notes: Written from documentation and public research, same as the path itself. Nothing in this lab — the self-assignment, the control's rejection, or the exact audit operation names — was run against a tenant for this file.
