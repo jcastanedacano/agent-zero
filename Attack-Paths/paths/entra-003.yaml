@@ -18,6 +18,27 @@ description: |
   therefore equivalent to the roles it can assign, and a holder that looks like a role-management tool is, in practice, a path to the most privileged role in the
   tenant.
 
+graph:
+  nodes:
+    - id: actor
+      label: Principal with RoleManagement.ReadWrite.Directory
+      sub: Or the Privileged Role Administrator role
+      type: attacker
+    - id: role
+      label: Any directory role
+      sub: Including Global Administrator
+      type: asset
+    - id: self
+      label: Itself, or a principal it controls
+      sub: Receives the role directly
+      type: agent
+  edges:
+    - from: actor
+      to: role
+      label: Assigns
+    - from: role
+      to: self
+      label: Granted to
 prerequisites:
   - The abusing principal can use the permission (it is the service principal, or can authenticate as it)
 
