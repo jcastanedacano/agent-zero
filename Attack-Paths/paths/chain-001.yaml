@@ -122,3 +122,79 @@ validation:
   status: documented
   date: 2026-10-21
   notes: Workshop exercise of Track C, Module 06, run against a demo tenant. Per-step evidence is not recorded in this file. The detection query carries its own validation status in the KQL library.
+
+lab:
+  kind: tenant-exercise
+  title: One agent, four stages, no human pause
+  objective: Simulate the observable middle of the JadePuffer pattern — discovery, credential access, lateral movement, bulk file operation — under one agent identity in a compressed window, and see whether the chain-correlation rule fires before you reach the stage that would matter in a real incident.
+  estimatedMinutes: 25
+  costEstimate: "Low: the simulated stages use existing SharePoint sites, an existing Key Vault and the Foundry resource from builder-001; no new paid resources. Not measured otherwise."
+  licenses:
+    - The ungoverned agent from builder-001 (this lab reuses it rather than recreating it)
+    - A Key Vault with at least one secret the agent's identity can read
+    - SharePoint sites with files the agent can enumerate and copy
+    - A group or role the agent can attempt to add itself to
+    - Log Analytics workspace ingesting CloudAppEvents
+  safety:
+    scope: Demo tenant only. This lab never encrypts or deletes anything; "Stage 7" is simulated as a bulk download or copy, which is reversible, not as destruction.
+    writes: Read access to Key Vault secrets and environment variables, a bulk copy or download of 20+ files, and one attempted (and ideally rejected) group or role membership change.
+    revert: Remove any group or role membership the attempt actually succeeded in creating, and delete the copied files from wherever the agent placed them.
+  architecture:
+    summary: "The same ungoverned agent created in builder-001 is driven through four of the seven JadePuffer stages by hand, one legitimate-looking tool call at a time, inside a 60-minute window, so the correlation query has something to correlate. Stage 1 (the real Langflow CVE-2025-3248 exploit) and the final encryption/ransom stages are out of scope: this lab tests the detection signal, not the exploit chain."
+    resources:
+      - name: red-team-test-agent (from builder-001)
+        purpose: Drives all four simulated stages under one AgentId, which is what the correlation query keys on.
+        createdBy: existing
+      - name: Key Vault
+        purpose: Target for the simulated credential-access stage (a read of an existing secret, nothing new provisioned).
+        createdBy: existing
+      - name: SharePoint sites
+        purpose: Target for the discovery and bulk-file-operation stages.
+        createdBy: existing
+      - name: Log Analytics workspace
+        purpose: Receives CloudAppEvents, the table the chain-correlation query reads.
+        createdBy: existing
+    principals:
+      - name: red-team-test-agent's identity
+        required:
+          - Whatever broad permissions it already holds from the builder-001 exercise (the point of this lab is that no additional grant is needed)
+        helpful: []
+  flow:
+    setup:
+      - Confirm the agent from builder-001 is still available and that you can drive it through a conversation that results in real tool calls, not just text.
+      - Note the agent's AgentId if you can find it, so you can filter the correlation query to it specifically while other tenant activity is happening.
+    attack:
+      - step: 'Stage 2, discovery: ask the agent to enumerate SharePoint sites, list users, and list connected services, through its own tool calls, not through you doing it manually.'
+        evidence: The agent's tool-call log shows at least one SharePoint, directory or service-enumeration call completed.
+      - step: 'Stage 3, credential access: ask the agent to read a Key Vault secret, check Foundry environment variables, and look for API keys in any configuration documents it can reach.'
+        evidence: At least one credential- or secret-read tool call completes, against an existing demo secret, not a real one.
+      - step: 'Stage 4, lateral movement: ask the agent to add itself (or a service principal it controls) to an additional group or role.'
+        evidence: 'The attempt is made and its result (accepted or rejected) is recorded; a rejection is itself useful evidence about where the chain would actually stop.'
+      - step: 'Stage 7, bulk file operation: ask the agent to download or copy 20 or more files, from more than one site, in a single session.'
+        evidence: A bulk copy or download tool call completes against the demo sites, and the files land somewhere you can delete them from afterward.
+      - step: Run the chain-correlation query, scoped to the agent's AgentId if you captured it, before and after the four simulated stages.
+        evidence: Whether UniqueActionTypes reaches the rule's threshold (5) for that AgentId, and at which stage count it first does.
+    cleanup:
+      - Delete or revert any file copies the bulk-operation stage produced.
+      - Remove the group or role membership from Stage 4 if it was accepted.
+    teardown:
+      - No infrastructure beyond builder-001's agent was created; tearing that agent down (see builder-001's lab) removes the identity this lab drove.
+  defend:
+    prevent:
+      - Close the entry point this chain assumes: Agent Builder governance (builder-001's own defend.prevent) stops the ungoverned agent that makes stages 2-7 possible in the first place.
+      - Patch and harden any internet-exposed AI development platform (Langflow, Flowise, n8n, Dify) with the same rigor as a production system; do not expose one without a WAF.
+      - Monitor for compressed multi-stage chains from a single agent identity: the signal is how many distinct action types appear close together in time, not the severity of any one action.
+    detect:
+      queries:
+        - P05-Q8
+      events:
+        - source: CloudAppEvents
+          operation: 3 or more distinct high-level action-type categories from the same AgentId within a 60-minute window
+          note: "Per the KQL library's own note on this query: it runs without errors in Advanced Hunting as of October 2026, but had 0 agent ActionTypes to correlate on the validation tenant, so it has not been run against live events. Confirm on your own tenant's real telemetry, not just that the query parses."
+  transcript:
+    summary: Not run in this repository. The steps and the stage table come from Track C, Module 06 (Attack 6, the JadePuffer simulation), itself written as instructional content for a demo-tenant workshop.
+    observations: []
+  validation:
+    status: documented
+    date: 2026-10-21
+    notes: This lab restructures the Module 06, Attack 6 exercise into the path/lab schema. It was not independently run for this file; it depends on builder-001's lab for the agent identity, and the detection query's "not run against live events" status is carried over from the KQL library rather than resolved here.
