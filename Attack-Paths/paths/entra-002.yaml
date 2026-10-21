@@ -1,0 +1,49 @@
+id: entra-002
+name: AppRoleAssignment.ReadWrite.All
+category: self-escalation
+platform: [entra, graph]
+
+permissions:
+  required:
+    - permission: AppRoleAssignment.ReadWrite.All (Microsoft Graph application permission)
+      resourceConstraints: Can assign any application role (including Microsoft Graph roles) to any service principal, including the caller's own
+  additional:
+    - permission: Application.Read.All
+      resourceConstraints: Helps list the app roles a resource application exposes
+
+description: |
+  A service principal that can manage app role assignments can grant itself, or another service principal it controls, any application permission that
+  requires no further consent step, for example a permission that reads or writes directory data. Because the grant is an app role assignment, it needs no user
+  interaction. The permission is effectively a path to every application permission available on the resources in the tenant.
+
+prerequisites:
+  - The abusing principal can authenticate as the service principal that holds the permission
+  - The target app role is an application permission that can be assigned this way
+
+limitations: |
+  Only application permissions are covered; delegated permissions follow a different consent flow. The result is as powerful as the role assigned: granting a
+  read-only role yields read-only access.
+
+recommendation: |
+  Treat AppRoleAssignment.ReadWrite.All as tier-0. Grant it to no automation unless the automation exists to assign roles, and then scope and monitor it. Review
+  every service principal that holds it, and prefer Conditional Access for workload identities and an app management policy on those service principals.
+
+  Detect the grant: `AuditLogs` operation "Add app role assignment to service principal", alerting on high-privilege roles and on actors that are service principals.
+
+detection:
+  library:
+    - KQL-Library/P03-Access-Anomalies.kql (Q13, consent and app-role grants on blueprint principals only)
+  gaps:
+    - No query covers app-role grants on non-agent service principals. The operation name above has NOT been run in this repository.
+
+references:
+  - https://learn.microsoft.com/graph/permissions-reference
+  - https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignments
+
+frameworks:
+  attack: [T1098.003]
+
+validation:
+  status: not-verified
+  date: 2026-10-20
+  notes: Written from documentation and public research. Nothing was run against a tenant.

@@ -1,0 +1,50 @@
+id: rbac-001
+name: Microsoft.Authorization/roleAssignments/write
+category: self-escalation
+platform: [azure-rbac]
+
+permissions:
+  required:
+    - permission: Microsoft.Authorization/roleAssignments/write (held through Owner, User Access Administrator or Role Based Access Control Administrator)
+      resourceConstraints: Effective at the scope of the assignment (management group, subscription, resource group or resource) and below
+  additional:
+    - permission: Microsoft.Authorization/roleDefinitions/read
+      resourceConstraints: Helps list the roles that can be assigned
+
+description: |
+  A principal that can write role assignments at a scope can assign itself, or a principal it controls, a more powerful role on that scope, for example Owner.
+  Access to everything below that scope follows. The permission is held by a few built-in roles that are sometimes granted to automation or to an agent's managed
+  identity so that it can "set up its own access".
+
+prerequisites:
+  - The abusing principal holds a role that includes role-assignment write at the scope
+  - The target role can be assigned there (see limitations)
+
+limitations: |
+  The reach is the scope of the assignment. The Role Based Access Control Administrator role can carry a condition (ABAC) that limits which roles it can assign
+  and to which principals, which blocks assigning Owner. Azure policy or deny assignments can also restrict it.
+
+recommendation: |
+  Do not grant Owner or User Access Administrator to automation or agent identities. Where an identity must assign roles, use Role Based Access Control Administrator
+  with a condition that limits the roles and principal types it can assign, and scope it as narrowly as possible. Use PIM for human holders.
+
+  Detect it: Azure Activity Log operation `Microsoft.Authorization/roleAssignments/write`, alerting when the caller is a managed identity or service principal, or the
+  assigned role is Owner or User Access Administrator.
+
+detection:
+  library:
+    - skills/govern/govern-foundry-rbac/queries/sentinel-foundry-rbac.kql (role assignments on Foundry resources only)
+  gaps:
+    - No query covers role-assignment writes by workload identities across subscriptions. The operation name above has NOT been run in this repository.
+
+references:
+  - https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal
+  - https://learn.microsoft.com/azure/role-based-access-control/delegate-role-assignments-overview
+
+frameworks:
+  attack: [T1098]
+
+validation:
+  status: not-verified
+  date: 2026-10-20
+  notes: Written from documentation and public research. Nothing was run against a tenant.

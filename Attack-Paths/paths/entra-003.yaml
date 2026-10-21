@@ -1,0 +1,48 @@
+id: entra-003
+name: RoleManagement.ReadWrite.Directory
+category: self-escalation
+platform: [entra, graph]
+
+permissions:
+  required:
+    - permission: RoleManagement.ReadWrite.Directory (Microsoft Graph application permission), or the Privileged Role Administrator role
+      resourceConstraints: Can assign directory roles, including highly privileged ones, to any principal
+  additional:
+    - permission: RoleManagement.Read.Directory
+      resourceConstraints: Helps list role definitions and current assignments
+
+description: |
+  A principal that can manage directory role assignments can assign itself, or a principal it controls, a highly privileged directory role. The permission is
+  therefore equivalent to the roles it can assign, and a holder that looks like a role-management tool is, in practice, a path to the most privileged role in the
+  tenant.
+
+prerequisites:
+  - The abusing principal can use the permission (it is the service principal, or can authenticate as it)
+
+limitations: |
+  Protections such as PIM, role-assignable groups and restricted management administrative units change what can be assigned and by whom; check them for
+  the tenant. Assignments made through PIM may be time-bound and require approval.
+
+recommendation: |
+  Keep RoleManagement.ReadWrite.Directory off automation unless role assignment is its purpose, and review every holder. Use PIM for eligible, time-bound and
+  approved assignments of privileged roles, and keep break-glass accounts monitored.
+
+  Detect the assignment: `AuditLogs` operations such as "Add member to role" and "Add eligible member to role", alerting when the role is privileged or the actor is
+  a service principal.
+
+detection:
+  library: []
+  gaps:
+    - No query in this repository covers directory role assignments by service principals. The operation names above have NOT been run here.
+
+references:
+  - https://learn.microsoft.com/graph/permissions-reference
+  - https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-configure
+
+frameworks:
+  attack: [T1098.003]
+
+validation:
+  status: not-verified
+  date: 2026-10-20
+  notes: Written from documentation and public research. Nothing was run against a tenant.

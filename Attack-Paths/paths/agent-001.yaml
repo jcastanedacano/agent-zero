@@ -1,0 +1,61 @@
+id: agent-001
+name: Graph write permission on the agent identity + a write-capable tool
+category: excessive-agency
+platform: [foundry, graph, sharepoint]
+
+permissions:
+  required:
+    - permission: A Microsoft Graph write permission held by the identity that signs the agent's tool calls (for example write access to one SharePoint site)
+      resourceConstraints: The identity is the Foundry resource's managed identity, shared by every project and agent in that resource
+    - permission: A tool that exposes a write operation (for example an OpenAPI operation that creates a list item)
+      resourceConstraints: The agent can choose to call it from a user message
+  additional:
+    - permission: Read access to the same data
+      resourceConstraints: The agent needs it for its legitimate job (recommending items), which is why the write permission is easy to overlook
+
+description: |
+  An agent whose job only needs to read (recommend comics from a SharePoint list) is given a tool that also exposes a write operation, and the identity
+  behind the tool has write permission. A user message that asks the agent to add an item is enough for the model to call the write operation, and Microsoft
+  Graph accepts it. The model does not distinguish "read" from "write" on its own: what limits the agent is what its identity is allowed to do, not what the
+  agent says it will do. Excessive permission, not prompt injection, is what makes the abuse possible (OWASP LLM06, excessive agency).
+
+prerequisites:
+  - The agent's identity holds a write permission it does not need for its task
+  - The tool specification includes the write operation
+  - A user (or content the agent reads) can influence what the agent is asked to do
+
+limitations: |
+  The result depends on the model: the same message may or may not make the agent call the write operation, so a single attempt proves little. Measure it over
+  several attempts of the same message. Removing the write operation from the tool specification, or instructing the agent not to write, does not enforce
+  anything if the identity keeps the permission: the agent can be steered to a different tool, and a refusal by the model is not a refusal by Microsoft Graph.
+
+recommendation: |
+  Remove the permission, not just the instruction. Give the identity the minimum it needs (read), on the minimum scope (one site rather than all sites).
+  Because the identity of a Foundry resource is shared by every project and agent in it, a second agent in the same resource inherits the write permission:
+  a restricted agent needs its own resource, with its own identity and read-only access.
+
+  To check that the control works, repeat the same message against a variant whose identity has read-only access. The write must reach Microsoft Graph and be
+  rejected (403); if the agent never attempts it, that says nothing about the permission, because it can be the model or its instructions.
+
+  Detect it by identity and time: non-GET calls to Microsoft Graph made by the agent's service principal, and 401 and 403 responses after a permission is reduced.
+
+detection:
+  library:
+    - skills/secure/secure-least-privilege-agent-identity/queries/sentinel-permission-usage.kql
+  gaps:
+    - A query that correlates an agent run (by time and identity) with the write call in `MicrosoftGraphActivityLogs`; today the correlation is manual (same AppId, same time, same endpoint).
+
+references:
+  - https://owasp.org/www-project-top-10-for-large-language-model-applications/
+  - https://learn.microsoft.com/graph/api/resources/listitem
+
+frameworks:
+  owasp_llm: [LLM06]
+
+validation:
+  status: observed-in-lab
+  date: 2026-10-20
+  notes: >-
+    Reproduced in the D3FEND Cyber Range challenge 9 (real Foundry agent, real SharePoint list): with the write permission the agent wrote in 3 of 3
+    attempts of the same message; with a read-only identity the write reached Graph and was rejected with 403. The correlation with Log Analytics was done by hand.
+    Not checked: other models, other tools or sites.
