@@ -18,6 +18,27 @@ description: |
   Access to everything below that scope follows. The permission is held by a few built-in roles that are sometimes granted to automation or to an agent's managed
   identity so that it can "set up its own access".
 
+graph:
+  nodes:
+    - id: actor
+      label: Principal with roleAssignments/write
+      sub: Via Owner, User Access Administrator or RBAC Administrator
+      type: attacker
+    - id: assignment
+      label: A role assignment at the scope
+      sub: For example Owner
+      type: asset
+    - id: self
+      label: Itself, or a principal it controls
+      sub: Gains everything below the scope
+      type: agent
+  edges:
+    - from: actor
+      to: assignment
+      label: Writes
+    - from: assignment
+      to: self
+      label: Granted to
 prerequisites:
   - The abusing principal holds a role that includes role-assignment write at the scope
   - The target role can be assigned there (see limitations)

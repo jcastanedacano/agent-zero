@@ -18,6 +18,34 @@ description: |
   target holds privileged Microsoft Graph permissions or directory roles, the new credential inherits that power. The abuse changes who can act as the application
   without touching its permissions, so a permission review of the target does not show it.
 
+graph:
+  nodes:
+    - id: actor
+      label: Principal with Application.ReadWrite.All
+      sub: Or Application/Cloud Application Administrator
+      type: attacker
+    - id: target
+      label: A more privileged application
+      sub: Holds Graph permissions or directory roles the actor lacks
+      type: asset
+    - id: credential
+      label: New client secret or certificate
+      sub: Added to the target; not shown as a permission change
+      type: asset
+    - id: inherited
+      label: Signs in as the target application
+      sub: Inherits everything it can do
+      type: agent
+  edges:
+    - from: actor
+      to: target
+      label: Adds a credential
+    - from: target
+      to: credential
+      label: Credential created
+    - from: credential
+      to: inherited
+      label: Authenticates with it
 prerequisites:
   - At least one application or service principal in the tenant holds more privilege than the abusing principal
   - Nothing blocks adding a credential to it (see limitations)

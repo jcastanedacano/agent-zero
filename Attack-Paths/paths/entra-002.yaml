@@ -18,6 +18,27 @@ description: |
   requires no further consent step, for example a permission that reads or writes directory data. Because the grant is an app role assignment, it needs no user
   interaction. The permission is effectively a path to every application permission available on the resources in the tenant.
 
+graph:
+  nodes:
+    - id: actor
+      label: Service principal with AppRoleAssignment.ReadWrite.All
+      sub: null
+      type: attacker
+    - id: role
+      label: Any application role
+      sub: On a resource application; no consent step required
+      type: asset
+    - id: self
+      label: Itself, or a service principal it controls
+      sub: Receives the role directly
+      type: agent
+  edges:
+    - from: actor
+      to: role
+      label: Assigns
+    - from: role
+      to: self
+      label: Granted to
 prerequisites:
   - The abusing principal can authenticate as the service principal that holds the permission
   - The target app role is an application permission that can be assigned this way
