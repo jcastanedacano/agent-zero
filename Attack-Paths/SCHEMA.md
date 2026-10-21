@@ -14,7 +14,7 @@ no exploitation commands.
 
 ## File naming and ids
 
-`{area}-{number}.yaml` in `paths/`, for example `agent-001.yaml`, `entra-001.yaml`, `rbac-001.yaml`. The id is the file name and is unique.
+`{area}-{number}.yaml` in `paths/`, for example `agent-001.yaml`, `entra-001.yaml`, `rbac-001.yaml`. The id is the file name and is unique. A path's optional `iac` lab files live in `labs/<id>/`, matching the same id.
 
 | Area | Covers |
 |---|---|
@@ -69,7 +69,9 @@ A `detection.library` entry names an existing query: a file path, or a library q
 
 ## `lab` (optional, v1.2)
 
-The exercise that goes with a path. pathfinding.cloud deploys its labs with Terraform from a separate repository; here a lab is, for now, a documented exercise in a demo tenant (`kind: tenant-exercise`), and reproducible infrastructure (`kind: iac`) is reserved for a later step.
+The exercise that goes with a path. pathfinding.cloud deploys its labs with Terraform from a separate repository; here a lab is either a documented exercise in a demo tenant (`kind: tenant-exercise`) or reproducible infrastructure (`kind: iac`) deployed from files in this repository.
+
+An `iac` lab's deployable files live under `labs/<id>/` (for example [`labs/rbac-001/`](./labs/rbac-001/)), next to `paths/<id>.yaml`, and are referenced from `architecture.resources` with `createdBy: iac`. `flow.setup` names the deploy command and `flow.teardown` the command that removes everything the files created; neither the YAML nor the deployable files perform the guided attack itself — that stays a human-run step in `flow.attack`, same as a `tenant-exercise` lab.
 
 | Field | Meaning |
 |---|---|

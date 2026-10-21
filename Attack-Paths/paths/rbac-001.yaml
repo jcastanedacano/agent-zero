@@ -50,3 +50,84 @@ validation:
   status: not-verified
   date: 2026-10-20
   notes: Written from documentation and public research. Nothing was run against a tenant.
+
+lab:
+  kind: iac
+  title: A role delegation that can promote itself to Owner
+  objective: Deploy two identities that both hold Role Based Access Control Administrator on a resource group, one with no condition and one constrained by Azure's own ABAC condition syntax, each attached to its own container so you can sign in as it, and show which one can assign itself Owner.
+  estimatedMinutes: 35
+  costEstimate: "Low: two Azure Container Instances (1 vCPU / 1.5 GB each) for the duration of the exercise, plus two managed identities and two role assignments at no cost. Not measured; check your own pricing."
+  licenses:
+    - Azure subscription where you can create a resource group and assign Owner on it
+    - Azure CLI with the Bicep tooling (bundled since CLI 2.20) and the container-instance extension (az extension add --name aci-preview, or Azure CLI 2.75+)
+  safety:
+    scope: A throwaway resource group in a test or demo subscription. Never target a resource group you cannot afford to have escalated into.
+    writes: Two user-assigned managed identities, two container instances and two role assignments, confined to the resource group the template is deployed into.
+    revert: Delete the resource group from your own session (not from inside either container); everything the template created goes with it (see teardown).
+  architecture:
+    summary: A Bicep template (Attack-Paths/labs/rbac-001/main.bicep) deploys two user-assigned managed identities into one resource group, both holding Role Based Access Control Administrator on it, each attached to its own Azure Container Instance running the Azure CLI. Only the hardened identity carries a condition.
+    resources:
+      - name: Resource group
+        purpose: The scope under test. Everything else lives inside it, so deleting it tears down the whole lab.
+        createdBy: manual
+      - name: lab-rbac001-vulnerable-<suffix> (managed identity)
+        purpose: "Holds Role Based Access Control Administrator with no condition: it can assign any role, including Owner, to itself or anyone else on the resource group."
+        createdBy: iac
+      - name: lab-rbac001-vulnerable-cli-<suffix> (container instance)
+        purpose: Runs the Azure CLI with the vulnerable identity attached, so you can exec into it and sign in as that identity.
+        createdBy: iac
+      - name: lab-rbac001-hardened-<suffix> (managed identity)
+        purpose: Holds the same role, with a condition that denies the assignment write when the role being granted is Owner, User Access Administrator or Role Based Access Control Administrator itself.
+        createdBy: iac
+      - name: lab-rbac001-hardened-cli-<suffix> (container instance)
+        purpose: Runs the Azure CLI with the hardened identity attached, for the same reason.
+        createdBy: iac
+    principals:
+      - name: Deploying operator (you)
+        required:
+          - Enough on the subscription to create a resource group, the resources above, and to delete the resource group afterwards
+        helpful: []
+      - name: lab-rbac001-vulnerable identity
+        required:
+          - Role Based Access Control Administrator on the resource group, no condition (created by the template)
+        helpful: []
+      - name: lab-rbac001-hardened identity
+        required:
+          - Role Based Access Control Administrator on the resource group, with the blocking condition (created by the template)
+        helpful: []
+  flow:
+    setup:
+      - "Create a throwaway resource group: az group create --name rbac-001-lab --location <region>."
+      - "Deploy the template: az deployment group create --resource-group rbac-001-lab --template-file Attack-Paths/labs/rbac-001/main.bicep."
+      - "Note the vulnerableClientId, vulnerablePrincipalId, vulnerableContainerGroup, hardenedClientId, hardenedPrincipalId, hardenedContainerGroup and resourceGroupScope outputs; the guided steps below use them. Stay signed in as the account that ran this deployment: the guided steps sign into the containers from this session and you return to it for teardown."
+    attack:
+      - step: 'Exec into the vulnerable container and sign in as its identity: az container exec --resource-group rbac-001-lab --name <vulnerableContainerGroup> --exec-command "/bin/sh", then inside it: az login --identity --client-id <vulnerableClientId>.'
+        evidence: az account show, run inside the container, returns the vulnerable identity as the signed-in principal.
+      - step: "Still inside that container, assign Owner to the identity itself using its object ID (not Microsoft Graph lookups, which this identity has no permission for): az role assignment create --assignee-object-id <vulnerablePrincipalId> --assignee-principal-type ServicePrincipal --role Owner --scope <resourceGroupScope>."
+        evidence: The command returns the new role assignment (HTTP 201). az role assignment list --assignee-object-id <vulnerablePrincipalId> --scope <resourceGroupScope>, run from your own session afterwards, shows both Role Based Access Control Administrator and Owner.
+      - step: 'Exit that container (exit), then exec into the hardened one and sign in as its identity the same way: az container exec --resource-group rbac-001-lab --name <hardenedContainerGroup> --exec-command "/bin/sh", then az login --identity --client-id <hardenedClientId>.'
+        evidence: az account show returns the hardened identity as the signed-in principal.
+      - step: "Attempt the same self-assignment: az role assignment create --assignee-object-id <hardenedPrincipalId> --assignee-principal-type ServicePrincipal --role Owner --scope <resourceGroupScope>."
+        evidence: The request is rejected (RequestDisallowedByPolicy / AuthorizationFailed, naming the role assignment's condition). az role assignment list --assignee-object-id <hardenedPrincipalId> --scope <resourceGroupScope>, from your own session, still shows only Role Based Access Control Administrator.
+      - step: "Still inside the hardened container, assign a role the condition does not block, for example Reader, to your own account or any other principal object ID: az role assignment create --assignee-object-id <principal-object-id> --assignee-principal-type <type> --role Reader --scope <resourceGroupScope>."
+        evidence: "The command succeeds: the condition blocks specific roles, not the ability to delegate at all."
+    cleanup:
+      - Exit any container shell (exit) and return to your own session before cleanup or teardown; neither identity can remove what it granted to itself (Role Based Access Control Administrator does not include deleting role assignments it created under a condition it is bound by) or delete the resource group.
+    teardown:
+      - "From your own session (not from inside either container): az group delete --name rbac-001-lab --yes. This removes both identities, both containers and both role assignments."
+  defend:
+    prevent:
+      - Do not grant Role Based Access Control Administrator, User Access Administrator or Owner to an automation or agent identity unless role assignment is its actual job.
+      - Where an identity must delegate roles, attach a condition that excludes the roles that reach Owner-equivalent control of the scope, using ForAnyOfAllValues:GuidNotEquals against the blocked set, as this template's hardened identity does — not ForAnyOfAnyValues, which does not block them.
+      - Scope the delegating role as narrowly as the task allows; a condition on a subscription-wide assignment still reaches every resource group under it.
+    detect:
+      files:
+        - skills/govern/govern-foundry-rbac/queries/sentinel-foundry-rbac.kql (Foundry-scoped role assignments only, via Azure Resource Graph)
+      events:
+        - source: Azure Activity Log
+          operation: Microsoft.Authorization/roleAssignments/write
+          note: Alert when the caller is a managed identity or service principal, or the assigned role is Owner, User Access Administrator or Role Based Access Control Administrator.
+  validation:
+    status: documented
+    date: 2026-10-21
+    notes: The Bicep template compiles (az bicep build) and the ABAC condition uses ForAnyOfAllValues:GuidNotEquals, matching the cited Microsoft Learn example (an earlier revision of this file used ForAnyOfAnyValues, which does not block the listed roles; caught in review before anything was deployed). The deployment and the guided attack steps, including whether az login --identity works as expected inside an Azure Container Instance and the exact CLI error text on a denied assignment, were not run against a tenant.

@@ -20,11 +20,11 @@ this for AWS IAM; see [SCHEMA.md](./SCHEMA.md) for the fields and what was and w
 | [entra-001](./paths/entra-001.yaml) | `Application.ReadWrite.All` | high | credential-access | not verified | — |
 | [entra-002](./paths/entra-002.yaml) | `AppRoleAssignment.ReadWrite.All` | critical | self-escalation | not verified | — |
 | [entra-003](./paths/entra-003.yaml) | `RoleManagement.ReadWrite.Directory` | critical | self-escalation | not verified | — |
-| [rbac-001](./paths/rbac-001.yaml) | `Microsoft.Authorization/roleAssignments/write` | high | self-escalation | not verified | — |
+| [rbac-001](./paths/rbac-001.yaml) | `Microsoft.Authorization/roleAssignments/write` | high | self-escalation | not verified | exercise (IaC) |
 
 The first six are the Track C, Module 06 red-team exercises (the "Agentic Red-Team Map" session companion renders them from these files); `agent-001` to `agent-003` are the identity and tool paths of an Agent 365 agent; the last four are Entra and Azure paths with no Agent 365 specific behaviour.
 
-The **Lab** column says which paths have a hands-on exercise (`lab` block): objective, resources, setup, a guided attack with the evidence each step must show, cleanup, and what to prevent and detect. They are documented exercises for a **demo tenant**; reproducible infrastructure is a later step.
+The **Lab** column says which paths have a hands-on exercise (`lab` block): objective, resources, setup, a guided attack with the evidence each step must show, cleanup, and what to prevent and detect. Most are manual exercises for a **demo tenant** (`kind: tenant-exercise`); `rbac-001` is the first with reproducible infrastructure (`kind: iac`) — a Bicep template under [`labs/rbac-001/`](./labs/rbac-001/) that deploys the vulnerable and hardened configurations, so the guided steps compare two real resources instead of describing them.
 
 ## How to read the validation column
 
