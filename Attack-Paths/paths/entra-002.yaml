@@ -73,6 +73,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: modifies-resources
   title: Granting yourself a role nobody has to approve
   objective: Use a service principal's AppRoleAssignment.ReadWrite.All to assign itself a Microsoft Graph application permission directly, with no consent screen and no admin in the loop, then confirm the effect with a fresh token — and show a service principal without that permission cannot do the same.
   estimatedMinutes: 25

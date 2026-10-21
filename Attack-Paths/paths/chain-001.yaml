@@ -125,6 +125,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: potential-impact
   title: One agent, four stages, no human pause
   objective: Simulate the observable middle of the JadePuffer pattern — discovery, credential access, lateral movement, bulk file operation — under one agent identity in a compressed window, and see whether the chain-correlation rule fires before you reach the stage that would matter in a real incident.
   estimatedMinutes: 25

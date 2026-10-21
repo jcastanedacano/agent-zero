@@ -91,6 +91,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: read-only
   title: Fifty questions, no agent in sight
   objective: Call a deployed model endpoint directly, 50 times in a tight loop, and see whether the volume-anomaly rule written for agent telemetry notices a caller that never goes through an agent at all.
   estimatedMinutes: 12

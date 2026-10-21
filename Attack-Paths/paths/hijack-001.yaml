@@ -107,6 +107,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: potential-impact
   title: Four innocent messages, one external email
   objective: Walk a demo agent through four gradually escalating requests and see whether it reaches the final one — forwarding an internal document externally — without a human ever approving that specific action, or whether an approval control already stops it.
   estimatedMinutes: 8

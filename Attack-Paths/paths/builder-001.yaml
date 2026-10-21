@@ -92,6 +92,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: modifies-resources
   title: An agent anyone can ship
   objective: Create and org-wide-share an unrestricted Agent Builder agent as an ordinary licensed user, with no admin in the loop, then check whether its use shows up anywhere a SOC would look.
   estimatedMinutes: 20

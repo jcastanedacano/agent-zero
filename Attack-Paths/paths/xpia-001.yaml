@@ -104,6 +104,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: modifies-resources
   title: A poisoned document in the agent's SharePoint corpus
   objective: Show that a document without a sensitivity label, placed where the agent retrieves from, can make the agent follow instructions it was never given by the user, and see which control and which detection apply.
   estimatedMinutes: 15

@@ -75,6 +75,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: modifies-resources
   title: A read-only agent that can write
   objective: Show that an agent whose job only needs to read can write when its identity holds a write permission, measure it over repeated attempts of the same message, and show that removing the permission (not the instruction) is what stops it.
   estimatedMinutes: 90
