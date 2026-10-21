@@ -76,8 +76,8 @@ workshop:
     - "Simulate Stage 4 (lateral movement): attempt to add the agent to an additional group or role."
     - "Simulate Stage 7 (mass file operation): download or copy 20+ files in a single session from different sites."
   verificationQuery: |-
-    // P05-Q8: confirma que la correlación de cadena se dispara
-    // Verifica si aparecieron 3+ etapas desde el mismo AgentId en 60 minutos
+    // P05-Q8: confirms that the chain correlation fires
+    // Checks whether 3+ stages showed up from the same AgentId within 60 minutes
     CloudAppEvents
     | where TimeGenerated > ago(1h)
     | extend AgentId = tostring(RawEventData["AgentId"])

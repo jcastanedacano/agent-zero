@@ -45,8 +45,8 @@ workshop:
     - Run the simulation script (replace <endpoint> and <api-key>).
     - When the script finishes, check the analytics rule threshold.
   payload: |-
-    # Simula extracción sistemática de modelo (50 queries para la demo)
-    # La extracción real usa 500+/hora; esto simula el patrón.
+    # Simulates systematic model extraction (50 queries for the demo)
+    # Real extraction uses 500+/hour; this simulates the pattern.
     for i in $(seq 1 50); do
       curl -s -X POST "<endpoint>/chat/completions" \
         -H "api-key: <api-key>" \
@@ -62,7 +62,7 @@ workshop:
     | where Application in ("Azure AI Foundry", "Azure OpenAI")
         and ActionType in ("InvokeAgent", "InferenceCall")
     | summarize QueryCount = count() by bin(TimeGenerated, 1h), AccountDisplayName
-    | where QueryCount > 20  // Bajado para la demo (umbral de producción: 500)
+    | where QueryCount > 20  // Lowered for the demo (production threshold: 500)
   expected: You should see a row with QueryCount around 50 for the identity that ran the script, above the demo’s threshold of 20.
   ifItFails:
     - condition: The script finishes but the query shows no results
