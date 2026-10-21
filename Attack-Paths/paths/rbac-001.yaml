@@ -50,3 +50,73 @@ validation:
   status: not-verified
   date: 2026-10-20
   notes: Written from documentation and public research. Nothing was run against a tenant.
+
+lab:
+  kind: iac
+  title: A role delegation that can promote itself to Owner
+  objective: Deploy two identities that both hold Role Based Access Control Administrator on a resource group, one with no condition and one constrained by Azure's own ABAC condition syntax, and show which one can assign itself Owner.
+  estimatedMinutes: 30
+  costEstimate: None beyond the two managed identities and two role assignments; delete the resource group when done.
+  licenses:
+    - Azure subscription where you can create a resource group and assign Owner on it
+    - Azure CLI with the Bicep tooling (bundled since CLI 2.20)
+  safety:
+    scope: A throwaway resource group in a test or demo subscription. Never target a resource group you cannot afford to have escalated into.
+    writes: Two user-assigned managed identities and two role assignments, confined to the resource group the template is deployed into.
+    revert: Delete the resource group; both identities and both role assignments go with it (see teardown).
+  architecture:
+    summary: A Bicep template (Attack-Paths/labs/rbac-001/main.bicep) deploys two user-assigned managed identities into one resource group, both holding Role Based Access Control Administrator on it. Only the hardened one carries a condition.
+    resources:
+      - name: Resource group
+        purpose: The scope under test. Everything else lives inside it, so deleting it tears down the whole lab.
+        createdBy: manual
+      - name: lab-rbac001-vulnerable-<suffix> (managed identity)
+        purpose: "Holds Role Based Access Control Administrator with no condition: it can assign any role, including Owner, to itself or anyone else on the resource group."
+        createdBy: iac
+      - name: lab-rbac001-hardened-<suffix> (managed identity)
+        purpose: Holds the same role, with a condition that denies the assignment write when the role being granted is Owner, User Access Administrator or Role Based Access Control Administrator itself.
+        createdBy: iac
+    principals:
+      - name: lab-rbac001-vulnerable identity
+        required:
+          - Role Based Access Control Administrator on the resource group, no condition (created by the template)
+        helpful: []
+      - name: lab-rbac001-hardened identity
+        required:
+          - Role Based Access Control Administrator on the resource group, with the blocking condition (created by the template)
+        helpful: []
+  flow:
+    setup:
+      - "Create a throwaway resource group: az group create --name rbac-001-lab --location <region>."
+      - "Deploy the template: az deployment group create --resource-group rbac-001-lab --template-file Attack-Paths/labs/rbac-001/main.bicep."
+      - Note the vulnerableClientId and hardenedClientId outputs; the guided steps below use them to sign in as each identity.
+    attack:
+      - step: "From a context that can authenticate as the vulnerable identity (for example a Cloud Shell session or VM with it attached), sign in as it: az login --identity --username <vulnerableClientId>."
+        evidence: az account show returns the vulnerable identity as the signed-in principal.
+      - step: "As that identity, assign yourself Owner on the resource group: az role assignment create --assignee <vulnerableClientId> --role Owner --scope <resourceGroupScope output>."
+        evidence: The command returns the new role assignment (HTTP 201); az role assignment list --assignee <vulnerableClientId> --scope <resourceGroupScope> now shows both Role Based Access Control Administrator and Owner.
+      - step: "Sign in as the hardened identity instead: az login --identity --username <hardenedClientId>."
+        evidence: az account show returns the hardened identity as the signed-in principal.
+      - step: "As that identity, attempt the same self-assignment: az role assignment create --assignee <hardenedClientId> --role Owner --scope <resourceGroupScope output>."
+        evidence: The request is rejected (RequestDisallowedByPolicy / AuthorizationFailed, naming the role assignment's condition). az role assignment list --assignee <hardenedClientId> --scope <resourceGroupScope> still shows only Role Based Access Control Administrator.
+      - step: "As the hardened identity, assign a role the condition does not block, for example Reader, to any principal: az role assignment create --assignee <some principal id> --role Reader --scope <resourceGroupScope output>."
+        evidence: "The command succeeds: the condition blocks specific roles, not the ability to delegate at all."
+    cleanup: []
+    teardown:
+      - "Delete the resource group: az group delete --name rbac-001-lab --yes. This removes both identities and both role assignments."
+  defend:
+    prevent:
+      - Do not grant Role Based Access Control Administrator, User Access Administrator or Owner to an automation or agent identity unless role assignment is its actual job.
+      - Where an identity must delegate roles, attach a condition that excludes the roles that reach Owner-equivalent control of the scope, as this template's hardened identity does.
+      - Scope the delegating role as narrowly as the task allows; a condition on a subscription-wide assignment still reaches every resource group under it.
+    detect:
+      files:
+        - skills/govern/govern-foundry-rbac/queries/sentinel-foundry-rbac.kql (Foundry-scoped role assignments only, via Azure Resource Graph)
+      events:
+        - source: Azure Activity Log
+          operation: Microsoft.Authorization/roleAssignments/write
+          note: Alert when the caller is a managed identity or service principal, or the assigned role is Owner, User Access Administrator or Role Based Access Control Administrator.
+  validation:
+    status: documented
+    date: 2026-10-21
+    notes: "The Bicep template compiles (az bicep build) and the ABAC condition syntax matches the pattern in the cited Microsoft Learn example. The deployment and the guided attack steps were not run against a tenant: the role names, the condition behaviour and the exact CLI error on denial should be confirmed against the Azure CLI and API versions in use before relying on them."
