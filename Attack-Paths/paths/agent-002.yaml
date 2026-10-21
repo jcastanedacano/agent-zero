@@ -66,3 +66,69 @@ validation:
   notes: >-
     The detection side was validated on a live tenant (Q12, Oct 2026: a credential operation on an agent identity shows Result = failure). The path itself
     (adding a credential to a blueprint and using it) was not reproduced for this file.
+
+lab:
+  kind: tenant-exercise
+  title: Who can add a credential to a blueprint? A read-only check of the detection
+  objective: Check in your own tenant, without creating anything, which agent identity blueprints exist, how many identities hang under each, who can modify them, and whether the credential detection (P03 Q12) sees changes on them.
+  estimatedMinutes: 45
+  costEstimate: "None: read-only queries."
+  licenses:
+    - Microsoft Entra Agent ID
+    - Microsoft Sentinel workspace with AuditLogs and AgentsInfo, or Defender XDR Advanced Hunting
+  safety:
+    scope: Read-only. No credential is created or changed. Safe in any tenant where you may run these queries.
+    writes: None.
+    revert: Nothing to revert.
+  architecture:
+    summary: A blueprint holds the credentials and authenticates as its agent identities, so the unit of compromise is the blueprint. The lab only reads the objects and the audit trail.
+    resources:
+      - name: Agent identity blueprint
+        purpose: An application that holds the credentials and impersonates its agent identities.
+        createdBy: existing
+      - name: Blueprint principal
+        purpose: The service principal through which the blueprint authenticates.
+        createdBy: existing
+      - name: Agent identities
+        purpose: The service principals that hold the permissions and appear in the audit logs.
+        createdBy: existing
+      - name: AuditLogs and AgentsInfo
+        purpose: Where credential, owner and sponsor changes are recorded and where the blueprint and identity ids are kept.
+        createdBy: existing
+    principals:
+      - name: You (reader)
+        required:
+          - Permission to read Entra Agent ID objects and to run queries over AuditLogs and AgentsInfo
+        helpful: []
+  flow:
+    setup:
+      - Ingest AgentsInfo into the workspace next to AuditLogs, or run the AgentsInfo side in Advanced Hunting. Q12 needs both.
+    attack:
+      - step: List the blueprints and count the agent identities under each, from AgentsInfo.
+        evidence: One row per blueprint with the number of agent identities. The blueprint with the most identities is the largest unit of compromise.
+      - step: List the owners and sponsors of each blueprint.
+        evidence: The people who can modify, re-enable or delete it. Anyone here who does not need it is a finding.
+      - step: Run Q12 over 90 days.
+        evidence: "Rows for credential, owner and sponsor changes on Agent ID objects. A credential operation on an agent identity (not the blueprint) shows Result = failure: a refused attempt, not an added credential."
+      - step: Read each credential row on a blueprint.
+        evidence: Who added it, when, and whether it was expected. A federated credential stores no secret.
+      - step: Count the agents that Q12 cannot cover.
+        evidence: Agents whose ids are empty in AgentsInfo, which includes Copilot Studio agents created before May 2026 that use an app registration. Those need another source.
+    cleanup: []
+    teardown: []
+  defend:
+    prevent:
+      - "Treat the number of blueprints as a security boundary decision: the blueprint is the unit of compromise."
+      - Prefer federated credentials over secrets and keep owners and sponsors to the minimum.
+      - "Contain by following the chain: disable the blueprint principal to stop every identity under it, or one agent identity to stop one."
+    detect:
+      queries:
+        - P03-Q12
+      events:
+        - source: AuditLogs
+          operation: Generic application and service principal operations on Agent ID objects, correlated by object id with AgentsInfo
+          note: There is no agent-specific OperationName, and the display name is chosen by the creator, so match by id, not by name.
+  validation:
+    status: documented
+    date: 2026-10-21
+    notes: The queries are the validated ones from the KQL library (Q12 validated on a live tenant, Oct 2026). This exercise sequence itself was not replayed end to end for this file.

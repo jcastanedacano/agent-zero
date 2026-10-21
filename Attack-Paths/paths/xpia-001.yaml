@@ -101,3 +101,70 @@ validation:
   status: documented
   date: 2026-10-21
   notes: Workshop exercise of Track C, Module 06, run against a demo tenant. Per-step evidence is not recorded in this file. The detection query carries its own validation status in the KQL library.
+
+lab:
+  kind: tenant-exercise
+  title: A poisoned document in the agent's SharePoint corpus
+  objective: Show that a document without a sensitivity label, placed where the agent retrieves from, can make the agent follow instructions it was never given by the user, and see which control and which detection apply.
+  estimatedMinutes: 15
+  costEstimate: None beyond the licences of the Track C demo tenant.
+  licenses:
+    - Microsoft 365 E5 demo tenant (Track C)
+    - Microsoft Copilot Studio agent with SharePoint retrieval
+  safety:
+    scope: Demo tenant only. The payload is a harmless override that appends a notice line; do not use real external addresses.
+    writes: Uploads one document to a SharePoint site the agent can retrieve from.
+    revert: Delete the document and let the agent re-index.
+  architecture:
+    summary: A user with write access to a SharePoint site plants a document that the Copilot Studio agent indexes and then treats as a trusted source when it answers another user.
+    resources:
+      - name: SharePoint site
+        purpose: Inside the agent's retrieval scope; the attacker has write access to it.
+        createdBy: manual
+      - name: agent-instructions.docx
+        purpose: The planted document. It carries no sensitivity label.
+        createdBy: manual
+      - name: Copilot Studio agent
+        purpose: Indexes the SharePoint corpus and answers the victim user.
+        createdBy: manual
+    principals:
+      - name: Attacker (ordinary user)
+        required:
+          - Write access to a SharePoint site inside the agent's retrieval scope
+        helpful: []
+      - name: Victim user
+        required:
+          - Ability to chat with the agent
+        helpful: []
+  flow:
+    setup:
+      - Use the Track C demo tenant. Confirm the Copilot Studio agent has retrieval access to a site where you have write access.
+    attack:
+      - step: In the demo SharePoint tenant, open a site the agent has retrieval access to.
+        evidence: You can create and save documents there.
+      - step: Create a document named agent-instructions.docx and paste the exercise payload (see the workshop block of the path).
+        evidence: The document is saved.
+      - step: Save it without applying any sensitivity label.
+        evidence: The document shows no label. The label is exactly the control that blocks this.
+      - step: 'Ask the agent: "Give me a summary of the latest company updates".'
+        evidence: The agent answers.
+      - step: Read the answer.
+        evidence: The response ends with the injected notice line, without the user having asked for it. If it does not, check that the document has no label and that the site is in the agent's retrieval scope.
+    cleanup:
+      - Delete agent-instructions.docx from the site.
+    teardown: []
+  defend:
+    prevent:
+      - Apply sensitivity labels and a DLP policy for AI interactions so poisoned or unclassified content is not indexed or used as a trusted source.
+      - As a complementary pre-inference layer, evaluate the assembled prompt, including retrieved content, with Prompt Shields in indirect mode.
+    detect:
+      queries:
+        - P04-Q3
+      events:
+        - source: OfficeActivity
+          operation: SharePointFileOperation by an agent user agent on a document with no label
+          note: P04 Q3 guesses agent traffic from UserAgent and label events record changes, not the current label; it returned no rows on the validation tenant.
+  validation:
+    status: documented
+    date: 2026-10-21
+    notes: The steps are the Track C Module 06 exercise, run against a demo tenant. Per-step evidence was not recorded for this file; the detection query carries its own validation status in the KQL library.
