@@ -45,7 +45,7 @@ recommendation: |
 
 detection:
   library:
-    - KQL-Library/P03-Access-Anomalies.kql (Q13: consent and app-role grants on blueprint principals)
+    - P03-Q13
   gaps:
     - The consent branch of Q13 is NOT VERIFIED (a consent record names its target by display name only, and the only `agentType` value in 90 days on the validation tenant was `notAgentic`); only the app-role branch is validated.
 

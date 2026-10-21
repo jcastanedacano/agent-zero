@@ -49,7 +49,7 @@ recommendation: |
 
 detection:
   library:
-    - KQL-Library/P03-Access-Anomalies.kql (Q12: credential, owner and sponsor changes on Agent ID objects)
+    - P03-Q12
   gaps:
     - Q12 does not cover agents whose ids are empty in `AgentsInfo`, which includes Copilot Studio agents created before May 2026 that use an app registration, and it needs `AgentsInfo` ingested next to `AuditLogs`.
 
