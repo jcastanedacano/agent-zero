@@ -1,4 +1,6 @@
-# Attack path schema v1.1
+# Attack path schema v1.2
+
+v1.2 adds the optional `lab` block (below): a hands-on exercise per path, with the same parts as a pathfinding.cloud lab (objective, resources created, principals and permissions, setup, guided attack, cleanup, teardown, defend, recorded run) adapted to Azure, Entra, Agent 365 and demo tenants. Files without `lab` stay valid.
 
 v1.1 adds `severity`, `surface`, `graph`, `workshop`, `frameworks.atlas` and `frameworks.owasp`, and widens `category`, so the 6 Track C red-team exercises and the Agent 365 identity-plane paths fit the same file. Files written for v1.0 stay valid.
 
@@ -64,3 +66,26 @@ validation:
 - `not-verified`: written from knowledge of the platform; nothing was run.
 
 A `detection.library` entry names an existing query: a file path, or a library query id such as `P03-Q6`. A path with no query says so under `detection.gaps` instead of inventing one.
+
+## `lab` (optional, v1.2)
+
+The exercise that goes with a path. pathfinding.cloud deploys its labs with Terraform from a separate repository; here a lab is, for now, a documented exercise in a demo tenant (`kind: tenant-exercise`), and reproducible infrastructure (`kind: iac`) is reserved for a later step.
+
+| Field | Meaning |
+|---|---|
+| `kind` | `tenant-exercise` (manual steps in a demo tenant) or `iac` (reproducible deployment) |
+| `title`, `objective` | What the exercise shows, in one sentence each |
+| `estimatedMinutes`, `costEstimate`, `licenses` | Time, cost (say when it was not measured) and what the tenant needs |
+| `safety` | **Required.** `scope` (demo tenant only), `writes` (what it changes) and `revert` (how to undo it) |
+| `architecture.summary` | The setup in a few lines |
+| `architecture.resources` | What exists: `name`, `purpose`, `createdBy` (`manual`, `iac` or `existing`) |
+| `architecture.principals` | Who acts, with `required` and `helpful` permissions |
+| `flow.setup` | Preparation steps |
+| `flow.attack` | The guided steps. **Each step has `step` and `evidence`**: what must be seen for that step to count, so an exercise can be checked, not just followed |
+| `flow.cleanup`, `flow.teardown` | Undo what the attack changed; remove what the setup created |
+| `defend.prevent` | Controls that stop it |
+| `defend.detect` | `queries` (library ids such as `P03-Q12`), `files` (query files) and `events` (`source`, `operation`, `note`) |
+| `transcript` | Optional. `summary` and `observations` of a real run, with identifiers removed |
+| `validation` | **Required.** Same meaning as the path's `validation`, for the lab: what was and was not replayed |
+
+A lab never reuses the path's evidence as its own: `lab.validation` says whether this exercise was run, and a path observed in a lab can still have a lab whose provisioning steps were only documented.

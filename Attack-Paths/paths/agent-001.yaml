@@ -72,3 +72,95 @@ validation:
     Reproduced in the D3FEND Cyber Range challenge 9 (real Foundry agent, real SharePoint list): with the write permission the agent wrote in 3 of 3
     attempts of the same message; with a read-only identity the write reached Graph and was rejected with 403. The correlation with Log Analytics was done by hand.
     Not checked: other models, other tools or sites.
+
+lab:
+  kind: tenant-exercise
+  title: A read-only agent that can write
+  objective: Show that an agent whose job only needs to read can write when its identity holds a write permission, measure it over repeated attempts of the same message, and show that removing the permission (not the instruction) is what stops it.
+  estimatedMinutes: 90
+  costEstimate: "Low: about a dozen model calls and one extra Foundry resource for the hardened variant. Not measured; check your own pricing."
+  licenses:
+    - Azure subscription with Microsoft Foundry
+    - Microsoft 365 demo tenant with SharePoint
+    - Log Analytics workspace receiving Microsoft Graph activity logs (for the second witness)
+  safety:
+    scope: Demo tenant only. Never run it against production data or a production Foundry resource.
+    writes: Each attempt against the vulnerable variant creates a real item in the SharePoint list.
+    revert: Give every test item a unique title prefix and delete them afterwards (see cleanup).
+  architecture:
+    summary: One agent with a tool that can read and create items in one SharePoint list. Two variants differ only in the permission held by the identity that signs the tool calls.
+    resources:
+      - name: Foundry resource (vulnerable variant)
+        purpose: Hosts the agent. Its managed identity signs the tool calls to Microsoft Graph and holds a write permission on the site.
+        createdBy: manual
+      - name: Agent with an OpenAPI tool
+        purpose: The tool exposes one read operation (GET) and one write operation (POST that creates a list item). The agent decides which to call from the user message.
+        createdBy: manual
+      - name: SharePoint site and list
+        purpose: The data the agent legitimately reads (for example a catalogue of comics). It is also what the write changes.
+        createdBy: manual
+      - name: Foundry resource (hardened variant)
+        purpose: A second resource with its own identity and read-only access to the same site. The identity belongs to the resource and is shared by every project and agent in it, so a restricted variant cannot live in the first resource.
+        createdBy: manual
+      - name: Log Analytics workspace
+        purpose: "Receives MicrosoftGraphActivityLogs: the independent witness of what reached Microsoft Graph and with which result."
+        createdBy: manual
+    principals:
+      - name: Foundry resource identity (vulnerable)
+        required:
+          - A Microsoft Graph write permission on the site (for example Sites.Selected with a write role on that site, or a broader site permission)
+        helpful:
+          - Read access to the same site, which the agent needs for its job
+      - name: Foundry resource identity (hardened)
+        required:
+          - Read access to the site
+        helpful: []
+  flow:
+    setup:
+      - Create the SharePoint list and a Foundry resource with a project and an agent whose OpenAPI tool exposes the read and the create operation on that list.
+      - Give the resource identity the write permission on the site. Check that the agent can read the list.
+      - Create the second Foundry resource with an agent identical to the first, and give its identity read-only access to the same site.
+      - Send the Microsoft Graph activity logs of the tenant to the Log Analytics workspace and note the AppId of each resource identity.
+    attack:
+      - step: Send the vulnerable agent a message that asks it to add a new item to the list (not to recommend one). Use a unique title with your test prefix.
+        evidence: The run shows a call to the create operation (POST) with a 2xx result, and the item exists in the list.
+      - step: Send exactly the same message again, at least three times in total.
+        evidence: "The write happens in most of the attempts. The model is not deterministic: a single attempt proves little, so count successes over the attempts (the reference run used at least 66 % of at least 3)."
+      - step: Correlate in Log Analytics by time (±2 minutes), the AppId of the vulnerable resource identity and the endpoint, using the permission usage query listed under defend.
+        evidence: A non-GET request by that AppId at the time of each attempt, with a 2xx result.
+      - step: Send the same message to the hardened agent.
+        evidence: The write reaches Microsoft Graph and is rejected with 403. Foundry may return the tool error instead of the agent's own text, so judge by the Graph result, not by the wording.
+      - step: Confirm the rejection in Log Analytics for the hardened resource identity.
+        evidence: "A 403 row for that AppId on the same endpoint and time. Rows can take minutes to appear: an absent row proves nothing yet."
+      - step: If the hardened agent answers without calling the tool, repeat the same message.
+        evidence: "A refusal by the model is not a refusal by Microsoft Graph: no write reached Graph, so the result cannot be attributed to the permission. Only a write that reaches Graph and is rejected counts."
+    cleanup:
+      - Delete every list item that carries your test prefix, in the SharePoint list.
+    teardown:
+      - Delete the second Foundry resource, the agents and the test list, and remove the write permission from the first identity.
+  defend:
+    prevent:
+      - "Remove the permission, not just the instruction: the agent can be steered, and a refusal by the model is not a refusal by Microsoft Graph."
+      - Give the identity the minimum it needs (read) on the minimum scope (one site, not all sites).
+      - "Use one Foundry resource per privilege level: the identity is shared by everything in a resource."
+      - Check a control by repeating the same message against a variant whose identity lacks the permission, and require that the write reaches Graph and is rejected.
+    detect:
+      files:
+        - skills/secure/secure-least-privilege-agent-identity/queries/sentinel-permission-usage.kql
+      events:
+        - source: MicrosoftGraphActivityLogs
+          operation: Non-GET requests made by the agent service principal (by AppId)
+          note: Correlate with the agent run by time and endpoint.
+        - source: MicrosoftGraphActivityLogs
+          operation: 401 and 403 responses after a permission is reduced
+          note: Shows the control working; absence of a row can mean the log has not arrived yet.
+  transcript:
+    summary: Observed in a private lab with a real Foundry agent and a real SharePoint list.
+    observations:
+      - "Vulnerable variant: the same message made the agent write in 3 of 3 attempts."
+      - "Hardened variant (read-only identity): the write reached Microsoft Graph and was rejected with 403."
+      - The Foundry response carried the tool error instead of the agent's text, so the wording of the answer did not identify the result; the Graph result did.
+  validation:
+    status: documented
+    date: 2026-10-21
+    notes: The behaviour (3 of 3 writes; 403 with a read-only identity) was observed in a private lab. The provisioning steps in this lab are written from documentation and were not replayed from this document.
