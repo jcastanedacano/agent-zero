@@ -128,6 +128,7 @@ lab:
   effects: potential-impact
   title: One agent, four stages, no human pause
   objective: Simulate the observable middle of the JadePuffer pattern — discovery, credential access, lateral movement, bulk file operation — under one agent identity in a compressed window, and see whether the chain-correlation rule fires before you reach the stage that would matter in a real incident.
+  scopeNote: "This lab reproduces 4 of the path's 7 stages — discovery, credential access, lateral movement, bulk file operation — simulated by hand under one agent identity. Stage 1 (the real Langflow CVE-2025-3248 exploit) and the final encryption/ransom stages are not reproduced: this lab tests whether the chain-correlation query fires, not the exploit chain itself."
   estimatedMinutes: 25
   costEstimate: "Low: the simulated stages use existing SharePoint sites, an existing Key Vault and the Foundry resource from builder-001; no new paid resources. Not measured otherwise."
   licenses:
@@ -141,7 +142,7 @@ lab:
     writes: Read access to Key Vault secrets and environment variables, a bulk copy or download of 20+ files, and one attempted (and ideally rejected) group or role membership change.
     revert: Remove any group or role membership the attempt actually succeeded in creating, and delete the copied files from wherever the agent placed them.
   architecture:
-    summary: "The same ungoverned agent created in builder-001 is extended with the specific tools each simulated stage needs, then driven through four of the seven JadePuffer stages by hand, one legitimate-looking tool call at a time, inside a 60-minute window, so the correlation query has something to correlate. Builder-001's bare agent has only an unrestricted system prompt: it holds none of these tools or permissions on its own, so provisioning them is part of this lab's own setup, not something inherited for free. Stage 1 (the real Langflow CVE-2025-3248 exploit) and the final encryption/ransom stages are out of scope: this lab tests the detection signal, not the exploit chain."
+    summary: "The same ungoverned agent created in builder-001 is extended with the specific tools each simulated stage needs, then driven through the stages in scope (see scopeNote) by hand, one legitimate-looking tool call at a time, inside a 60-minute window, so the correlation query has something to correlate. Builder-001's bare agent has only an unrestricted system prompt: it holds none of these tools or permissions on its own, so provisioning them is part of this lab's own setup, not something inherited for free."
     resources:
       - name: red-team-test-agent (from builder-001)
         purpose: Drives all four simulated stages under one AgentId, which is what the correlation query keys on.
