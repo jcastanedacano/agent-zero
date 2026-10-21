@@ -74,6 +74,7 @@ validation:
 
 lab:
   kind: iac
+  effects: modifies-resources
   title: A role delegation that can promote itself to Owner
   objective: Deploy two identities that both hold Role Based Access Control Administrator on a resource group, one with no condition and one constrained by Azure's own ABAC condition syntax, each attached to its own container so you can sign in as it, and show which one can assign itself Owner.
   estimatedMinutes: 35

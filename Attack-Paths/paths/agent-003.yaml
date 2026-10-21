@@ -64,6 +64,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: modifies-resources
   title: A permission the admin center never shows you
   objective: Grant an application permission on an agent identity blueprint's own service principal, not on any individual agent identity, and show the permission in a minted agent identity's access token even though neither the Entra admin center nor Microsoft Graph lists it against that identity.
   estimatedMinutes: 30

@@ -72,6 +72,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: modifies-resources
   title: A role-management tool that can promote itself
   objective: Use RoleManagement.ReadWrite.Directory to assign a privileged directory role to the same service principal that holds the permission, with no second approver, then show the identical call fails for a service principal that does not hold the permission.
   estimatedMinutes: 25

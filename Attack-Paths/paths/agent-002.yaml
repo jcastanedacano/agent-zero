@@ -69,6 +69,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: read-only
   title: Who can add a credential to a blueprint? A read-only check of the detection
   objective: Check in your own tenant, without creating anything, which agent identity blueprints exist, how many identities hang under each, who can modify them, and whether the credential detection (P03 Q12) sees changes on them.
   estimatedMinutes: 45

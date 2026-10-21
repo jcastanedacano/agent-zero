@@ -92,6 +92,7 @@ validation:
 
 lab:
   kind: tenant-exercise
+  effects: read-only
   title: Asking an agent what it is
   objective: Send a demo Copilot Studio agent five plain elicitation prompts and see whether it names its tools, its parameters, its system prompt, or its endpoints, with no exploit of any kind — only questions.
   estimatedMinutes: 8

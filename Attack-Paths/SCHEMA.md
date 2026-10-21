@@ -73,6 +73,7 @@ An `iac` lab's deployable files live under `labs/<id>/` (for example [`labs/rbac
 | Field | Meaning |
 |---|---|
 | `kind` | `tenant-exercise` (manual steps in a demo tenant) or `iac` (reproducible deployment) |
+| `effects` | **Required.** `read-only`, `modifies-resources` or `potential-impact` (see below) |
 | `title`, `objective` | What the exercise shows, in one sentence each |
 | `estimatedMinutes`, `costEstimate`, `licenses` | Time, cost (say when it was not measured) and what the tenant needs |
 | `safety` | **Required.** `scope` (demo tenant only), `writes` (what it changes) and `revert` (how to undo it) |
@@ -88,3 +89,9 @@ An `iac` lab's deployable files live under `labs/<id>/` (for example [`labs/rbac
 | `validation` | **Required.** Same meaning as the path's `validation`, for the lab: what was and was not replayed |
 
 A lab never reuses the path's evidence as its own: `lab.validation` says whether this exercise was run, and a path observed in a lab can still have a lab whose provisioning steps were only documented.
+
+`effects` classifies what the guided attack actually does to the tenant, derived from `flow.attack` and `safety.writes` — never from the title:
+
+- `read-only`: nothing is created or changed (same bar as `safety.writes: None.`).
+- `modifies-resources`: creates or changes something contained to the demo tenant — a credential, a role or permission assignment, a resource — that `safety.revert` undoes.
+- `potential-impact`: the guided attack itself does something with consequences beyond the directory, such as sending content to an external recipient or a bulk file operation, even when `safety.revert` can still clean it up afterwards.
