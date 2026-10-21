@@ -3,8 +3,7 @@
 A small library of privilege-escalation and excessive-agency paths on the Microsoft stack, one YAML file per path, for people who defend AI agents and the
 identities behind them. Each path names the permission abused, what must be true for the abuse to work, how to see it, and how to remove it.
 
-It is **defensive**. The `workshop` block of the Track C paths carries the exercise prompts for a **demo tenant**, as in Module 06; no path carries exploitation commands for real environments. The structure is adapted from [pathfinding.cloud](https://pathfinding.cloud/) (Datadog, Apache 2.0), which does
-this for AWS IAM; see [SCHEMA.md](./SCHEMA.md) for the fields and what was and was not borrowed.
+It is **defensive**. The `workshop` block of the Track C paths carries the exercise prompts for a **demo tenant**, as in Module 06; no path carries exploitation commands for real environments. See [SCHEMA.md](./SCHEMA.md) for the fields.
 
 | Path | What it is | Severity | Category | Validation | Lab |
 |---|---|---|---|---|---|

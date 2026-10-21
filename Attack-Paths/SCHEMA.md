@@ -1,13 +1,10 @@
 # Attack path schema v1.2
 
-v1.2 adds the optional `lab` block (below): a hands-on exercise per path, with the same parts as a pathfinding.cloud lab (objective, resources created, principals and permissions, setup, guided attack, cleanup, teardown, defend, recorded run) adapted to Azure, Entra, Agent 365 and demo tenants. Files without `lab` stay valid.
+v1.2 adds the optional `lab` block (below): a hands-on exercise per path (objective, resources created, principals and permissions, setup, guided attack, cleanup, teardown, defend, recorded run) adapted to Azure, Entra, Agent 365 and demo tenants. Files without `lab` stay valid.
 
 v1.1 adds `severity`, `surface`, `graph`, `workshop`, `frameworks.atlas` and `frameworks.owasp`, and widens `category`, so the 6 Track C red-team exercises and the Agent 365 identity-plane paths fit the same file. Files written for v1.0 stay valid.
 
-One YAML file per privilege-escalation or excessive-agency path on the Microsoft stack. The structure is adapted from the
-[pathfinding.cloud](https://pathfinding.cloud/) AWS IAM path library by Datadog ([Apache 2.0](https://github.com/DataDog/pathfinding.cloud/blob/main/LICENSE)):
-the idea of one structured file per path, with required and additional permissions, prerequisites, limitations and a recommendation, is theirs.
-The fields below are this repository's own. No pathfinding.cloud content was copied: every path here is Microsoft-specific.
+One YAML file per privilege-escalation or excessive-agency path on the Microsoft stack: one structured file per path, with required and additional permissions, prerequisites, limitations and a recommendation. Every path here is Microsoft-specific.
 
 This library is **defensive**. A path says what permission is abused, what must be true for the abuse to work, how to see it and how to remove it. It carries
 no exploitation commands.
@@ -69,7 +66,7 @@ A `detection.library` entry names an existing query: a file path, or a library q
 
 ## `lab` (optional, v1.2)
 
-The exercise that goes with a path. pathfinding.cloud deploys its labs with Terraform from a separate repository; here a lab is either a documented exercise in a demo tenant (`kind: tenant-exercise`) or reproducible infrastructure (`kind: iac`) deployed from files in this repository.
+The exercise that goes with a path: either a documented exercise in a demo tenant (`kind: tenant-exercise`) or reproducible infrastructure (`kind: iac`) deployed from files in this repository.
 
 An `iac` lab's deployable files live under `labs/<id>/` (for example [`labs/rbac-001/`](./labs/rbac-001/)), next to `paths/<id>.yaml`, and are referenced from `architecture.resources` with `createdBy: iac`. `flow.setup` names the deploy command and `flow.teardown` the command that removes everything the files created; neither the YAML nor the deployable files perform the guided attack itself — that stays a human-run step in `flow.attack`, same as a `tenant-exercise` lab.
 
