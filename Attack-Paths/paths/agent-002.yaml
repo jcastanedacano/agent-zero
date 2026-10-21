@@ -1,0 +1,68 @@
+id: agent-002
+name: Credential added to an agent identity blueprint
+category: credential-access
+severity: high
+platform: [entra-agent-id]
+surface: agent-identity
+
+permissions:
+  required:
+    - permission: Ownership of, or administrative rights over, the agent identity blueprint
+      resourceConstraints: Only the blueprint holds credentials (client secret, certificate or federated credential); a credential operation on an agent identity itself is refused
+  additional:
+    - permission: Read access to Microsoft Entra Agent ID objects
+      resourceConstraints: Helps find which blueprints sit above the most agent identities
+
+description: |
+  An agent that uses Microsoft Entra Agent ID is a chain, not one object: the blueprint holds the credentials, authenticates, and impersonates its agent identities.
+  A credential added to the blueprint by someone who should not have one lets that person authenticate as the blueprint and obtain tokens for every agent identity
+  under it. One blueprint, many identities: the compromise is not limited to one agent.
+
+graph:
+  nodes:
+    - { id: actor, label: Actor, sub: Can modify the blueprint, type: attacker, x: 90, y: 200 }
+    - { id: blueprint, label: Agent identity blueprint, sub: Holds the credentials, type: asset, x: 330, y: 90 }
+    - { id: identities, label: Agent identities, sub: Every identity under the blueprint, type: agent, x: 570, y: 200 }
+    - { id: resources, label: Downstream resources, sub: Whatever each agent identity can reach, type: victim, x: 800, y: 90 }
+  edges:
+    - { from: actor, to: blueprint, label: Adds a credential }
+    - { from: blueprint, to: identities, label: Authenticates and impersonates }
+    - { from: identities, to: resources, label: Scoped tokens }
+
+prerequisites:
+  - The blueprint exists and its owners, sponsors or administrators are not limited to the people who need them
+  - Agents are grouped under few blueprints (a single blueprint is a single point of compromise)
+
+limitations: |
+  The federated credential that Agent Service uses stores no secret, so there is nothing to steal from the agent runtime; the path needs the ability to add or
+  change a credential on the blueprint. The reach is the set of agent identities under that blueprint and the permissions each holds.
+
+recommendation: |
+  Treat the number of blueprints as a security boundary decision: the blueprint is the unit of compromise. Prefer federated credentials over secrets, keep owners and
+  sponsors to the minimum, and review who can modify, re-enable or delete each blueprint.
+
+  Contain by following the chain: disable the blueprint principal to stop every agent identity under it, or disable one agent identity to stop one. Revoking sessions only
+  works on the agent user, not on a service principal.
+
+  Detect credential additions on blueprints and agent identities (Agent ID objects are logged in `AuditLogs` as generic application and service principal operations, so
+  correlate by object id with `AgentsInfo` rather than by name).
+
+detection:
+  library:
+    - P03-Q12
+  gaps:
+    - Q12 does not cover agents whose ids are empty in `AgentsInfo`, which includes Copilot Studio agents created before May 2026 that use an app registration, and it needs `AgentsInfo` ingested next to `AuditLogs`.
+
+references:
+  - docs/architecture.md (section 3, the identity chain of an agent)
+  - skills/govern/govern-entra-agent-id/SKILL.md
+
+frameworks:
+  attack: [T1098.001]
+
+validation:
+  status: documented
+  date: 2026-10-21
+  notes: >-
+    The detection side was validated on a live tenant (Q12, Oct 2026: a credential operation on an agent identity shows Result = failure). The path itself
+    (adding a credential to a blueprint and using it) was not reproduced for this file.

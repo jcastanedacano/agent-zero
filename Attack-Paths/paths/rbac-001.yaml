@@ -1,7 +1,9 @@
 id: rbac-001
 name: Microsoft.Authorization/roleAssignments/write
 category: self-escalation
+severity: high
 platform: [azure-rbac]
+surface: azure-resource
 
 permissions:
   required:

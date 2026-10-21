@@ -1,0 +1,90 @@
+id: extraction-001
+name: Model Extraction via Systematic Inference
+category: model-extraction
+severity: medium
+platform:
+  - foundry
+surface: model-endpoint
+permissions:
+  required:
+    - permission: Authorized access to call a deployed model endpoint (inference)
+      resourceConstraints: An Entra identity with a role that can invoke the deployment, or a key when local authentication is enabled
+description: Low-volume, systematic queries against an inference endpoint allow reconstructing the model’s behavior without direct access to its weights.
+graph:
+  nodes:
+    - id: atacante
+      label: Attacker
+      sub: Azure CLI / Cloud Shell
+      type: attacker
+      x: 100
+      y: 200
+    - id: endpoint
+      label: Azure AI Foundry Endpoint
+      sub: Deployed model
+      type: asset
+      x: 420
+      y: 200
+    - id: respuestas
+      label: Extracted behavior
+      sub: 50+ systematic queries
+      type: victim
+      x: 740
+      y: 200
+  edges:
+    - from: atacante
+      to: endpoint
+      label: Query loop (50 requests)
+    - from: endpoint
+      to: respuestas
+      label: Accumulates response pattern
+workshop:
+  estimatedMinutes: 12
+  steps:
+    - In the demo Azure AI Foundry environment, locate a deployed model endpoint.
+    - Open Azure Cloud Shell or a local terminal with Azure CLI authenticated.
+    - Run the simulation script (replace <endpoint> and <api-key>).
+    - When the script finishes, check the analytics rule threshold.
+  payload: |-
+    # Simula extracción sistemática de modelo (50 queries para la demo)
+    # La extracción real usa 500+/hora; esto simula el patrón.
+    for i in $(seq 1 50); do
+      curl -s -X POST "<endpoint>/chat/completions" \
+        -H "api-key: <api-key>" \
+        -H "Content-Type: application/json" \
+        -d "{\"messages\":[{\"role\":\"user\",\"content\":\"Question $i: $(cat /dev/urandom | head -c 20 | base64)\"}],\"max_tokens\":50}" \
+        > /dev/null
+      sleep 1
+    done
+    echo "50 extraction queries sent"
+  verificationQuery: |-
+    CloudAppEvents
+    | where TimeGenerated > ago(1h)
+    | where Application in ("Azure AI Foundry", "Azure OpenAI")
+        and ActionType in ("InvokeAgent", "InferenceCall")
+    | summarize QueryCount = count() by bin(TimeGenerated, 1h), AccountDisplayName
+    | where QueryCount > 20  // Bajado para la demo (umbral de producción: 500)
+  expected: You should see a row with QueryCount around 50 for the identity that ran the script, above the demo’s threshold of 20.
+  ifItFails:
+    - condition: The script finishes but the query shows no results
+      explanation: 'Confirm Application matches exactly "Azure AI Foundry" or "Azure OpenAI" in your environment: the exact name can vary by diagnostic connector version. Also, this simulation calls the model endpoint directly and is not an agent run: Agent 365 observability telemetry (InvokeAgent, InferenceCall) does not capture it, so check the diagnostic logs of the Azure OpenAI or Foundry resource for the per-caller count.'
+  documentationQuestions:
+    - At what query count did the rule fire?
+    - What is the minimum rate an attacker needs to stay under to evade detection?
+    - What does that imply for your threshold?
+  source: Track-C-SOC-Engineer/Module-06-RedTeamPerspective.md
+recommendation: |-
+  Per-identity rate limiting in Azure AI Foundry + a Conditional Access policy that blocks unauthorized identities (Session 03, Secure Access).
+
+  Detection rule: Agentic AI Volume Spike Anomaly (compares hourly volume per AgentId against an 8-day moving baseline, fires above 3 standard deviations; see the P05-Q2 exercise in Session 05). P03-Q6 is the fixed-threshold variant (>500 queries/hour) for simpler detection.
+detection:
+  library:
+    - P03-Q6
+frameworks:
+  atlas:
+    - AML.T0040
+  owasp:
+    - LLM06
+validation:
+  status: documented
+  date: 2026-10-21
+  notes: Workshop exercise of Track C, Module 06, run against a demo tenant. Per-step evidence is not recorded in this file. The detection query carries its own validation status in the KQL library.
