@@ -236,6 +236,10 @@ agent-zero/
 │   ├── Module-06-RedTeamPerspective.md          ← attacker perspective, 6 attacks
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
+├── Attack-Paths/                    ← 5 attack paths (YAML): permission abused, prerequisites, detection, mitigation, validation status
+│   ├── README.md
+│   ├── SCHEMA.md
+│   └── paths/
 ├── KQL-Library/                     ← 43 production-ready queries for Sentinel + Defender XDR
 │   ├── README.md
 │   ├── P01-Agent-Discovery.kql                  ← Q7 AI applications in use (Copilot, Copilot Studio, third-party)

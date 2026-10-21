@@ -1,0 +1,51 @@
+id: entra-001
+name: Application.ReadWrite.All
+category: credential-access
+platform: [entra, graph]
+
+permissions:
+  required:
+    - permission: Application.ReadWrite.All (Microsoft Graph application permission), or the Application Administrator or Cloud Application Administrator role
+      resourceConstraints: Can add a credential to any app registration or service principal in scope; Application.ReadWrite.OwnedBy limits this to apps the principal owns
+  additional:
+    - permission: Application.Read.All
+      resourceConstraints: Helps find which applications hold privileged permissions or roles
+
+description: |
+  A principal that can manage applications can add a new client secret or certificate to an existing application or service principal, then sign in as it. If the
+  target holds privileged Microsoft Graph permissions or directory roles, the new credential inherits that power. The abuse changes who can act as the application
+  without touching its permissions, so a permission review of the target does not show it.
+
+prerequisites:
+  - At least one application or service principal in the tenant holds more privilege than the abusing principal
+  - Nothing blocks adding a credential to it (see limitations)
+
+limitations: |
+  App management policies can restrict or forbid password credentials and limit their lifetime; the app instance property lock restricts changes to a
+  multi-tenant app's service principal. Tenant protections change over time: check the current behaviour for the role and permission in use.
+
+recommendation: |
+  Treat Application.ReadWrite.All and the application administrator roles as tier-0 for every privileged application. Use Application.ReadWrite.OwnedBy where an
+  application only manages its own apps. Enforce app management policies (no password credentials, short lifetimes, certificates only) and require Conditional
+  Access for workload identities where supported. Remove unused credentials and review credential age.
+
+  Detect credential additions: `AuditLogs` operations "Update application – Certificates and secrets management" and "Add service principal credentials", alerting
+  when the actor is not an expected automation identity or the target holds privileged permissions.
+
+detection:
+  library:
+    - KQL-Library/P03-Access-Anomalies.kql (Q12, credential changes on agent identity objects only)
+  gaps:
+    - No query covers credential changes on non-agent applications. The operation names above come from knowledge of Entra audit logs and have NOT been run in this repository.
+
+references:
+  - https://learn.microsoft.com/graph/permissions-reference
+  - https://learn.microsoft.com/entra/identity/monitoring-health/reference-audit-activities
+
+frameworks:
+  attack: [T1098.001]
+
+validation:
+  status: not-verified
+  date: 2026-10-20
+  notes: Written from documentation and public research. Nothing was run against a tenant; the audit operation names and the current effect of app management policies must be checked before relying on them.
