@@ -1,7 +1,9 @@
 id: agent-001
 name: Graph write permission on the agent identity + a write-capable tool
 category: excessive-agency
+severity: high
 platform: [foundry, graph, sharepoint]
+surface: agent-tool
 
 permissions:
   required:
@@ -49,8 +51,19 @@ references:
   - https://owasp.org/www-project-top-10-for-large-language-model-applications/
   - https://learn.microsoft.com/graph/api/resources/listitem
 
+graph:
+  nodes:
+    - { id: user, label: User, sub: Asks the agent to add an item, type: attacker, x: 90, y: 200 }
+    - { id: agent, label: Agent, sub: Chooses the write operation, type: agent, x: 330, y: 90 }
+    - { id: identity, label: Agent identity, sub: Holds a write permission it does not need, type: asset, x: 570, y: 200 }
+    - { id: graph, label: Microsoft Graph, sub: Accepts the write, type: victim, x: 800, y: 90 }
+  edges:
+    - { from: user, to: agent, label: Message }
+    - { from: agent, to: identity, label: Calls the tool }
+    - { from: identity, to: graph, label: POST accepted }
+
 frameworks:
-  owasp_llm: [LLM06]
+  owasp: [LLM06]
 
 validation:
   status: observed-in-lab

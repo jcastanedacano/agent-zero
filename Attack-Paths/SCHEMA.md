@@ -1,4 +1,6 @@
-# Attack path schema v1.0
+# Attack path schema v1.1
+
+v1.1 adds `severity`, `surface`, `graph`, `workshop`, `frameworks.atlas` and `frameworks.owasp`, and widens `category`, so the 6 Track C red-team exercises and the Agent 365 identity-plane paths fit the same file. Files written for v1.0 stay valid.
 
 One YAML file per privilege-escalation or excessive-agency path on the Microsoft stack. The structure is adapted from the
 [pathfinding.cloud](https://pathfinding.cloud/) AWS IAM path library by Datadog ([Apache 2.0](https://github.com/DataDog/pathfinding.cloud/blob/main/LICENSE)):
@@ -24,7 +26,9 @@ no exploitation commands.
 |---|---|---|
 | `id` | string | Same as the file name |
 | `name` | string | The permission abused, with ` + ` between several |
-| `category` | enum | `excessive-agency`, `self-escalation`, `credential-access` or `principal-access` |
+| `category` | enum | `excessive-agency`, `self-escalation`, `credential-access`, `principal-access`, `prompt-injection`, `model-extraction`, `capability-disclosure`, `goal-hijacking`, `ungoverned-deployment` or `agentic-ransomware` |
+| `severity` | enum | `critical`, `high`, `medium` or `low` |
+| `surface` | enum | Where the path lives: `agent-tool`, `agent-identity`, `agent-content`, `agent-conversation`, `agent-lifecycle`, `model-endpoint`, `directory` or `azure-resource` |
 | `platform` | list | Microsoft services involved (`foundry`, `entra`, `graph`, `azure-rbac`, `sharepoint`) |
 | `permissions.required` | list of `{permission, resourceConstraints}` | The minimum the abusing principal needs |
 | `description` | string | How the abuse works and what it yields |
@@ -35,12 +39,14 @@ no exploitation commands.
 
 | Field | Meaning |
 |---|---|
+| `graph` | `nodes` (`id`, `label`, `sub`, `type`: `attacker`, `asset`, `agent` or `victim`, optional `x`, `y`) and `edges` (`from`, `to`, `label`): the attack as a flow |
+| `workshop` | The hands-on exercise: `estimatedMinutes`, `steps`, `payload`, `verificationQuery`, `expected`, `ifItFails`, `documentationQuestions`, `source`. For demo tenants only, as in Track C |
 | `permissions.additional` | Read or list permissions that help discovery and could come from a separate principal |
 | `prerequisites` | What must exist in the tenant for the path to work |
 | `limitations` | When the path yields full access, when only partial, and what blocks it |
 | `detection` | Where to look: `library` (existing queries in this repository) and `gaps` (what has no query yet) |
 | `references` | Primary documentation and research |
-| `frameworks` | MITRE ATT&CK, ATLAS and OWASP ids, checked against the source |
+| `frameworks` | `attack` (MITRE ATT&CK), `atlas` (MITRE ATLAS) and `owasp` (Agentic Top 10 `ASI`, LLM Top 10 `LLM`) ids, checked against the source |
 
 ## `validation`
 
@@ -57,4 +63,4 @@ validation:
 - `documented`: described in Microsoft documentation or public research, not reproduced here.
 - `not-verified`: written from knowledge of the platform; nothing was run.
 
-A `detection.library` entry names an existing query file. A path with no query says so under `detection.gaps` instead of inventing one.
+A `detection.library` entry names an existing query: a file path, or a library query id such as `P03-Q6`. A path with no query says so under `detection.gaps` instead of inventing one.

@@ -1,7 +1,9 @@
 id: entra-001
 name: Application.ReadWrite.All
 category: credential-access
+severity: high
 platform: [entra, graph]
+surface: directory
 
 permissions:
   required:

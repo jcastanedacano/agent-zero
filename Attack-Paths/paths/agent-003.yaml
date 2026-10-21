@@ -1,0 +1,63 @@
+id: agent-003
+name: Inheritable permissions on an agent identity blueprint principal
+category: principal-access
+severity: high
+platform: [entra-agent-id, graph]
+surface: agent-identity
+
+permissions:
+  required:
+    - permission: Ability to grant consent or assign app roles on the service principal of an agent identity blueprint
+      resourceConstraints: The resource application is configured as inheritable for the blueprint
+  additional:
+    - permission: Read access to Microsoft Entra Agent ID objects
+      resourceConstraints: Helps list the blueprint principals and the agent identities under them
+
+description: |
+  A grant on a blueprint principal can reach every current and future agent identity created from that blueprint when the resource app is configured as inheritable.
+  Inherited permissions are not shown on the agent identities in the Entra admin center or in Microsoft Graph: they appear only in the `scp` and `roles` claims of the
+  token at runtime. A review that looks at each agent identity can therefore miss a permission that every one of them holds.
+
+graph:
+  nodes:
+    - { id: actor, label: Actor, sub: Can grant on the blueprint principal, type: attacker, x: 90, y: 200 }
+    - { id: principal, label: Blueprint principal, sub: Receives the consent or app role, type: asset, x: 330, y: 90 }
+    - { id: inherit, label: Inheritable permission, sub: Not shown on the agent identities, type: asset, x: 570, y: 200 }
+    - { id: identities, label: Agent identities, sub: Current and future, type: agent, x: 800, y: 90 }
+  edges:
+    - { from: actor, to: principal, label: Grants consent or an app role }
+    - { from: principal, to: inherit, label: Resource is inheritable }
+    - { from: inherit, to: identities, label: Appears in the token claims at runtime }
+
+prerequisites:
+  - The resource application is configured as inheritable for the blueprint
+  - The grant is made on the blueprint principal, not on an individual agent identity
+
+limitations: |
+  The grants stay visible on the blueprint principal, so the audit event is the earliest signal; the inherited permissions themselves are not listed on the agent
+  identities. The effect depends on which permission is granted and on which resource it applies to.
+
+recommendation: |
+  Review grants at the blueprint principal, not only at each agent identity, and treat any inheritable resource application as part of the blueprint's reach. Keep the
+  ability to grant consent or assign app roles to a minimum number of administrators, and alert on grants to blueprint principals.
+
+  Detect the grant in `AuditLogs` ("Add app role assignment to service principal" and "Consent to application") matched to the blueprint principal.
+
+detection:
+  library:
+    - KQL-Library/P03-Access-Anomalies.kql (Q13: consent and app-role grants on blueprint principals)
+  gaps:
+    - The consent branch of Q13 is NOT VERIFIED (a consent record names its target by display name only, and the only `agentType` value in 90 days on the validation tenant was `notAgentic`); only the app-role branch is validated.
+
+references:
+  - docs/architecture.md (section 3, the identity chain of an agent)
+
+frameworks:
+  attack: [T1098.003, T1671]
+
+validation:
+  status: documented
+  date: 2026-10-21
+  notes: >-
+    The app-role branch of the detection was validated against the real `AuditLogs` of the validation workspace (Oct 2026: 1 row in 30 days, the 2026-09-17 app-role
+    assignment on a blueprint principal). The consent branch is not verified and the path itself was not reproduced for this file.

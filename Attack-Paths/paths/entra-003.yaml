@@ -1,7 +1,9 @@
 id: entra-003
 name: RoleManagement.ReadWrite.Directory
 category: self-escalation
+severity: critical
 platform: [entra, graph]
+surface: directory
 
 permissions:
   required:

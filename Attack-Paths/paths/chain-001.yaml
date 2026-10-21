@@ -1,0 +1,124 @@
+id: chain-001
+name: "JadePuffer: Agentic Ransomware Chain"
+category: agentic-ransomware
+severity: critical
+platform:
+  - agent-builder
+  - langflow
+  - key-vault
+  - sharepoint
+surface: agent-lifecycle
+permissions:
+  required:
+    - permission: An ungoverned agent with broad permissions (see builder-001) and an initial foothold
+      resourceConstraints: The lab uses a deliberately vulnerable Langflow (CVE-2025-3248) as the initial access
+description: 7-stage chain where an autonomous agent runs the entire intrusion (from initial access to encryption) with adaptive decision-making at each stage, with no pauses or fatigue.
+graph:
+  nodes:
+    - id: langflow
+      label: 1. Langflow (CVE-2025-3248)
+      sub: Unauthenticated RCE (initial access)
+      type: attacker
+      x: 60
+      y: 220
+    - id: agente
+      label: Autonomous agent
+      sub: Via Agent Builder Bypass (Attack 2)
+      type: agent
+      x: 300
+      y: 100
+    - id: discovery
+      label: 2. Discovery
+      sub: Sites, users, connected services
+      type: asset
+      x: 540
+      y: 220
+    - id: creds
+      label: 3. Credentials
+      sub: Key Vault, env vars, config docs
+      type: asset
+      x: 780
+      y: 100
+    - id: lateral
+      label: 4. Lateral movement
+      sub: New group or role
+      type: asset
+      x: 1020
+      y: 220
+    - id: exfil
+      label: 5-7. Exfiltration + Encryption
+      sub: 20+ files, then ransom
+      type: victim
+      x: 1260
+      y: 100
+  edges:
+    - from: langflow
+      to: agente
+      label: Initial access
+    - from: agente
+      to: discovery
+      label: Enumerates
+    - from: discovery
+      to: creds
+      label: Hunts for secrets
+    - from: creds
+      to: lateral
+      label: Pivots
+    - from: lateral
+      to: exfil
+      label: Escalates + executes
+workshop:
+  estimatedMinutes: 20
+  steps:
+    - Use the Agent Builder Bypass from Attack 2 to create an ungoverned agent with broad permissions.
+    - "Simulate Stage 2 (discovery): have the agent enumerate SharePoint sites, user lists, and connected services via legitimate tool calls."
+    - "Simulate Stage 3 (credential access): query Key Vault (read), environment variables via Foundry, and any API keys in config documents."
+    - "Simulate Stage 4 (lateral movement): attempt to add the agent to an additional group or role."
+    - "Simulate Stage 7 (mass file operation): download or copy 20+ files in a single session from different sites."
+  verificationQuery: |-
+    // P05-Q8: confirma que la correlación de cadena se dispara
+    // Verifica si aparecieron 3+ etapas desde el mismo AgentId en 60 minutos
+    CloudAppEvents
+    | where TimeGenerated > ago(1h)
+    | extend AgentId = tostring(RawEventData["AgentId"])
+    | where isnotempty(AgentId)
+    | summarize
+        ActionTypes = make_set(ActionType),
+        ActionCount = count(),
+        UniqueActionTypes = dcount(ActionType)
+        by AgentId, AccountDisplayName
+    | where UniqueActionTypes >= 5
+    | project AgentId, AccountDisplayName, ActionCount, UniqueActionTypes, ActionTypes,
+        RiskNote = "Agent executing high action-type diversity in 1h (multi-stage chain candidate)"
+  expected: You should see a row with UniqueActionTypes >= 5 for the AgentId that ran the 4 simulated stages, before reaching a full Stage 7.
+  ifItFails:
+    - condition: The query does not correlate any stage
+      explanation: "Confirm all stages ran under the same AgentId (the same agent created in step 1, not a new one per stage): the correlation depends on that."
+  documentationQuestions:
+    - Did P05-Q8 fire before reaching Stage 7 (encryption)?
+    - What was the minimum number of stages required to trigger the alert?
+    - If the agent operated at lower volume per stage to evade detection, at what rate would it become invisible?
+    - What is the difference in time-to-detection between a human-operated attack (intermittent) and this agent-operated chain (continuous)?
+  source: Track-C-SOC-Engineer/Module-06-RedTeamPerspective.md
+recommendation: |-
+  Defense in depth: Agent Builder governance (Session 02) prevents the ungoverned agent from Stage 1; Global Secure Access (Session 03) blocks connections to uncategorized MCP servers at the network level; and hardening internet-exposed AI platforms (patching Langflow, no public exposure without a WAF) closes the original entry point.
+
+  Detection rule: P05-Q8 (chain correlation: 3 or more distinct stages from the same AgentId within a 60-minute window). No dedicated rule name in the workshop playbook.
+detection:
+  library:
+    - P05-Q8
+  suggestedRule:
+    name: Agentic Multi-Stage Attack Chain Correlation (Proposed)
+    severity: Critical
+    frequency: Scheduled query, every 5 min (P05-Q8)
+frameworks:
+  atlas:
+    - AML.T0051
+    - AML.T0040
+  owasp:
+    - ASI04
+    - ASI05
+validation:
+  status: documented
+  date: 2026-10-21
+  notes: Workshop exercise of Track C, Module 06, run against a demo tenant. Per-step evidence is not recorded in this file. The detection query carries its own validation status in the KQL library.

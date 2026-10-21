@@ -236,7 +236,7 @@ agent-zero/
 │   ├── Module-06-RedTeamPerspective.md          ← attacker perspective, 6 attacks
 │   └── Templates/
 │       └── Incident-Response-Playbook-Template.md
-├── Attack-Paths/                    ← 5 attack paths (YAML): permission abused, prerequisites, detection, mitigation, validation status
+├── Attack-Paths/                    ← 13 attack paths (YAML): permission abused, prerequisites, detection, mitigation, validation status
 │   ├── README.md
 │   ├── SCHEMA.md
 │   └── paths/
