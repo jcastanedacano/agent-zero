@@ -1,0 +1,126 @@
+id: pim-001
+name: PIM Activation Abuse for Agent Roles
+category: privilege-escalation
+severity: high
+platform:
+  - entra
+  - azure-rbac
+surface: pim-activation
+permissions:
+  required:
+    - permission: Ability to activate an eligible PIM assignment already held by an agent's service principal (an approver's approval, or the role's own activation if no approval is required)
+      resourceConstraints: The agent's service principal already has an eligible (not permanent) assignment to the role being activated
+description: |
+  Privileged Identity Management replaces a permanent role with just-in-time, time-boxed access, which is the right fix for the standing-privilege problem
+  agent-002 and agent-003 describe. But PIM is a control an attacker who already holds the eligible assignment, or who compromises the activation path, can also
+  use: nothing stops an eligible role from being activated for its full configured duration (recommended 1-4 hours, but not enforced by PIM itself), repeated back
+  to back, or activated outside business hours when review is least likely. The window is temporary; what happens inside it is not.
+
+graph:
+  nodes:
+    - { id: atacante, label: Actor with eligible assignment, sub: Agent service principal or its controller, type: attacker, x: 90, y: 200 }
+    - { id: activacion, label: PIM activation, sub: Justification + approval (if required), type: asset, x: 330, y: 90 }
+    - { id: ventana, label: Active window, sub: Role active for the configured duration, type: asset, x: 570, y: 200 }
+    - { id: accion, label: High-privilege action, sub: Taken while the role is active, type: victim, x: 800, y: 90 }
+  edges:
+    - { from: atacante, to: activacion, label: Requests activation }
+    - { from: activacion, to: ventana, label: Granted for the activation window }
+    - { from: ventana, to: accion, label: Role is usable for its full duration }
+
+prerequisites:
+  - The agent's service principal already holds an eligible (not permanent) PIM assignment to a privileged role
+  - Either no approval is configured for activation, or the attacker (or a compromised approver flow) can supply one
+
+limitations: |
+  This path assumes the eligible assignment already exists; it does not cover how the assignment was created (see agent-002 and agent-003 for how permissions reach an
+  agent identity in the first place). It also assumes PIM is configured per the recommended practice (1-4 hour activation windows, justification required); a tenant
+  that configured PIM with longer windows or no justification narrows the gap between "eligible" and "permanent" that this path depends on.
+
+recommendation: |
+  Configure PIM for agent service principals exactly as the governing skill specifies: a 1-4 hour maximum activation duration (not the 8-hour default), mandatory
+  justification, and mandatory approval for Contributor-or-higher Azure RBAC roles, with the approving human (not the agent) required to complete MFA. For Entra ID
+  roles, disable permanent eligible assignments. Where a Graph API permission needs just-in-time control, native PIM support is limited: consider a revoke-and-
+  re-consent pattern instead of treating the permission as PIM-eligible.
+
+  Detection: alert on PIM activations outside business hours (P03-Q5 and the governing skill's Query 2), and separately audit for service principals holding a
+  high-privilege Azure RBAC role as a direct/permanent assignment rather than through PIM (the governing skill's Query 3) — a permanent assignment next to an agent
+  identity means PIM was bypassed or never applied, not that it is working.
+detection:
+  library:
+    - P03-Q5
+  gaps:
+    - "P03-Q5's OperationName filter ORs together \"Add member to role in PIM requested (permanent)\" and \"Add member to role completed (PIM activation)\" — two different event types (a request for a permanent, non-time-boxed PIM assignment, and the completion of a time-boxed activation) that the governing skill's own validated query (skills/govern/govern-pim-agent-roles/queries/sentinel-pim-activations.kql, Query 1) treats separately, specifically because each activation generates three events (requested, completed, expired) under its own operation name and conflating them double-counts or misclassifies. P03-Q5 was not independently re-validated for this path."
+    - "The governing skill's validation (Oct 2026) found only 1 activation in 90 days on its workspace, so the duration/frequency threshold logic (Query 4, long_activation_hrs) was never exercised against data that actually crossed it. The same applies to this path's threshold claims: they are documented defaults, not tenant-validated thresholds."
+frameworks:
+  attack: [T1548.005]
+validation:
+  status: documented
+  date: 2026-10-22
+  notes: >-
+    Written from the governing skill govern-pim-agent-roles's documented workflow and its validated Sentinel queries (Oct 2026: 1 activation in 90 days, duration/frequency
+    thresholds not exercised with data that crossed them). Not run against a tenant for this file: no PIM eligible assignment was created or activated, and P03-Q5 and
+    the governing skill's queries were not independently re-executed.
+
+lab:
+  kind: tenant-exercise
+  effects: read-only
+  title: The window is temporary; what you do in it is not
+  objective: Activate an existing eligible PIM assignment for a demo service principal, confirm the role is fully usable for the activation window, and check which signals actually show the activation versus which only claim to.
+  estimatedMinutes: 20
+  costEstimate: "None beyond the tenant's existing Entra ID P2 / Workload ID Premium licensing already required for PIM. Not measured otherwise."
+  licenses:
+    - A demo tenant with Entra ID P2 (for PIM on users/groups) or Microsoft Entra Workload ID Premium (for PIM on service principals), per the governing skill's license note
+    - A demo service principal with an existing eligible (not permanent) PIM assignment to a non-destructive role, created ahead of this exercise
+    - Access to Privileged Identity Management in the Entra admin center or via Microsoft Graph PowerShell
+  safety:
+    scope: Demo tenant only. Use a low-privilege, non-destructive role for the eligible assignment (for example Reader) so the activation itself does not create a real exposure.
+    writes: One PIM activation (and its automatic expiration) on the demo service principal's eligible assignment.
+    revert: Let the activation expire naturally at the end of its configured window, or deactivate it manually; no other state changes.
+  architecture:
+    summary: One demo service principal with a pre-existing eligible PIM assignment, activated once for the exercise, with the activation observed both while active and after expiration.
+    resources:
+      - name: Demo service principal
+        purpose: Holds the eligible PIM assignment being activated. Already exists; nothing new is deployed for this lab.
+        createdBy: existing
+    principals:
+      - name: Account performing the activation
+        required:
+          - Ability to activate the demo service principal's eligible assignment (or to approve the activation, if approval is required)
+        helpful: []
+  flow:
+    setup:
+      - Confirm the demo service principal's eligible PIM assignment exists and note its configured maximum activation duration, approval requirement, and justification requirement.
+    attack:
+      - step: Activate the eligible assignment (PIM → Azure resources or Entra roles → Assignments → Activate), supplying a justification, and approval if required.
+        evidence: The activation succeeds and the role becomes Active for its configured window.
+      - step: While the window is active, perform one action that the role permits (chosen to match the Safety scope above) and confirm it succeeds.
+        evidence: The action succeeds exactly as it would under a permanent assignment; PIM does not narrow what the role can do during the window, only how long it lasts.
+      - step: Run the governing skill's Query 1 (completed PIM activations) and Query 2 (activations outside business hours) against AuditLogs for the activation window.
+        evidence: Query 1 returns the activation with its role, principal, justification, and start/expiration time. Query 2 only flags it if the activation happened outside the configured business-hours window (8-20 UTC by default in the query) — repeat the activation at a different hour to see this threshold actually move.
+      - step: Run the governing skill's Query 3 against AzureActivity to confirm the demo service principal has no permanent (non-PIM) assignment to the same or a higher-privilege role.
+        evidence: No rows for the demo principal, confirming the exercise actually went through PIM rather than bypassing it — if Query 3 does return a row, that permanent assignment is the real finding, not a false positive.
+    cleanup:
+      - Let the activation expire, or deactivate it manually, returning the service principal to its eligible (not active) state.
+    teardown: []
+  defend:
+    prevent:
+      - Configure PIM with a 1-4 hour maximum activation duration, mandatory justification, and mandatory approval for Contributor-or-higher roles, with MFA required of the approving human.
+      - Disable permanent eligible assignments for Entra ID roles; for Graph API permissions with limited native PIM support, use revoke-and-re-consent on demand instead.
+      - Review Azure RBAC role assignments directly (az role assignment list --include-inherited) alongside PIM, since a permanent assignment next to an agent identity bypasses PIM entirely without PIM itself ever showing it.
+    detect:
+      queries:
+        - P03-Q5
+      events:
+        - source: AuditLogs
+          operation: Add member to role completed (PIM activation), outside configured business hours
+          note: "Exercised directly in this lab (Query 2 of the governing skill). The business-hours window is a configurable default (8-20 UTC), not a tenant-validated threshold; confirm it matches your tenant's actual working hours before relying on it."
+        - source: AzureActivity
+          operation: Microsoft.Authorization/roleAssignments/write, principalType ServicePrincipal, matched to a high-privilege role GUID, outside PIM
+          note: "The governing skill's Query 3, which this lab also exercises: a permanent Azure RBAC assignment on an agent identity means PIM was bypassed or never applied for that role, and is itself the finding, independent of any PIM activation."
+  transcript:
+    summary: Not run. This lab was written from the governing skill govern-pim-agent-roles's documented workflow and its own validated Sentinel queries, not reproduced against a tenant for this file.
+    observations: []
+  validation:
+    status: documented
+    date: 2026-10-22
+    notes: Written from documented sources (govern-pim-agent-roles SKILL.md and its queries/sentinel-pim-activations.kql validation notes). No PIM assignment was created or activated, and no query was executed against a tenant for this file.

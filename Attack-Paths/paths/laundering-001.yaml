@@ -1,0 +1,119 @@
+id: laundering-001
+name: Identity Laundering — Agent Actions Attributed to the Human User
+category: identity-laundering
+severity: medium
+platform:
+  - entra-agent-id
+  - graph
+surface: delegated-access
+permissions:
+  required:
+    - permission: Delegated access to call Microsoft Graph or SharePoint on behalf of a signed-in user (an OAuth delegated flow, not an app-only / service-principal flow)
+      resourceConstraints: The calling process authenticates as the user, not as its own service principal, so every downstream log sees only the user
+description: |
+  When an automated process (an agent, a script, an RPA job) authenticates as a human user instead of under its own identity, the resulting activity is logged
+  as that user's own action. There is no agent, service principal, or AgentId anywhere in the record: the automation is invisible by construction, not by evasion.
+  This differs from token theft or impersonation; the process is using its own legitimately-held delegated credential, it is simply never distinguishable from the
+  human afterward.
+
+graph:
+  nodes:
+    - { id: agente, label: Automated process, sub: Holds a delegated user token, type: attacker, x: 90, y: 200 }
+    - { id: usuario, label: Human user account, sub: Credential the process authenticates as, type: asset, x: 330, y: 90 }
+    - { id: accion, label: Logged action, sub: File read, download, copy, etc., type: victim, x: 570, y: 200 }
+    - { id: registro, label: Audit trail, sub: Shows the user, not the process, type: asset, x: 800, y: 90 }
+  edges:
+    - { from: agente, to: usuario, label: Authenticates with the user's delegated token }
+    - { from: usuario, to: accion, label: Performs the action under that identity }
+    - { from: accion, to: registro, label: Logged as AccountType = Regular }
+
+prerequisites:
+  - The automated process holds a valid delegated OAuth token for a user (for example, a scheduled script that signed in once interactively and cached a refresh token, or a RPA tool configured with a service account's own interactive credentials)
+  - The downstream API accepts delegated calls and does not require an app-only / application permission
+
+limitations: |
+  This path needs an automation that already authenticates delegated as a user, which is a design and provisioning choice, not a vulnerability exploited in the moment.
+  Where the automation can be redesigned to use its own app registration and application permissions instead, the attribution problem disappears at the source; this path
+  documents how to notice the pattern where that redesign has not happened yet.
+
+recommendation: |
+  Prefer app-only / application-permission authentication for any automated process, so its activity logs under its own service principal and AgentId, not under a human
+  account. Where delegated authentication is unavoidable (for example, a tool that must act strictly within the permissions of the signed-in user), treat the account whose
+  credential is used as a shared/service account, rotate its credential on a schedule, and expect every log from it to require manual correlation to tell human activity
+  from automated activity apart.
+
+  Detection: P03-Q2 looks for a User-Agent string that mentions "agent", "copilot", "assistant" or "bot" on file actions logged under AccountType = Regular. This is a weak
+  signal: the sibling skill detect-agent-identity-abuse explicitly removed the equivalent name-based heuristic from its own four rules after validation showed it both
+  "flags Microsoft services and misses agents with other names" (see gap below) — the same failure mode applies here, since P03-Q2 depends on the automation's HTTP client
+  advertising itself in the User-Agent header, which well-behaved and badly-named automations alike will often not do.
+detection:
+  library:
+    - P03-Q2
+  gaps:
+    - P03-Q2's only signal is a substring match on the UserAgent header ("agent", "copilot", "assistant", "bot"). The sibling skill detect-agent-identity-abuse tested the equivalent approach (matching agents by name across its four identity-abuse rules) against a real Sentinel workspace and removed it, noting it "flags Microsoft services and misses agents with other names" (SKILL.md, Implementation notes). P03-Q2 was not independently re-validated for this path; expect the same false-positive/false-negative pattern until it is.
+    - "Not verified for this path: whether CloudAppEvents' AccountType field reliably distinguishes delegated-as-user automation from genuine interactive use in this repository's own validation tenant."
+frameworks:
+  attack: [T1036]
+validation:
+  status: documented
+  date: 2026-10-22
+  notes: >-
+    Written from kql-library.js's own P03-Q2 definition and from the sibling skill detect-agent-identity-abuse's documented finding that the equivalent name-based
+    heuristic failed validation on a real Sentinel workspace. Not run against a tenant for this file: no delegated-auth automation was built or exercised, and P03-Q2
+    was not executed against real CloudAppEvents data.
+
+lab:
+  kind: tenant-exercise
+  effects: read-only
+  title: The script that looks like you
+  objective: Run a small script that authenticates as a demo user (a delegated token, not an app-only service principal) and performs a file action through Microsoft Graph, then check whether the resulting CloudAppEvents record shows anything other than the human account.
+  estimatedMinutes: 15
+  costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access and one demo user account. Not measured otherwise."
+  licenses:
+    - A demo tenant with at least one demo user who has a file in OneDrive or SharePoint to read
+    - Microsoft Graph PowerShell SDK, signed in with delegated permissions as that demo user (not app-only / application permissions)
+    - Defender for Cloud Apps / CloudAppEvents active in the tenant (Office 365 connector, so file actions are captured)
+  safety:
+    scope: Demo tenant and demo user only. Use a throwaway or dedicated demo file; the exercise only reads it.
+    writes: None beyond the delegated sign-in and one file-read action.
+    revert: Nothing to revert.
+  architecture:
+    summary: One demo user account, one Microsoft Graph PowerShell session signed in with a delegated (not app-only) token for that user, and one file-read call made through that session.
+    resources:
+      - name: Demo user account
+        purpose: Holds the delegated credential the script authenticates as. Already exists; nothing new is deployed for this lab.
+        createdBy: existing
+    principals:
+      - name: Demo user
+        required:
+          - Read access to at least one file in their own OneDrive or SharePoint
+        helpful: []
+  flow:
+    setup:
+      - Confirm the demo user has at least one readable file, and that the tenant's Defender for Cloud Apps Office 365 connector is active (file activities are not captured otherwise).
+      - Open a terminal with Microsoft Graph PowerShell SDK installed.
+    attack:
+      - step: 'Connect-MgGraph -Scopes "Files.Read" using the demo user''s own delegated sign-in (an interactive browser sign-in, not -Identity or a client-secret app-only flow), then set a custom User-Agent on the session before calling Get-MgDriveItem / Get-MgDriveItemContent on the demo file.'
+        evidence: The call succeeds and returns the file content or metadata, authenticated entirely as the demo user.
+      - step: Run P03-Q2 against CloudAppEvents for the window of the call.
+        evidence: "Expected: the record's AccountDisplayName is the demo user, AccountType is Regular, and the match depends entirely on whether the custom User-Agent string happens to contain one of P03-Q2's four substrings. Repeat the call once with the custom header and once with Microsoft Graph PowerShell's own default User-Agent, to see the detection appear and disappear based only on that string, not on anything about what the script actually did."
+    cleanup: []
+    teardown: []
+  defend:
+    prevent:
+      - Prefer app-only / application-permission authentication (a dedicated app registration with its own service principal) for any script or RPA job that acts on a schedule or without a human present, so its activity logs under its own identity.
+      - Where delegated authentication by an automation is unavoidable, document the account as a shared/service account in the Pillar 1 risk register and rotate its credential on a schedule.
+    detect:
+      queries:
+        - P03-Q2
+      events:
+        - source: CloudAppEvents
+          operation: File action (FileDownloaded, FileAccessed, FileCopied, SensitiveFileRead) with AccountType = Regular and a UserAgent substring match
+          note: "Observed directly in this lab to depend entirely on the UserAgent string the calling script happens to send, not on any property of the action itself. The sibling skill detect-agent-identity-abuse documents the same weakness in its own four rules and removed the equivalent heuristic after validation; treat P03-Q2 the same way until it is re-validated."
+  transcript:
+    summary: Not run. This lab was written from P03-Q2's own definition and the sibling skill's documented finding about the equivalent heuristic, not reproduced against a tenant for this file.
+    observations: []
+  validation:
+    status: documented
+    date: 2026-10-22
+    notes: Written from documented sources (kql-library.js's P03-Q2, detect-agent-identity-abuse's SKILL.md Implementation notes). No delegated-auth script, Graph call, or CloudAppEvents check was run against a tenant for this file.

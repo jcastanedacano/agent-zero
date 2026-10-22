@@ -1,0 +1,131 @@
+id: orphan-001
+name: Orphaned Agent Identity Takeover
+category: identity-takeover
+severity: high
+platform:
+  - entra-agent-id
+  - graph
+surface: agent-identity
+permissions:
+  required:
+    - permission: Ability to reassign ownership of an ownerless agent, or to act as an existing owner/sponsor who was never removed
+      resourceConstraints: The agent's owner account has left the organization (disabled or deleted) while the agent's identity, credentials, and permissions remain active
+description: |
+  An agent does not stop working when its owner leaves. The owner's user account gets disabled or deleted during offboarding, but the agent's service principal,
+  its credentials, and everything it was ever granted keep running unless someone separately revokes them. An attacker who can reassign an ownerless agent, or who
+  simply never gets challenged because no one is watching an agent whose owner is gone, inherits whatever that agent could already do.
+
+graph:
+  nodes:
+    - { id: dueno, label: Agent owner, sub: Account disabled or deleted on offboarding, type: victim, x: 90, y: 200 }
+    - { id: agente, label: Agent identity, sub: Keeps its credentials and permissions, type: asset, x: 330, y: 200 }
+    - { id: atacante, label: Actor, sub: Reassigns or quietly uses the orphaned agent, type: attacker, x: 570, y: 200 }
+    - { id: alcance, label: Everything the agent could already do, sub: Inherited with no new grant, type: victim, x: 800, y: 200 }
+  edges:
+    - { from: dueno, to: agente, label: Owns/sponsors, now disabled or deleted }
+    - { from: agente, to: atacante, label: Reassigned, or quietly used, unnoticed }
+    - { from: atacante, to: alcance, label: Inherits permissions untouched by the owner's departure }
+
+prerequisites:
+  - At least one agent whose owner account has been disabled or deleted, with the agent itself still Active
+  - "Either reassignment rights over ownerless agents (for a direct takeover), or simply no monitoring of agents whose owner has left (for a quieter path, the agent keeps running and no one notices)"
+
+limitations: |
+  This path observes a state (an active agent with a disabled/deleted owner), not an exploit of a flaw. The governing skill's own validation found this exact
+  combination did not occur in its tenant during the check window — ownerless agents there had a null owner id, not a disabled or deleted one — so the join
+  condition this path depends on is documented but not confirmed to return real rows on every tenant.
+
+recommendation: |
+  Treat "owner account disabled or deleted" as a decommission trigger with the same urgency as "no activity in 30 days": notify the owner's manager within the
+  offboarding process itself, not on the next periodic audit, and default to blocking (reversible) rather than leaving the agent active while ownership is sorted
+  out. Where the agent is still needed, reassign ownership explicitly rather than letting it run ownerless. Record consent grants and role assignments before any
+  eventual delete, since deleting an agent with an Entra Agent ID also deletes its identity.
+
+  Detection: P03-Q10 joins the agent inventory's Owners field against AuditLogs "Delete user"/"Update user (AccountEnabled=false)" events. The governing skill's own
+  Advanced Hunting version of the same idea (joining AgentsInfo.Owners against IdentityInfo for IsAccountEnabled/DeletedDateTime) is the one actually exercised against
+  a real tenant, and it surfaced a different, more common finding first: agents with a null-GUID owner, which is not the same condition as a disabled or deleted owner
+  and needs its own review path.
+detection:
+  library:
+    - P03-Q10
+  gaps:
+    - "P03-Q10 was not independently re-validated for this path. The governing skill govern-lifecycle-decommission-agent's equivalent query (Query 5, Advanced Hunting) was validated on a real tenant (Oct 2026) and returned agents with a null-GUID owner and no disabled-or-deleted owner — the specific \"owner account disabled or deleted\" condition this path and P03-Q10 describe was not exercised with matching data there. Treat the detection as documented, not confirmed, until it fires on a real disabled/deleted-owner case."
+    - "Neither P03-Q10 nor the governing skill's query distinguishes a sponsor from an owner, or accounts for the fact that an agent can have multiple owners where only one has left — both would need checking before trusting a single row as \"this agent is now ownerless.\""
+frameworks:
+  attack: [T1078.004]
+validation:
+  status: documented
+  date: 2026-10-22
+  notes: >-
+    Written from kql-library.js's P03-Q10 definition and from the governing skill govern-lifecycle-decommission-agent's documented lifecycle model and its validated
+    Query 5 (Oct 2026: returned null-owner agents, not disabled/deleted-owner agents). Not run against a tenant for this file: no owner account was disabled or deleted,
+    and no reassignment or takeover was attempted.
+
+lab:
+  kind: tenant-exercise
+  effects: read-only
+  title: The agent that outlived its owner
+  objective: Identify an agent whose owner account is disabled, deleted, or missing, and compare what the Entra Agent ID object model actually shows against what the governing skill's lifecycle process expects you to do about it.
+  estimatedMinutes: 15
+  costEstimate: "None beyond the tenant's existing Entra ID and Microsoft Graph PowerShell access. Not measured otherwise."
+  licenses:
+    - A demo tenant with Microsoft Entra Agent ID objects (at least one agent with a recorded owner)
+    - Read access to AgentsInfo/IdentityInfo in Advanced Hunting, or Microsoft Graph PowerShell equivalent
+    - An account that can disable a demo user (to create the owner-disabled condition) and that can reassign ownership of an ownerless agent
+  safety:
+    scope: Demo tenant only. Disable a demo owner account created for this exercise, never a real employee's account, even in a demo tenant shared with other exercises.
+    writes: Disabling one demo user account; optionally, one ownership reassignment on a demo agent.
+    revert: Re-enable the demo user account; if ownership was reassigned, note that this is not reversible to "no owner" (an agent cannot be made ownerless again) — reassign to the original demo owner instead.
+  architecture:
+    summary: One demo agent with a recorded owner, that owner's account disabled during the exercise, and a check of what the agent can still do and who, if anyone, is watching.
+    resources:
+      - name: Demo agent
+        purpose: The agent whose owner will be disabled. Already exists, or create one for this exercise; nothing about the agent itself needs to change.
+        createdBy: existing
+      - name: Demo owner account
+        purpose: The user account that will be disabled to create the orphaned condition. Create a dedicated demo account; never use a real employee's.
+        createdBy: manual
+    principals:
+      - name: Account performing the exercise
+        required:
+          - Ability to disable a user account and read Entra Agent ID / AgentsInfo objects
+        helpful:
+          - Ability to reassign agent ownership, to complete the takeover step
+  flow:
+    setup:
+      - Create or identify a demo agent with a recorded owner, and confirm it is Active and has at least one real permission or credential (not a freshly-created, empty agent).
+    attack:
+      - step: Disable the demo owner's account (Entra admin center → Users → [owner] → Block sign-in, or Update-MgUser -AccountEnabled:$false).
+        evidence: The owner account shows as disabled in Entra; the agent itself is untouched and remains Active.
+      - step: Confirm the agent still functions — it keeps whatever credentials and permissions it had before the owner was disabled.
+        evidence: No admin-center or Graph surface blocks the agent because its owner is disabled; ownership and function are independent properties of the object model.
+      - step: Run P03-Q10 against AuditLogs/AgentsInfo, and separately the governing skill's Query 5 against AgentsInfo/IdentityInfo in Advanced Hunting, for the same window.
+        evidence: "Record which query actually returns the demo agent with OwnerState = \"Owner account disabled\", and which does not. This is the gap documented above, observed directly: expect Query 5 to need the IdentityInfo join (IsAccountEnabled) to catch this specific case, since its own validation run surfaced null-owner agents, not disabled-owner ones, on the first pass."
+      - step: If reassignment rights are available, reassign the agent's ownership to a different demo account (Microsoft 365 admin center → Agents → All agents → [agent] → Assign owner, for ownerless agents) and confirm the agent now shows an active owner.
+        evidence: The reassignment succeeds without re-granting any permission the agent already had — the takeover inherits the agent's existing reach, it does not need to recreate it.
+    cleanup:
+      - Re-enable the demo owner account.
+      - If ownership was reassigned, reassign it back to the original demo owner; delete the demo agent and demo owner account if they were created solely for this exercise.
+    teardown: []
+  defend:
+    prevent:
+      - Treat "owner account disabled or deleted" as an immediate decommission-candidate trigger in the offboarding process itself (govern-lifecycle-decommission-agent, Step 1-2), not something that waits for the next periodic audit.
+      - Default to Block/Stop (reversible, 7-day rollback window) for an agent whose owner just left, until ownership is explicitly reassigned or the agent is confirmed no longer needed.
+      - Before any eventual delete, capture the agent's consent grants and role assignments (govern-lifecycle-decommission-agent, Steps 4-5), since deleting an agent with an Entra Agent ID also deletes its identity.
+    detect:
+      queries:
+        - P03-Q10
+      events:
+        - source: AuditLogs
+          operation: Delete user / Update user (AccountEnabled = false), joined to AgentsInfo.Owners
+          note: "P03-Q10's own approach. Not independently re-validated for this path; the governing skill's equivalent (richer) join against IdentityInfo is the one actually exercised on a real tenant, and on its first validated pass it surfaced null-owner agents rather than disabled/deleted-owner ones — confirm which condition your tenant's data actually produces before relying on either query alone."
+        - source: AgentsInfo + IdentityInfo
+          operation: Agent owner resolved against IdentityInfo.IsAccountEnabled / DeletedDateTime (governing skill Query 5)
+          note: "The more complete version of the same check: it also catches a null-GUID owner (no real owner at all) and an owner not resolvable in the directory, two states P03-Q10 does not check for at all."
+  transcript:
+    summary: Not run. This lab was written from P03-Q10's definition and the governing skill govern-lifecycle-decommission-agent's documented lifecycle model and validated Query 5, not reproduced against a tenant for this file.
+    observations: []
+  validation:
+    status: documented
+    date: 2026-10-22
+    notes: Written from documented sources (kql-library.js's P03-Q10, govern-lifecycle-decommission-agent's SKILL.md and queries/sentinel-inactive-agents.kql validation notes). No owner account was disabled, no agent was reassigned, and no query was executed against a tenant for this file.
