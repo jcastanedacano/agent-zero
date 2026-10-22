@@ -57,7 +57,7 @@ workshop:
     for i in $(seq 1 50); do
       curl -s -o /dev/null -w "%{http_code}\n" -X POST "$URL" \
         -H "api-key: $API_KEY" -H "Content-Type: application/json" \
-        -d "{\"model\":\"$MODEL\",\"input\":\"Question $i: $(head -c 20 /dev/urandom | base64)\",\"max_output_tokens\":50}"
+        -d "{\"model\":\"$MODEL\",\"input\":\"Question $i: $(head -c 20 /dev/urandom | base64)\",\"max_output_tokens\":50,\"store\":false}"
       sleep 1
     done | sort | uniq -c
     echo "50 extraction queries sent"
@@ -71,7 +71,7 @@ workshop:
         Succeeded = countif(ResultSignature == "200"),
         Throttled429 = countif(ResultSignature == "429")
         by bin(TimeGenerated, 15m), CallerIPAddress
-    | where Calls > 20  // Lowered for the demo (production threshold: 500)
+    | where Calls > 20  // Demo threshold for this 15-minute bucket, not the production rule: that is 500 calls/hour, so scale both the bucket size and the threshold together, don't just raise this number
   expected: >-
     You should see one row for the caller IP of the script with Calls around 50, above the demo's threshold of 20.
     Requests throttled with HTTP 429 are logged and counted too, so Succeeded plus Throttled429 adds up to Calls.
