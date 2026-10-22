@@ -56,9 +56,11 @@ workshop:
     | where OperationName == "create-response"
     | summarize Calls = count(),
         Succeeded = countif(ResultSignature == "200"),
-        Throttled429 = countif(ResultSignature == "429")
-        by bin(TimeGenerated, 15m), CallerIPAddress
-    | where Calls > 20  // Demo threshold for this 15-minute bucket, not a production rule — see extraction-001 for the scaling caveat
+        Throttled429 = countif(ResultSignature == "429"),
+        FirstCall = min(TimeGenerated),
+        LastCall = max(TimeGenerated)
+        by CallerIPAddress
+    | where Calls > 20  // Demo threshold for this exercise's 30-minute lookback, not a production rule — see extraction-001 for the scaling caveat. Aggregated by caller over the whole lookback, not fixed time buckets, so a run that straddles a bucket boundary is never split and missed.
   expected: >-
     This inline query only proves the same thing extraction-001's does: that 60 near-duplicate calls from one caller are visible in the resource's own diagnostic logs.
     It cannot distinguish a membership-inference probe (near-duplicate questions) from systematic extraction (distinct questions) or from a chatty normal user:

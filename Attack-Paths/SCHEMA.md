@@ -25,9 +25,9 @@ no exploitation commands.
 |---|---|---|
 | `id` | string | Same as the file name |
 | `name` | string | The permission abused, with ` + ` between several |
-| `category` | enum | `excessive-agency`, `self-escalation`, `credential-access`, `principal-access`, `prompt-injection`, `model-extraction`, `capability-disclosure`, `goal-hijacking`, `ungoverned-deployment` or `agentic-ransomware` |
+| `category` | enum | `excessive-agency`, `self-escalation`, `credential-access`, `principal-access`, `prompt-injection`, `model-extraction`, `capability-disclosure`, `goal-hijacking`, `ungoverned-deployment`, `agentic-ransomware`, `membership-inference`, `model-inversion`, `identity-laundering`, `privilege-escalation` or `identity-takeover` |
 | `severity` | enum | `critical`, `high`, `medium` or `low` |
-| `surface` | enum | Where the path lives: `agent-tool`, `agent-identity`, `agent-content`, `agent-conversation`, `agent-lifecycle`, `model-endpoint`, `directory` or `azure-resource` |
+| `surface` | enum | Where the path lives: `agent-tool`, `agent-identity`, `agent-content`, `agent-conversation`, `agent-lifecycle`, `model-endpoint`, `directory`, `azure-resource`, `delegated-access` or `pim-activation` |
 | `platform` | list | Microsoft services involved (`foundry`, `entra`, `graph`, `azure-rbac`, `sharepoint`) |
 | `permissions.required` | list of `{permission, resourceConstraints}` | The minimum the abusing principal needs |
 | `description` | string | How the abuse works and what it yields |
