@@ -100,7 +100,7 @@ lab:
       - Identify the blueprint, its service principal, and confirm which resource application is already configured as inheritable for it; this exercise observes an existing inheritable configuration rather than creating one, since the exact admin-center or Graph path to mark a resource inheritable was not checked for this file.
       - Create (or reuse) one agent identity from the blueprint, and capture a way to request a token on its behalf.
     attack:
-      - step: Grant consent, or assign an app role, for the inheritable resource application directly on the blueprint's service principal — not on the agent identity.
+      - step: Grant consent, or assign an app role, for the inheritable resource application directly on the blueprint's service principal, not on the agent identity.
         evidence: The grant appears in the blueprint principal's own permissions or app role assignments (in the admin center or via Get-MgServicePrincipalAppRoleAssignment against the blueprint principal's object id).
       - step: Open the agent identity's own API permissions view in the Entra admin center, and separately query it via Microsoft Graph.
         evidence: Neither surface lists the permission just granted; the agent identity's own permission list is unchanged.
@@ -133,4 +133,4 @@ lab:
   validation:
     status: documented
     date: 2026-10-21
-    notes: Written from the path's description and from documented Entra Agent ID concepts (blueprint, blueprint principal, inheritable resource application). Nothing in this lab — the grant, the token inspection, or the exact admin-center navigation to mark a resource inheritable — was run against a tenant for this file.
+    notes: Written from the path's description and from documented Entra Agent ID concepts (blueprint, blueprint principal, inheritable resource application). Nothing in this lab (the grant, the token inspection, or the exact admin-center navigation to mark a resource inheritable) was run against a tenant for this file.

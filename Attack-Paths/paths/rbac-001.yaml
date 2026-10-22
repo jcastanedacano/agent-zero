@@ -140,7 +140,7 @@ lab:
   defend:
     prevent:
       - Do not grant Role Based Access Control Administrator, User Access Administrator or Owner to an automation or agent identity unless role assignment is its actual job.
-      - Where an identity must delegate roles, attach a condition that excludes the roles that reach Owner-equivalent control of the scope, using ForAnyOfAllValues:GuidNotEquals against the blocked set, as this template's hardened identity does — not ForAnyOfAnyValues, which does not block them.
+      - Where an identity must delegate roles, attach a condition that excludes the roles that reach Owner-equivalent control of the scope, using ForAnyOfAllValues:GuidNotEquals against the blocked set, as this template's hardened identity does, not ForAnyOfAnyValues, which does not block them.
       - Scope the delegating role as narrowly as the task allows; a condition on a subscription-wide assignment still reaches every resource group under it.
     detect:
       files:
