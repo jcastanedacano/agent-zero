@@ -19,7 +19,7 @@ graph:
       x: 100
       y: 200
     - id: endpoint
-      label: Azure AI Foundry Endpoint
+      label: Microsoft Foundry Endpoint
       sub: Deployed model
       type: asset
       x: 420
@@ -85,7 +85,7 @@ workshop:
     - condition: A CloudAppEvents query for InvokeAgent or InferenceCall shows nothing for this script
       explanation: >-
         Expected. The script calls the model endpoint directly, which is not an agent run, so Agent 365 observability telemetry does not capture it.
-        In the validation tenant the only InvokeAgent and InferenceCall events (92 in 7 days) had Application set to Microsoft 365, not Azure AI Foundry or Azure OpenAI.
+        In the validation tenant the only InvokeAgent and InferenceCall events (92 in 7 days) had Application set to Microsoft 365, not Microsoft Foundry or Azure OpenAI.
     - condition: The script prints 401 or 403
       explanation: >-
         The key may be wrong, or local authentication may be disabled on the resource (check the disableLocalAuth property).
@@ -124,7 +124,7 @@ validation:
     The loop printed 26 responses with 200 and 24 with 429 (deployment quota). The resource's diagnostic logs (AzureDiagnostics, ResourceProvider MICROSOFT.COGNITIVESERVICES)
     recorded operation create-response with 26 results of 200 and 24 of 429 from a single caller IP, so throttled requests are counted.
     A second row (operation responses, no IP, no result, 26 entries) was not explained.
-    A CloudAppEvents query for InvokeAgent and InferenceCall over 7 days returned 92 events, all with Application set to Microsoft 365 and none from Azure AI Foundry or Azure OpenAI,
+    A CloudAppEvents query for InvokeAgent and InferenceCall over 7 days returned 92 events, all with Application set to Microsoft 365 and none from Microsoft Foundry or Azure OpenAI,
     so the original verification query would have returned nothing for this script.
     The aggregated query in this file was assembled from columns and values seen separately and was not run as written.
     Not checked: the chat-completions route, key authentication disabled, an Entra bearer token (per-identity attribution), a second run, how long the logs take to arrive, any threshold other than 20.
@@ -137,7 +137,7 @@ lab:
   estimatedMinutes: 12
   costEstimate: "Low: 50 small Responses API calls against a demo deployment. Not measured otherwise."
   licenses:
-    - Azure AI Foundry with a deployed model endpoint in a demo environment
+    - Microsoft Foundry with a deployed model endpoint in a demo environment
     - An API key or an Entra identity authorized to call the deployment
     - Azure Cloud Shell in Bash, or a local terminal with curl
     - Diagnostic settings on the Foundry or Azure OpenAI resource that send logs to Log Analytics
@@ -148,7 +148,7 @@ lab:
   architecture:
     summary: "One script, run once, calling one deployed model endpoint directly with curl: no agent, no Copilot, no Foundry agent runtime in the loop. That absence is the point: this traffic will not carry an AgentId."
     resources:
-      - name: Azure AI Foundry deployment
+      - name: Microsoft Foundry deployment
         purpose: The target endpoint. Already exists; nothing new is deployed for this lab.
         createdBy: existing
     principals:
@@ -163,7 +163,7 @@ lab:
     attack:
       - step: 'Open Cloud Shell in Bash (type bash if it opens in PowerShell) and run a loop of 50 Responses API requests, each with a distinct random-looking question, one second apart (real extraction uses 500+/hour; 50 is the demo-scale version of the same pattern).'
         evidence: The loop prints a count per HTTP status. With a small deployment quota it can be mixed, for example 26 with 200 and 24 with 429; both kinds are logged.
-      - step: Query CloudAppEvents for Azure AI Foundry or Azure OpenAI InvokeAgent/InferenceCall activity in the last hour.
+      - step: Query CloudAppEvents for Microsoft Foundry or Azure OpenAI InvokeAgent/InferenceCall activity in the last hour.
         evidence: "Most likely, nothing: this call path does not go through an agent run, so it is not expected to carry Agent 365 observability ActionTypes at all. An empty result here is the expected outcome, not a failure; it is what motivates the next step."
       - step: Query the Azure OpenAI or Foundry resource's own diagnostic logs (AzureDiagnostics, operation create-response) for the per-caller request count over the same window.
         evidence: One row with about 50 calls (successful plus throttled) attributable to the caller IP, in the diagnostic logs rather than in CloudAppEvents. A key carries no identity, so the log shows an IP address.
@@ -189,7 +189,7 @@ lab:
     observations:
       - "50 requests one second apart: 26 returned 200 and 24 returned 429."
       - "The resource's diagnostic logs (AzureDiagnostics) recorded the calls as operation create-response, 26 with result 200 and 24 with 429, from one caller IP. Throttled requests are counted."
-      - "Over 7 days, CloudAppEvents held 92 InvokeAgent and InferenceCall events, all with Application set to Microsoft 365 and none from Azure AI Foundry or Azure OpenAI. The original verification query returned nothing for this script."
+      - "Over 7 days, CloudAppEvents held 92 InvokeAgent and InferenceCall events, all with Application set to Microsoft 365 and none from Microsoft Foundry or Azure OpenAI. The original verification query returned nothing for this script."
       - "The same table also held non-inference operations (ListKey, Projects_Wildcard_Get, Files_List) that exceed a threshold of 20 if the query does not filter by operation."
       - "A second row (operation responses, no caller IP, no result) with 26 entries was not explained."
   validation:

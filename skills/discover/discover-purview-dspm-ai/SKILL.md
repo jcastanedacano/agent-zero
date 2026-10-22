@@ -28,7 +28,7 @@ effort_hours: 2
 
 - Active M365 E5 or M365 E5 Compliance license in the tenant
 - Compliance Administrator role
-- At least one active Copilot Studio or Azure AI Foundry agent in the tenant
+- At least one active Copilot Studio or Microsoft Foundry agent in the tenant
 - Access to the Microsoft Purview portal: purview.microsoft.com
 
 ```mermaid
