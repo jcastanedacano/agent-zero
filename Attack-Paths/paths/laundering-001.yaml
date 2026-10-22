@@ -117,7 +117,7 @@ lab:
       events:
         - source: CloudAppEvents
           operation: File action (FileDownloaded, FileAccessed, FileCopied, SensitiveFileRead) with AccountType = Regular and a UserAgent substring match
-          note: "Observed directly in this lab to depend entirely on the UserAgent string the calling script happens to send, not on any property of the action itself. The sibling skill detect-agent-identity-abuse documents the same weakness in its own four rules and removed the equivalent heuristic after validation; treat P03-Q2 the same way until it is re-validated."
+          note: "Expected behavior inferred from P03-Q2's own definition, not observed in a tenant for this file: this lab was not run (see transcript and validation.notes below). The query should depend entirely on the UserAgent string the calling script happens to send, not on any property of the action itself. The sibling skill detect-agent-identity-abuse documents the same weakness in its own four rules and removed the equivalent heuristic after validation; P03-Q2 itself still needs that same independent validation before this expectation can be called confirmed."
   transcript:
     summary: Not run. This lab was written from P03-Q2's own definition and the sibling skill's documented finding about the equivalent heuristic, not reproduced against a tenant for this file.
     observations: []

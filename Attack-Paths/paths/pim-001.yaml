@@ -52,8 +52,7 @@ recommendation: |
   catch, not a single activation event. Separately audit for service principals holding a high-privilege Azure RBAC role as a direct/permanent assignment rather
   than through PIM (the governing skill's Query 3) — a permanent assignment next to an agent identity means PIM was bypassed or never applied, not that it is working.
 detection:
-  library:
-    - P03-Q5
+  library: []
   gaps:
     - "P03-Q5 does not match this path's actual mechanism. Its OperationName filter ORs together \"Add member to role in PIM requested (permanent)\" and \"Add member to role completed (PIM activation)\" — neither is the operation name Microsoft Entra's own audit-activity reference lists for a time-bound Active assignment (\"Add member to role in PIM completed (timebound)\") or for its renewal (\"Update member in PIM requested (extend)\", \"Update member in PIM approved by admin (extend/renew)\"). As written, P03-Q5 would not surface the pattern this path describes at all; it was not independently re-validated or corrected for this path."
     - "The governing skill's validation (Oct 2026) found only 1 PIM event in 90 days on its workspace (an eligible-role activation for a human principal, not a service-principal time-bound assignment), so neither this path's renewal-pattern claim nor the governing skill's own duration/frequency threshold logic (Query 4) was ever exercised against matching data."
@@ -120,10 +119,10 @@ lab:
       events:
         - source: AuditLogs
           operation: Add member to role in PIM completed (timebound), principal type ServicePrincipal
-          note: "Exercised directly in this lab. P03-Q5 does not currently filter on this operation name; it would need to, to see the initial grant at all."
+          note: "This is the step this lab's own flow walks through, not something confirmed against a real tenant (this lab was not run — see transcript and validation.notes below). P03-Q5 does not currently filter on this operation name; it would need to, to see the initial grant at all."
         - source: AuditLogs
           operation: Update member in PIM requested (extend) / Update member in PIM approved by admin (extend/renew)
-          note: "Exercised directly in this lab. This is the actual pattern to alert on — repeated renewals on the same assignment — and P03-Q5 does not filter on it either."
+          note: "This is the step this lab's own flow walks through, not something confirmed against a real tenant (this lab was not run). This is the actual pattern to alert on — repeated renewals on the same assignment — and P03-Q5 does not filter on it either."
         - source: AzureActivity
           operation: Microsoft.Authorization/roleAssignments/write, principalType ServicePrincipal, matched to a high-privilege role GUID, outside PIM
           note: "The governing skill's Query 3, which this lab also exercises: a permanent Azure RBAC assignment on an agent identity means PIM was bypassed or never applied for that role, and is itself the finding, independent of any time-bound assignment. Scoped to only three roles (Owner, Contributor, User Access Administrator) and only 90 days of write events, not current state — a no-rows result for a role or timeframe outside that scope proves nothing."
