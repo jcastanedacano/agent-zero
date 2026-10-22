@@ -5,6 +5,8 @@
 // It now uses CopilotActivity (by AgentName), AADServicePrincipalSignInLogs, MicrosoftGraphActivityLogs, AuditLogs and OfficeActivity. All compile and
 // ran with real values substituted in the variables; Q1 returned Graph and OfficeActivity activity for an application, and returned no rows from
 // CopilotActivity or AuditLogs for that value. Replace {agent-name}, {agent-sp-id} (service principal object id) and {agent-app-id} (appId).
+// Queries 3, 5 and 6 also take a time (compromise_time or containment_time). It defaults to a relative window (the last 72 h or 24 h) so the
+// query parses and runs as pasted; for a real investigation set the exact time, for example datetime(2026-10-21T14:30:00Z).
 
 // ── Query 1: Full activity timeline of an agent (last 72 h) ──────────────────────────────────────────────────────
 let agent_name = "{agent-name}";      // agent displayName
@@ -65,7 +67,7 @@ union
 // in Purview (Information protection, Labels).
 let agent_app        = "{agent-app-id}";
 let agent_name       = "{agent-name}";
-let compromise_time  = datetime("{YYYY-MM-DDTHH:MM:SSZ}");  // replace with the time of the compromise
+let compromise_time  = ago(72h);  // REPLACE with the time of the compromise, for example datetime(2026-10-21T14:30:00Z); default: the last 72 hours
 let labels = MicrosoftPurviewInformationProtection
     | where isnotempty(SensitivityLabelId) and isnotempty(LabelName)
     | summarize LabelName = any(LabelName) by SensitivityLabelId;
@@ -110,7 +112,7 @@ AuditLogs
 // A disabled service principal fails with AADSTS7000112 ("Application is disabled"), which appears in the log as ResultType 7000112 (Learn,
 // error AADSTS7000112). Any ResultType 0 after containment means the identity still obtains tokens (or is still using one issued before).
 let agent_sp         = "{agent-sp-id}";
-let containment_time = datetime("{YYYY-MM-DDTHH:MM:SSZ}");  // time of containment
+let containment_time = ago(24h);  // REPLACE with the time of containment, for example datetime(2026-10-21T14:30:00Z); the default also lists sign-ins before it
 AADServicePrincipalSignInLogs
 | where TimeGenerated > containment_time
 | where ServicePrincipalId == agent_sp
@@ -124,7 +126,7 @@ AADServicePrincipalSignInLogs
 // ── Query 6: Mail sent with the agent identity (scope of email exfiltration) ──────────────────────────────────────
 // The recipients are in Item.Recipients of the Exchange Send event.
 let agent_app        = "{agent-app-id}";
-let compromise_time  = datetime("{YYYY-MM-DDTHH:MM:SSZ}");
+let compromise_time  = ago(72h);  // REPLACE as in Query 3; default: the last 72 hours
 OfficeActivity
 | where TimeGenerated > compromise_time
 | where OfficeWorkload == "Exchange"

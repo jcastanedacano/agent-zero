@@ -196,7 +196,7 @@ PATCH https://graph.microsoft.com/v1.0/servicePrincipals/{sp-id}
 ```
 
 Permission `Application.ReadWrite.All`. New sign-ins then fail with `AADSTS7000112` (Application is disabled), which is `ResultType` 7000112 in the logs; verify it with
-Query 5 of `queries/sentinel-ir-hunting.kql`.
+Query 5 of `queries/sentinel-ir-hunting.kql`. Set `containment_time` in it to the moment you disabled the application: the default only looks at the last 24 hours.
 
 ### Step 7 — Action 5: Preserve forensic evidence
 
