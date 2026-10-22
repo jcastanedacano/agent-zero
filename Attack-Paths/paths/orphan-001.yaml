@@ -71,7 +71,7 @@ lab:
   licenses:
     - A demo tenant with Microsoft Entra Agent ID objects (at least one agent with a recorded owner)
     - Read access to AgentsInfo/IdentityInfo in Advanced Hunting, or Microsoft Graph PowerShell equivalent
-    - For the P03-Q10 check specifically: AgentsInfo ingested into the same Log Analytics workspace that receives AuditLogs (P03-Q10's own header lists this as a requirement); without it, the query fails to find the table rather than demonstrating the detection gap
+    - "For the P03-Q10 check specifically: AgentsInfo ingested into the same Log Analytics workspace that receives AuditLogs (P03-Q10's own header lists this as a requirement); without it, the query fails to find the table rather than demonstrating the detection gap"
     - An account that can disable a demo user (to create the owner-disabled condition) and that can reassign ownership of an ownerless agent
   safety:
     scope: Demo tenant only. Disable a demo owner account created for this exercise, never a real employee's account, even in a demo tenant shared with other exercises.
