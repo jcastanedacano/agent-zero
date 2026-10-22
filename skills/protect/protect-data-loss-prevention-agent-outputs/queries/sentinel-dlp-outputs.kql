@@ -5,8 +5,7 @@
 // in SensitivityLabelId, and the recipients of an email go in Item.Recipients. A DLP event carries the user and the record type, not the policy name
 // (the name arrives in the SecurityAlert alerts: see govern-dlp-policy-copilot-prompts Q3). All of them compile and ran: Q1, Q2, Q4 and Q5 returned rows, and Q3
 // returned rows with a real label GUID (with the empty list it returns nothing).
-// ai_label_ids is the list of GUIDs of your labels for AI content: replace it.
-let ai_label_ids = dynamic([]);   // GUID of the Confidential \ AI-Generated label and its equivalents
+// Query 3 declares ai_label_ids, the list of GUIDs of your labels for AI content: replace it there. Each query is self-contained, so it can be pasted alone.
 
 // ── Query 1: DLP matches in SharePoint, OneDrive and Exchange (7 days) ──────────────────────────────────────────────
 OfficeActivity
@@ -29,6 +28,7 @@ OfficeActivity
 
 // ── Query 3: Access volume to files with an AI label per user or application (30-minute window) ───────────────────────────
 // A user or an application that reads many files with the AI label in a short time. To watch only agents, filter by UserType == "Application".
+let ai_label_ids = dynamic([]);   // REPLACE with the GUID of the Confidential \ AI-Generated label and its equivalents
 OfficeActivity
 | where TimeGenerated > ago(1d)
 | where OfficeWorkload in ("SharePoint", "OneDrive")

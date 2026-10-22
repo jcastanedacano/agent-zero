@@ -25,6 +25,7 @@ MicrosoftGraphActivityLogs
 // Replaces the query that read Scopes. ClientCredentialType says what it authenticates with (clientSecret, clientAssertion, federatedIdentityCredential, certificate): a secret is a
 // candidate to move to managed identity or to federation (see secure-managed-identity-foundry and secure-secret-management-keyvault). AgentType separates the agents from the rest.
 // Result in the validation account: dozens of combinations with secrets, client assertions and federated credentials; a single agent identity (federated).
+let lookback = 30d;
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
 | where ResultType == "0"

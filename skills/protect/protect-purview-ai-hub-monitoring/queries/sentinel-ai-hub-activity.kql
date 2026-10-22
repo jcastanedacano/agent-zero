@@ -20,6 +20,7 @@ CopilotActivity
 | order by Interactions desc
 
 // ── Query 2: Users with the highest volume of AI interactions ────────────────────────────────────────────────────
+let lookback = 30d;
 CopilotActivity
 | where TimeGenerated > ago(lookback)
 | where RecordType in ("CopilotInteraction", "AIAppInteraction")
@@ -34,6 +35,7 @@ CopilotActivity
 // ── Query 3: Sensitivity labels of the resources Copilot read ────────────────────────────────────────────────────
 // The audit record carries SensitivityLabelId per resource (the GUID, not the name). It replaces the detection of sensitive information types, which the
 // record does not carry. Same source as KQL Library P04-Q6.
+let lookback = 30d;
 CopilotActivity
 | where TimeGenerated > ago(lookback)
 | where RecordType == "CopilotInteraction"

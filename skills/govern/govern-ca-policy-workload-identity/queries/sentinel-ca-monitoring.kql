@@ -17,6 +17,7 @@ AADServicePrincipalSignInLogs
 // ── Query 2: Report-only, accesses the policy would have blocked (before enabling it) ────────────────────────────────
 // reportOnlyFailure is "Report-only: Failure" in the portal: the conditions of the policy are met and the control is Block. Review the IPs and locations before moving the policy to enabled.
 // Result in the validation account: 0 rows (no policy of this type in report-only).
+let lookback = 90d;
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
 | mv-expand Pol = parse_json(ConditionalAccessPolicies)
@@ -27,6 +28,7 @@ AADServicePrincipalSignInLogs
 // ── Query 3: Blocks enforced by Conditional Access ───────────────────────────────────────────────────────────────────
 // 53003 is the code Entra returns when a Conditional Access policy blocks access.
 // Result in the validation account: 0 rows in 90 days (no policy ever blocked).
+let lookback = 90d;
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
 | where ResultType == "53003"
@@ -37,6 +39,7 @@ AADServicePrincipalSignInLogs
 // Replace trusted_ranges with the PUBLIC egress ranges of the agents (203.0.113.0/24 is a documentation range). ipv4_is_in_any_range returns null for an IPv6 address;
 // coalesce leaves them in the list instead of silently dropping them. Result in the validation account: with the documentation range everything falls outside; the rows include
 // two service principals of the account itself from a single public IP and internal IPv6 traffic from Microsoft Cloud App Security.
+let lookback = 90d;
 let trusted_ranges = dynamic(["203.0.113.0/24"]);
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)

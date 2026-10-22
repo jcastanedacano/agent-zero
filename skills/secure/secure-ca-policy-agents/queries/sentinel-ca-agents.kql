@@ -20,6 +20,7 @@ AADServicePrincipalSignInLogs
 // ConditionalAccessPolicies is an array with all the evaluated policies. A policy in report-only mode appears with reportOnly results (for example reportOnlyNotApplied or
 // reportOnlyFailure): this is what to review during the test week before moving it to enabled.
 // Result on the validation account: the blueprint principal to Microsoft Graph row carries the 4 agent policies (one enabled with result notApplied and three in report-only with reportOnlyNotApplied); the 8 agent identity rows on the token exchange carry no evaluated policy.
+let lookback = 30d;
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
 | extend AgentType = tostring(parse_json(Agent).agentType)
@@ -31,6 +32,7 @@ AADServicePrincipalSignInLogs
 // ── Query 3: Blocks by Conditional Access and by disabled identity ───────────────────────────────────────────
 // 53003 is the code Entra returns when a Conditional Access policy blocks access; 7000112 is the one for a disabled application (for example after containment).
 // It includes all service principals and marks which ones are agents. Result on the validation account: 0 rows in 30 days (no policy blocked a sign-in).
+let lookback = 30d;
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(lookback)
 | where ResultType in ("53003", "7000112")

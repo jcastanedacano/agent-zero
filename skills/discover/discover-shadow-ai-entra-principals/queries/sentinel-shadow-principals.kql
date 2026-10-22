@@ -35,6 +35,7 @@ AuditLogs
 // "Consent to application"; it is not counted here to avoid duplicates.
 // Result on the validation account (90 days): 31 grants (24 delegated and 7 application), 13 with sensitive access (delegated: 9 High and 1 Medium;
 // application: 1 High and 2 Medium), all in the last 30 days.
+let lookback = 30d;
 let sensitive_permissions = dynamic([
     "Mail.ReadWrite", "Mail.Send", "Mail.Read",
     "Files.ReadWrite.All", "Files.Read.All", "Sites.ReadWrite.All",
