@@ -72,9 +72,11 @@ workshop:
         allow a few minutes for ingestion and widen the window. The operation name depends on the API route: this script uses the Responses route, which logs as create-response.
     - condition: You expected P03-Q7 (the membership-inference KQL-Library query) to fire, and it did not
       explanation: >-
-        Expected. P03-Q7 reads prompt and response text from CloudAppEvents (RawEventData.UserPrompt, RawEventData.AgentResponse) to compute how distinct the 60 questions were.
-        Microsoft Learn documents that field as not yet surfaced in advanced hunting, and the validation tenant for this repository recorded 0 agent ActionTypes on CloudAppEvents
-        for this call path, so the query has no column to read today. This lab's own verificationQuery (above) is the only one actually exercised; it measures volume, not distinctness.
+        Expected, for two independent reasons. First, P03-Q7 reads prompt and response text from CloudAppEvents (RawEventData.UserPrompt, RawEventData.AgentResponse) to compute
+        how distinct the questions were; Microsoft Learn documents that field as not yet surfaced in advanced hunting, and the validation tenant for this repository recorded 0
+        agent ActionTypes on CloudAppEvents for this call path, so the query has no column to read today. Second, even with that telemetry present, P03-Q7 requires
+        TotalQueries > 200 within a 1-hour bin per caller; this exercise sends only 60 requests, well under that volume threshold, so the query's own filter would have
+        excluded this run regardless. This lab's own verificationQuery (above) is the only one actually exercised; it measures volume, not distinctness.
     - condition: The script prints 401 or 403
       explanation: >-
         The key may be wrong, or local authentication may be disabled on the resource (check the disableLocalAuth property).
@@ -102,6 +104,7 @@ detection:
     - P03-Q7
   gaps:
     - P03-Q7 needs RawEventData.UserPrompt and RawEventData.AgentResponse from CloudAppEvents; Microsoft Learn lists these as not yet surfaced in advanced hunting, and the validation tenant recorded 0 agent ActionTypes on that table for direct endpoint calls. No query in this library currently separates a membership-inference probe from systematic extraction (P03-Q6) or from a chatty legitimate user, since all three only differ by prompt content, which AzureDiagnostics does not carry.
+    - "P03-Q7 also requires TotalQueries > 200 within a 1-hour bin per caller, independent of the telemetry gap above. This lab's demo (60 requests) would be filtered out by that threshold even if the prompt/response columns existed; treating an empty result as confirmation of the telemetry gap alone, without checking the volume threshold separately, overstates what an empty result actually proves."
 frameworks:
   atlas:
     - AML.T0024.000
@@ -150,7 +153,7 @@ lab:
       - step: Query the resource's own diagnostic logs (AzureDiagnostics, operation create-response) for the per-caller request count over the same window.
         evidence: One row with about 60 calls attributable to the caller IP, indistinguishable in this log from extraction-001's 50-call systematic-extraction run; AzureDiagnostics has no field that tells the two patterns apart.
       - step: Attempt to run P03-Q7 (the membership-inference KQL-Library query) against CloudAppEvents for the same window.
-        evidence: "No rows, by design of the exercise: this call path does not go through an agent run and does not populate the Application/ActionType/RawEventData fields P03-Q7 depends on. This is the gap documented above, observed directly rather than only read about."
+        evidence: "No rows, by design of the exercise, for two independent reasons: this call path does not populate the Application/ActionType/RawEventData fields P03-Q7 depends on, and separately, 60 requests is below the TotalQueries > 200 per-hour threshold the query also requires. Either reason alone would produce an empty result; this exercise cannot distinguish which one is actually at fault, which is itself part of the gap documented above."
     cleanup: []
     teardown: []
   defend:

@@ -78,9 +78,12 @@ workshop:
         allow a few minutes for ingestion and widen the window.
     - condition: You expected P03-Q8 (the model-inversion KQL-Library query) to fire, and it did not
       explanation: >-
-        Expected, for the same reason as P03-Q7 in inference-001. P03-Q8 scores prompts for inversion keywords ("verbatim", "repeat exactly", "what was in the training")
-        and for personal-identifier patterns, both read from CloudAppEvents.RawEventData.UserPrompt. Microsoft Learn documents that field as not yet surfaced in advanced
-        hunting, and the validation tenant recorded 0 agent ActionTypes for this call path. The query is a documented pattern, not a rule you can currently fire in this environment.
+        Expected, for two independent reasons, the first the same as P03-Q7 in inference-001. First, P03-Q8 scores prompts for inversion keywords ("verbatim", "repeat exactly",
+        "what was in the training") and for personal-identifier patterns, both read from CloudAppEvents.RawEventData.UserPrompt; Microsoft Learn documents that field as not
+        yet surfaced in advanced hunting, and the validation tenant recorded 0 agent ActionTypes for this call path. Second, even with that telemetry present, this exercise's
+        4 rotating templates would not score high enough: the single strongest template ("what was in the training data...") earns the 3-point keyword bonus, but with only
+        40 total requests (below the TotalQueries > 50 check) and 4 distinct templates (below DistinctPrompts > 30), the total ModelInversionScore tops out at 3 — short of
+        the >= 4 threshold the query requires. The query is a documented pattern, not a rule you can currently fire in this environment, for either reason.
     - condition: The script prints 401 or 403
       explanation: The key may be wrong, or local authentication may be disabled on the resource (check the disableLocalAuth property). Call with an Entra bearer token instead.
     - condition: The script prints many 429 responses
@@ -103,6 +106,7 @@ detection:
     - P03-Q8
   gaps:
     - P03-Q8 needs RawEventData.UserPrompt from CloudAppEvents for both its keyword scoring and its identifier-pattern matching; Microsoft Learn lists that field as not yet surfaced in advanced hunting, and the validation tenant recorded 0 agent ActionTypes on that table for direct endpoint calls. No currently-working query distinguishes a reconstruction-style probe from an ordinary question or from systematic extraction (P03-Q6).
+    - "P03-Q8's scoring also needs TotalQueries > 50, DistinctPrompts > 30, and a ModelInversionScore >= 4, independent of the telemetry gap above. This lab's demo (40 requests, 4 templates) would score at most 3 and be filtered out by the threshold even if the prompt-text columns existed; treating an empty result as confirmation of the telemetry gap alone, without checking the scoring threshold separately, overstates what an empty result actually proves."
 frameworks:
   atlas:
     - AML.T0024.001
@@ -151,7 +155,7 @@ lab:
       - step: Query the resource's own diagnostic logs (AzureDiagnostics, operation create-response) for the per-caller request count over the same window.
         evidence: One row with about 40 calls attributable to the caller IP, indistinguishable in this log from inference-001's or extraction-001's runs.
       - step: Attempt to run P03-Q8 (the model-inversion KQL-Library query) against CloudAppEvents for the same window.
-        evidence: "No rows, by design of the exercise: this call path does not populate the Application/ActionType/RawEventData fields P03-Q8 depends on. This is the gap documented above, observed directly rather than only read about."
+        evidence: "No rows, by design of the exercise, for two independent reasons: this call path does not populate the Application/ActionType/RawEventData fields P03-Q8 depends on, and separately, this run's score (at most 3) would fall below the ModelInversionScore >= 4 threshold the query also requires. Either reason alone would produce an empty result; this exercise cannot distinguish which one is actually at fault, which is itself part of the gap documented above."
     cleanup: []
     teardown: []
   defend:

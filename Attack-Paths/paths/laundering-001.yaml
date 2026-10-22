@@ -12,11 +12,12 @@ permissions:
       resourceConstraints: The calling process authenticates as the user, not as its own service principal, so the specific workload-activity record this path targets (CloudAppEvents) attributes the action to the user, not the automation
 description: |
   When an automated process (an agent, a script, an RPA job) authenticates as a human user instead of under its own identity, CloudAppEvents — the workload-activity
-  record this path targets — logs the resulting action as that user's own, with no AgentId and no distinguishing field in that specific table. This does not make the
-  automation invisible everywhere: Entra sign-in logs retain the client application's AppId for a delegated sign-in, and Microsoft Graph activity logs can carry both
-  AppId and the signed-in user's id. The gap is narrower than "no record exists" — it is that the workload-activity table a SOC watches day to day for file actions
-  does not carry that correlation on its own, so finding it means joining across tables most playbooks do not join by default. This differs from token theft or
-  impersonation; the process is using its own legitimately-held delegated credential, it is simply not flagged as automated by the one table most likely to be watched.
+  record this path targets — logs the resulting action as that user's own, with no AgentId. CloudAppEvents does have an OAuthAppId column for the registered OAuth
+  application, so this is not "no distinguishing field exists": it is that OAuthAppId's population is inconsistent enough that this path cannot claim it reliably
+  identifies the calling application for every delegated action, and a SOC reading AccountType/AccountDisplayName alone (the fields P03-Q2 and most file-action triage
+  actually use) will not see it without deliberately checking that column. Microsoft Graph activity logs and Entra sign-in logs are separate sources that can also carry
+  the client AppId. This differs from token theft or impersonation; the process is using its own legitimately-held delegated credential, it is simply not flagged as
+  automated by the fields most likely to be read by default.
 
 graph:
   nodes:
@@ -39,24 +40,26 @@ limitations: |
   documents how to notice the pattern where that redesign has not happened yet.
 
 recommendation: |
-  Prefer app-only / application-permission authentication for any automated process, so CloudAppEvents itself logs its activity under its own service principal and
-  AgentId, not under a human account. Where delegated authentication is unavoidable (for example, a tool that must act strictly within the permissions of the signed-in
-  user), treat the account whose credential is used as a shared/service account, rotate its credential on a schedule, and join CloudAppEvents file actions against the
-  corresponding Entra sign-in logs (matched by user, time, and IP) to recover the client AppId that CloudAppEvents itself does not carry — that join, not a redesign of
-  the automation, is the practical mitigation when app-only authentication genuinely isn't an option.
+  Prefer app-only / application-permission authentication for any automated process, so CloudAppEvents itself logs its activity under its own service principal instead
+  of a human account. Note that this gives you service-principal attribution, not necessarily an AgentId specifically: an ordinary app registration creates a service
+  principal, not a Microsoft Entra Agent ID blueprint or an agent runtime, so do not expect AgentId to appear just because the automation switched to application
+  permissions — check which identifier the specific workload's logs actually expose. Where delegated authentication is unavoidable (for example, a tool that must act
+  strictly within the permissions of the signed-in user), treat the account whose credential is used as a shared/service account and rotate its credential on a schedule.
 
   Detection: P03-Q2 looks for a User-Agent string that mentions "agent", "copilot", "assistant" or "bot" on file actions logged under AccountType = Regular. This is a weak
   signal: the sibling skill detect-agent-identity-abuse explicitly removed the equivalent name-based heuristic from its own four rules after validation showed it both
   "flags Microsoft services and misses agents with other names" (see gap below) — the same failure mode applies here, since P03-Q2 depends on the automation's HTTP client
-  advertising itself in the User-Agent header, which well-behaved and badly-named automations alike will often not do. A more reliable signal, not yet built into any
-  KQL-Library query, would join CloudAppEvents to SignInLogs/AADServicePrincipalSignInLogs by user and timestamp to recover the actual client AppId per file action.
+  advertising itself in the User-Agent header, which well-behaved and badly-named automations alike will often not do. Where available, prefer Microsoft Graph activity
+  logs for per-request client attribution over a sign-in-log join: a user/time/IP join to SignInLogs or AADServicePrincipalSignInLogs is only a heuristic, since a
+  delegated call can reuse an existing access token without a new sign-in, multiple clients can share the same join values, and AADServicePrincipalSignInLogs covers
+  app-only sign-ins rather than this delegated flow — include non-interactive user sign-ins if attempting that join anyway.
 detection:
   library:
     - P03-Q2
   gaps:
     - P03-Q2's only signal is a substring match on the UserAgent header ("agent", "copilot", "assistant", "bot"). The sibling skill detect-agent-identity-abuse tested the equivalent approach (matching agents by name across its four identity-abuse rules) against a real Sentinel workspace and removed it, noting it "flags Microsoft services and misses agents with other names" (SKILL.md, Implementation notes). P03-Q2 was not independently re-validated for this path; expect the same false-positive/false-negative pattern until it is.
     - "Not verified for this path: whether CloudAppEvents' AccountType field reliably distinguishes delegated-as-user automation from genuine interactive use in this repository's own validation tenant."
-    - "No KQL-Library query joins CloudAppEvents to SignInLogs/AADServicePrincipalSignInLogs to recover the client AppId behind a delegated action — the correlation this path's own recommendation calls the practical mitigation does not exist as a ready-to-run query yet."
+    - "No KQL-Library query reads CloudAppEvents.OAuthAppId, joins to Microsoft Graph activity logs, or joins to SignInLogs/AADServicePrincipalSignInLogs for per-request client attribution on a delegated action. A sign-in-log join is only a heuristic (token reuse without a new sign-in, shared join values across clients, and AADServicePrincipalSignInLogs covering app-only rather than delegated sign-ins all limit it); which source actually works best for this pattern has not been tested against real data."
 frameworks:
   attack: [T1036]
 validation:

@@ -80,7 +80,7 @@ lab:
     - A demo service principal to receive the time-bound assignment
     - Privileged Role Administrator (for Entra roles) or role-assignment-write access at the target scope (for Azure resource roles), to create and later extend the assignment
   safety:
-    scope: Demo tenant only. Use a low-privilege, non-destructive role (for example Reader) for the time-bound assignment so creating and renewing it does not itself create a real exposure.
+    scope: "Demo tenant only. Use a low-privilege, non-destructive Microsoft Entra directory role (for example Directory Readers, not an Azure RBAC role like Reader) for the time-bound assignment: this exercise's detection steps query AuditLogs for Entra directory-role PIM operations, which do not cover Azure resource-role PIM events (those land in AzureActivity instead, a different log entirely)."
     writes: One time-bound Active PIM role assignment on the demo service principal, and at least one extend/renew request against it.
     revert: Let the final window expire naturally, or remove the assignment directly; no other state changes.
   architecture:
@@ -96,7 +96,7 @@ lab:
         helpful: []
   flow:
     setup:
-      - Pick a low-privilege, non-destructive role for the exercise, and confirm the tenant has Workload ID Premium licensing available for PIM on service principals.
+      - "Pick a low-privilege, non-destructive Microsoft Entra directory role for the exercise (for example Directory Readers), not an Azure RBAC role: the detection steps below query AuditLogs, which carries Entra directory-role PIM events, not Azure resource-role ones. Confirm the tenant has Workload ID Premium licensing available for PIM on service principals."
     attack:
       - step: Create a time-bound Active PIM assignment for the demo service principal with a short window (for example 1 hour), directly — no eligible assignment or activation step, since neither is available to a service principal.
         evidence: The assignment appears as Active with a defined end date; the service principal can use the role immediately, with no activation request involved.
