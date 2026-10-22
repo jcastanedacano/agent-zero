@@ -127,8 +127,8 @@ lab:
   kind: tenant-exercise
   effects: potential-impact
   title: One agent, four stages, no human pause
-  objective: Simulate the observable middle of the JadePuffer pattern — discovery, credential access, lateral movement, bulk file operation — under one agent identity in a compressed window, and see whether the chain-correlation rule fires before you reach the stage that would matter in a real incident.
-  scopeNote: "This lab reproduces 4 of the path's 7 stages — discovery, credential access, lateral movement, bulk file operation — simulated by hand under one agent identity. Stage 1 (the real Langflow CVE-2025-3248 exploit) and the final encryption/ransom stages are not reproduced: this lab tests whether the chain-correlation query fires, not the exploit chain itself."
+  objective: Simulate the observable middle of the JadePuffer pattern (discovery, credential access, lateral movement, bulk file operation) under one agent identity in a compressed window, and see whether the chain-correlation rule fires before you reach the stage that would matter in a real incident.
+  scopeNote: "This lab reproduces 4 of the path's 7 stages (discovery, credential access, lateral movement, bulk file operation), simulated by hand under one agent identity. Stage 1 (the real Langflow CVE-2025-3248 exploit) and the final encryption/ransom stages are not reproduced: this lab tests whether the chain-correlation query fires, not the exploit chain itself."
   estimatedMinutes: 25
   costEstimate: "Low: the simulated stages use existing SharePoint sites, an existing Key Vault and the Foundry resource from builder-001; no new paid resources. Not measured otherwise."
   licenses:
@@ -162,7 +162,7 @@ lab:
     principals:
       - name: red-team-test-agent's identity
         required:
-          - SharePoint read/search access, Key Vault secret-read access, directory permission to add itself (or a service principal it controls) to a group or role, and a bulk file download/copy tool — none of this is present from builder-001 alone and must be granted for this exercise
+          - SharePoint read/search access, Key Vault secret-read access, directory permission to add itself (or a service principal it controls) to a group or role, and a bulk file download/copy tool; none of this is present from builder-001 alone and must be granted for this exercise
         helpful: []
   flow:
     setup:

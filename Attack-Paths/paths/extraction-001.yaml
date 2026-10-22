@@ -106,7 +106,7 @@ lab:
     writes: None beyond 50 inference requests and whatever the endpoint logs for them. No data is created or changed.
     revert: Nothing to revert.
   architecture:
-    summary: "One script, run once, calling one deployed model endpoint directly with curl — no agent, no Copilot, no Foundry agent runtime in the loop. That absence is the point: this traffic will not carry an AgentId."
+    summary: "One script, run once, calling one deployed model endpoint directly with curl: no agent, no Copilot, no Foundry agent runtime in the loop. That absence is the point: this traffic will not carry an AgentId."
     resources:
       - name: Azure AI Foundry deployment
         purpose: The target endpoint. Already exists; nothing new is deployed for this lab.
@@ -124,7 +124,7 @@ lab:
       - step: 'Open Cloud Shell or a local terminal with the Azure CLI authenticated, and run a loop of 50 chat-completion requests, each with a distinct random-looking question, one second apart (real extraction uses 500+/hour; 50 is the demo-scale version of the same pattern).'
         evidence: The script completes and prints a count of 50 sent requests.
       - step: Query CloudAppEvents for Azure AI Foundry or Azure OpenAI InvokeAgent/InferenceCall activity in the last hour.
-        evidence: "Most likely, nothing: this call path does not go through an agent run, so it is not expected to carry Agent 365 observability ActionTypes at all. An empty result here is the expected outcome, not a failure — it is what motivates the next step."
+        evidence: "Most likely, nothing: this call path does not go through an agent run, so it is not expected to carry Agent 365 observability ActionTypes at all. An empty result here is the expected outcome, not a failure; it is what motivates the next step."
       - step: Check the Azure OpenAI or Foundry resource's own diagnostic logs for the per-caller request count over the same window.
         evidence: Approximately 50 requests attributable to the caller identity or key used, in the diagnostic logs rather than in CloudAppEvents.
     cleanup: []

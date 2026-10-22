@@ -84,7 +84,7 @@ lab:
   kind: tenant-exercise
   effects: modifies-resources
   title: A credential that borrows someone else's privilege
-  objective: Add a client secret to an application that holds more privilege than you do, sign in as it, and confirm the new credential inherits that privilege with no change to the target's own permissions — then repeat it against a target protected by an app management policy and show the add itself gets rejected.
+  objective: Add a client secret to an application that holds more privilege than you do, sign in as it, and confirm the new credential inherits that privilege with no change to the target's own permissions, then repeat it against a target protected by an app management policy and show the add itself gets rejected.
   estimatedMinutes: 30
   costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access. Not measured otherwise."
   licenses:
@@ -144,4 +144,4 @@ lab:
   validation:
     status: not-verified
     date: 2026-10-21
-    notes: Written from documentation and public research, same as the path itself. Nothing in this lab — the credential add, the sign-in, or the app management policy's current rejection behaviour — was run against a tenant for this file.
+    notes: Written from documentation and public research, same as the path itself. Nothing in this lab (the credential add, the sign-in, or the app management policy's current rejection behaviour) was run against a tenant for this file.

@@ -16,7 +16,7 @@ permissions:
 description: |
   A service principal that can manage app role assignments can grant itself, or another service principal it controls, any application permission that
   requires no further consent step, for example a permission that reads or writes directory data. Because the grant is an app role assignment, it needs no user
-  interaction. The reach is bounded by what app roles are actually exposed by resource applications in the tenant — Microsoft Graph's own high-privilege roles
+  interaction. The reach is bounded by what app roles are actually exposed by resource applications in the tenant, Microsoft Graph's own high-privilege roles
   included, but nothing a resource application has not defined as an app role.
 
 graph:
@@ -76,7 +76,7 @@ lab:
   kind: tenant-exercise
   effects: modifies-resources
   title: Granting yourself a role nobody has to approve
-  objective: Use a service principal's AppRoleAssignment.ReadWrite.All to assign itself a Microsoft Graph application permission directly, with no consent screen and no admin in the loop, then confirm the effect with a fresh token — and show a service principal without that permission cannot do the same.
+  objective: Use a service principal's AppRoleAssignment.ReadWrite.All to assign itself a Microsoft Graph application permission directly, with no consent screen and no admin in the loop, then confirm the effect with a fresh token, and show a service principal without that permission cannot do the same.
   estimatedMinutes: 25
   costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access. Not measured otherwise."
   licenses:
@@ -138,4 +138,4 @@ lab:
   validation:
     status: not-verified
     date: 2026-10-21
-    notes: Written from documentation and public research, same as the path itself. Nothing in this lab — the self-assignment, the token check, or the control's rejection — was run against a tenant for this file.
+    notes: Written from documentation and public research, same as the path itself. Nothing in this lab (the self-assignment, the token check, or the control's rejection) was run against a tenant for this file.
