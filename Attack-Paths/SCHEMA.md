@@ -75,6 +75,7 @@ An `iac` lab's deployable files live under `labs/<id>/` (for example [`labs/rbac
 | `kind` | `tenant-exercise` (manual steps in a demo tenant) or `iac` (reproducible deployment) |
 | `effects` | **Required.** `read-only`, `modifies-resources` or `potential-impact` (see below) |
 | `title`, `objective` | What the exercise shows, in one sentence each |
+| `scopeNote` | Optional. Only when this lab reproduces less than the path describes (a subset of a multi-stage chain, for example): what is in scope, what is deliberately left out, and why — so the gap reads as a stated boundary, not a discrepancy |
 | `estimatedMinutes`, `costEstimate`, `licenses` | Time, cost (say when it was not measured) and what the tenant needs |
 | `safety` | **Required.** `scope` (demo tenant only), `writes` (what it changes) and `revert` (how to undo it) |
 | `architecture.summary` | The setup in a few lines |
