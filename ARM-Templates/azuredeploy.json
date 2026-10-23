@@ -43,7 +43,7 @@
   },
   "variables": {
     "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
-    "sentinelOnboardingId": "[resourceId('Microsoft.SecurityInsights/onboardingStates', parameters('workspaceName'), 'default')]"
+    "sentinelOnboardingId": "[extensionResourceId(variables('workspaceId'), 'Microsoft.SecurityInsights/onboardingStates', 'default')]"
   },
   "resources": [
     {
