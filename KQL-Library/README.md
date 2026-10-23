@@ -50,6 +50,8 @@ These queries use conservative time windows (`ago(7d)`, `ago(30d)`) suitable for
 
 ## Schema validation status
 
+Status of every query, generated from its header: [docs/validation-status.md](../docs/validation-status.md).
+
 KQL Library queries are validated against a live Microsoft 365 tenant using the Microsoft Graph Security `runHuntingQuery` API, with the date of the last validation listed per file. P04 queries Sentinel tables and has no validation date.
 
 | File | Tables | Last Validated | Notes |

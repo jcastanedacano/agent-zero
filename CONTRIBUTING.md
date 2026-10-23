@@ -13,7 +13,7 @@ The most valuable contributions. To add a query:
 - Test against a demo or trial tenant before submitting
 - Note any table availability requirements (e.g., "requires Sentinel workspace", "requires MDE connector")
 - Say in the header whether the query was validated against a tenant or is NOT VERIFIED, and keep each query runnable on its own when pasted
-- Run `python scripts/check-counts.py`: the numbers quoted in the README (modules, skills, queries) must match the files, and CI runs the same check
+- Run `python scripts/check-counts.py` (the numbers quoted in the README must match the files) and, after changing a query header, `python scripts/validation-status.py` to refresh `docs/validation-status.md`. CI runs both checks
 
 ### Lab Module Improvements
 - Corrections to step-by-step instructions when Microsoft UI changes

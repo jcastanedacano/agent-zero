@@ -1,7 +1,8 @@
-name: Check README counts
+name: Check README counts and query status
 
 # Fails when a number quoted in README.md (modules, skills, KQL library queries,
-# skill query files, tracks) no longer matches the files in the repository.
+# skill query files, tracks) no longer matches the files in the repository, or when
+# docs/validation-status.md is out of date with the headers of the queries.
 on:
   push:
     branches: [main]
@@ -19,3 +20,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: python scripts/check-counts.py
+      - run: python scripts/validation-status.py --check

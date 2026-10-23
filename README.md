@@ -261,6 +261,7 @@ agent-zero/
 │   ├── architecture.md              ← reference architecture: telemetry map, Foundry anatomy, agent identity chain
 │   ├── references.md
 │   ├── framework-coverage.md
+│   ├── validation-status.md         ← status of every query, generated from the query headers
 │   └── controls-and-risk-vectors.md
 ├── ARM-Templates/                   ← Deploy a pre-configured Sentinel workspace in one click
 │   ├── README.md
@@ -299,7 +300,7 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 
 ## KQL Library
 
-43 queries (counted by unique Q number: a Q5a, Q5b and Q5c count as one) for Microsoft Sentinel and Defender Advanced Hunting, in five files (P01 to P05). The library is validated against a live Microsoft 365 tenant using the Microsoft Graph Security `runHuntingQuery` API, with the date of the last validation listed per file (P04 targets Sentinel tables and has no validation date). A query whose header says NOT VERIFIED has not run against real data: read its status before you rely on it.
+43 queries (counted by unique Q number: a Q5a, Q5b and Q5c count as one) for Microsoft Sentinel and Defender Advanced Hunting, in five files (P01 to P05). The library is validated against a live Microsoft 365 tenant using the Microsoft Graph Security `runHuntingQuery` API, with the date of the last validation listed per file (P04 targets Sentinel tables and has no validation date). A query whose header says NOT VERIFIED has not run against real data: read its status before you rely on it. The status of every query, from its own header, is in [docs/validation-status.md](./docs/validation-status.md).
 
 Index, usage and per-file validation status: [KQL-Library/README.md](./KQL-Library/README.md#schema-validation-status).
 
