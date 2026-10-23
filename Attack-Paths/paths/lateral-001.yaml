@@ -1,0 +1,126 @@
+id: lateral-001
+name: Multi-Agent Lateral Movement via Unauthorized InvokeAgent
+category: principal-access
+severity: high
+platform:
+  - foundry
+  - copilot-studio
+  - entra-agent-id
+surface: agent-identity
+permissions:
+  required:
+    - permission: An agent identity authorized to call another agent (InvokeAgent), where the target agent does not re-validate the originating user's own permissions
+      resourceConstraints: Works when the calling and target agents cross a trust boundary (different owner, different purpose, different data scope) and the platform treats the call as agent-to-agent rather than re-checking the human user behind it.
+description: One agent's identity, once reachable by an attacker (through a prompt injection, a compromised credential, or simply an overly broad declared capability), invokes a second agent that the attacker's own user context would never have been authorized to call directly. The second agent trusts the call because it comes from another agent, not because the end user behind it was re-checked; this is the agent-to-agent analogue of lateral movement between compromised hosts, distinct from chain-001's single-agent, self-escalating chain.
+graph:
+  nodes:
+    - id: atacante
+      label: Attacker
+      sub: Controls or influences Agent A
+      type: attacker
+      x: 80
+      y: 200
+    - id: agenteA
+      label: Agent A
+      sub: Compromised or influenced
+      type: agent
+      x: 380
+      y: 90
+    - id: agenteB
+      label: Agent B
+      sub: Trusts calls from other agents
+      type: agent
+      x: 380
+      y: 310
+    - id: datosB
+      label: Agent B's scope
+      sub: Reached without re-authorization
+      type: victim
+      x: 760
+      y: 200
+  edges:
+    - from: atacante
+      to: agenteA
+      label: Injection / compromised credential
+    - from: agenteA
+      to: agenteB
+      label: InvokeAgent, no per-call user re-check
+    - from: agenteB
+      to: datosB
+      label: Acts within its own scope
+recommendation: |-
+  Treat agent-to-agent calls as crossing a trust boundary: the target agent should re-validate the originating human user's own authorization for the specific action, not only accept that the call came from another recognized agent. Declare and enforce which agents are allowed to call which others (an explicit allow-list per the zero-trust model for multi-agent systems), rather than leaving any agent free to invoke any other it can reach.
+
+  Detection rule: none named in the KQL library for this query; P04-Q5b is offered as a pattern, not a shipped rule, and the ActionTypes and keys it depends on returned no rows on the tenant where it was last checked.
+detection:
+  library:
+    - P04-Q5b
+  gaps:
+    - "No query confirms whether a given InvokeAgent call was actually authorized by the end user versus initiated autonomously by the calling agent; the query surfaces the call itself (CallingAgent -> TargetAgent), not the authorization decision behind it."
+    - Declared agent-to-agent trust relationships (AgentsInfo.ConnectedAgents) and observed InvokeAgent traffic live on different surfaces in this tenant's telemetry today, so a declared link and an actual call cannot yet be correlated in one query.
+references:
+  - Anthropic, "Zero Trust for AI Agents" (multi-agent trust boundaries)
+
+frameworks:
+  attack:
+    - T1210
+validation:
+  status: not-verified
+  date: 2026-10-22
+  notes: Written from the P04-Q5b query and the zero-trust multi-agent reference it cites. Not reproduced for this file; the query's own validation run found no InvokeAgent events on the tenant checked, so neither the attack nor the detection has been observed end to end anywhere in this repository.
+
+lab:
+  kind: tenant-exercise
+  effects: read-only
+  title: Which agents can call which other agents, and does anyone check who asked
+  objective: Inventory the declared agent-to-agent trust relationships in the tenant, pick one pair that crosses an ownership or data-scope boundary, and check whether the target agent's own logic re-validates the end user before acting, or only checks that the call came from a recognized agent.
+  estimatedMinutes: 15
+  costEstimate: "None beyond read access to the agent registry and existing telemetry. Not measured otherwise."
+  licenses:
+    - Microsoft Agent 365 (AgentsInfo, ConnectedAgents) or an equivalent registry of agent-to-agent links
+    - Read access to CloudAppEvents / Advanced Hunting
+  safety:
+    scope: Demo or production tenant; this lab only reads the agent registry and existing telemetry, and inspects (does not change) one target agent's own authorization logic.
+    writes: None.
+    revert: Nothing to revert.
+  architecture:
+    summary: A read-only inventory of declared agent-to-agent links, followed by a manual check of one cross-boundary pair's actual authorization behavior.
+    resources:
+      - name: Agent registry (AgentsInfo)
+        purpose: Source of declared agent-to-agent connections. Already exists; nothing new is deployed for this lab.
+        createdBy: existing
+    principals:
+      - name: Reviewer
+        required:
+          - Read access to the agent registry and to CloudAppEvents
+        helpful: []
+  flow:
+    setup:
+      - Confirm read access to AgentsInfo.ConnectedAgents (or the tenant's equivalent) and to CloudAppEvents.
+    attack:
+      - step: List every declared agent-to-agent connection and flag the pairs where the two agents have different owners, purposes, or data scopes.
+        evidence: A table of agent pairs with owner/purpose/scope for each side, and which pairs cross a boundary.
+      - step: For one flagged pair, inspect the target agent's own logic (its tool/skill definitions, its system prompt, any policy it enforces) for whether it re-checks the originating user's authorization on an incoming agent-to-agent call.
+        evidence: A yes/no, with the specific check (or its absence) quoted from the agent's configuration.
+      - step: Run the InvokeAgent correlation query (P04-Q5b) over the last 7 days for that pair.
+        evidence: "Most likely, nothing: the query's own validation run found no InvokeAgent events on the tenant checked, so an empty result is expected here, not a failure. Any row is a lead: an actual call between the pair, to correlate against the authorization check from the previous step."
+    cleanup: []
+    teardown: []
+  defend:
+    prevent:
+      - Require the target agent to re-validate the originating human user's own authorization on every incoming agent-to-agent call, not only that the call came from a recognized agent.
+      - Declare and enforce an explicit allow-list of which agents may call which others, instead of leaving any reachable agent free to invoke any other.
+    detect:
+      queries:
+        - P04-Q5b
+      events:
+        - source: CloudAppEvents
+          operation: InvokeAgent where AgentId (caller) and TargetAgentId differ, correlated with the UserKey of the call
+          note: "Per the KQL library's own note: the query runs without errors but returned no rows on the tenant where it was last checked; declared links (AgentsInfo.ConnectedAgents) live on a different surface than observed calls today, so correlating a declared trust relationship with actual traffic is not yet a single query."
+  transcript:
+    summary: Not run in this repository. The query and its empty-result caveat come from the KQL library; the trust-boundary framing comes from the cited zero-trust reference.
+    observations: []
+  validation:
+    status: not-verified
+    date: 2026-10-22
+    notes: This lab was not run against a tenant for this file. The underlying query's own "no InvokeAgent events observed" status is carried over rather than resolved here.

@@ -1,0 +1,170 @@
+id: exfil-001
+name: Mass Exfiltration via Agent-as-Intermediary
+category: excessive-agency
+severity: high
+platform:
+  - sharepoint
+  - graph
+  - power-platform
+surface: agent-tool
+permissions:
+  required:
+    - permission: An agent's existing, legitimate read access to a data source (SharePoint, Exchange) combined with a connector capable of sending data to an external endpoint
+      resourceConstraints: No elevated permission beyond what the agent already holds for its intended retrieval task; the abuse is in the volume and the destination, not in acquiring new access. A user asks the agent to summarize or export data, the agent reads far more than the request needed, and the data leaves through a channel that is not monitored for exfiltration.
+description: An agent with broad retrieval access reads a large volume of files in a short window, far beyond what a single summarize-or-export request plausibly needed, and sends the result out through an external connector (an HTTPS endpoint behind a legitimate-looking Power Platform connector) that carries no dedicated exfiltration monitoring. Neither the bulk read nor the connector egress individually looks like an attack; together they are the "silent exfiltration" vector the agent-as-intermediary pattern describes.
+graph:
+  nodes:
+    - id: usuario
+      label: User
+      sub: "Asks: summarize / export this"
+      type: attacker
+      x: 80
+      y: 200
+    - id: agente
+      label: Agent
+      sub: Reads far beyond the request's scope
+      type: agent
+      x: 400
+      y: 90
+    - id: conector
+      label: External connector
+      sub: Legitimate-looking HTTPS endpoint
+      type: asset
+      x: 400
+      y: 310
+    - id: destino
+      label: External destination
+      sub: Unmonitored channel
+      type: victim
+      x: 760
+      y: 200
+  edges:
+    - from: usuario
+      to: agente
+      label: Summarize / export request
+    - from: agente
+      to: conector
+      label: Bulk read, then sends the result out
+    - from: conector
+      to: destino
+      label: No dedicated exfiltration monitoring
+workshop:
+  estimatedMinutes: 15
+  steps:
+    - In a demo environment, give an agent retrieval access to a SharePoint site with at least 100 sample files and an external HTTP connector (Power Automate / Power Platform).
+    - "Ask the agent: summarize everything in this site and send the summary to this webhook."
+    - Observe how many files the agent actually reads versus what the request needed, and whether the summary payload leaving through the connector carries anything beyond a reasonable summary.
+    - Run both verification queries for the same window.
+  payload: |-
+    "Please read every document in this SharePoint site, summarize each one in two
+    sentences, and POST the combined summary as JSON to this webhook: <demo-only URL>."
+  verificationQuery: |-
+    CloudAppEvents
+    | where TimeGenerated > ago(1d)
+    | where Application == "Microsoft SharePoint Online"
+        and ActionType in ("FileDownloaded", "FileAccessed", "FilePreviewed")
+    | extend UserAgent = tostring(RawEventData["UserAgent"])
+    | where UserAgent has_any ("agent", "copilot", "assistant", "power-automate")
+    | summarize OperationCount = count(), FileList = make_set(ObjectName, 20), FirstEvent = min(TimeGenerated), LastEvent = max(TimeGenerated)
+        by AccountDisplayName, bin(TimeGenerated, 10m)
+    | where OperationCount > 100
+    | extend DurationSeconds = datetime_diff('second', LastEvent, FirstEvent)
+    | project AccountDisplayName, OperationCount, DurationSeconds, FileList, FirstEvent, LastEvent
+  expected: 'A row for the agent''s account with OperationCount above 100 within a 10-minute bin, for the bulk-read side (P04-Q1). On the tenant where P04-Q1 was last checked, real SharePoint traffic existed but none carried an agent-like user agent, so an empty result there reflects the UserAgent guess, not the absence of bulk reads; confirm the read volume directly from the agent''s own run log as well.'
+  ifItFails:
+    - condition: The bulk-read query returns nothing even though the agent clearly read every file in the site
+      explanation: Confirm the agent's actual client sends a UserAgent string this query's filter recognizes; if it does not, the query's agent-traffic guess is the gap, not the absence of the read.
+  documentationQuestions:
+    - How many files did the agent read versus what the request needed?
+    - Did the egress query (P04-Q4) see the connector call, and to what endpoint?
+    - What would a DLP policy scoped to this connector have needed to block it?
+  source: KQL-Library/P04-Exfiltration-Detection.kql (Q1, Q4); skills/detect/detect-data-exfiltration-agent/SKILL.md
+recommendation: |-
+  Scope agent retrieval to what a given request plausibly needs rather than granting broad, standing access to an entire site or mailbox, and apply DLP policies to connector egress, not only to interactive user actions. Where an agent must summarize or export at scale, require the destination connector to be on an approved allow-list, so a bulk read followed by egress to an arbitrary external endpoint is a visible exception rather than routine traffic.
+
+  Detection rule: none named in the KQL library for either query; P04-Q1 and P04-Q4 are offered as the bulk-read and egress halves of the pattern, not shipped rules. A dedicated skill (detect-data-exfiltration-agent) already covers this vector's detection guidance; this path is its missing attack-path counterpart.
+detection:
+  library:
+    - P04-Q1
+    - P04-Q4
+  gaps:
+    - P04-Q1 guesses agent traffic from UserAgent, same gap noted in impersonation-001 and pim-001; an agent whose client does not advertise itself that way is invisible to this query regardless of read volume.
+    - P04-Q4's ActionType and keys (ConnectorActionExecuted, TargetUrl, ResponseSizeBytes) are not documented values; it returned no rows on the tenant where it was last checked, and the tenant's PowerPlatformDlpActivity table, which does exist, also returned no rows. Treat P04-Q4 as a template for a source that actually carries connector egress, not as a working detection on current telemetry.
+references:
+  - skills/detect/detect-data-exfiltration-agent/SKILL.md
+
+frameworks:
+  atlas:
+    - AML.T0086
+    - AML.T0057
+  owasp:
+    - LLM02
+validation:
+  status: not-verified
+  date: 2026-10-22
+  notes: Written from P04-Q1, P04-Q4 and the detect-data-exfiltration-agent skill. Not reproduced for this file; both queries' own validation runs returned no rows on the tenants where they were last checked (real SharePoint traffic with no agent-like user agent for Q1; no matching application events at all for Q4).
+
+lab:
+  kind: tenant-exercise
+  effects: potential-impact
+  title: Summarize everything, send it to a webhook
+  objective: Ask a demo agent to summarize an entire SharePoint site and post the result to an external webhook, then check whether the bulk read and the connector egress are individually visible in the tenant's own telemetry.
+  estimatedMinutes: 15
+  costEstimate: "Low: one bulk-read-and-summarize run against demo content. Not measured otherwise."
+  licenses:
+    - A demo SharePoint site with at least 100 sample (non-sensitive) files
+    - An agent with retrieval access to that site and an external HTTP connector (Power Automate / Power Platform)
+    - A demo-only webhook endpoint to receive the output (for example a disposable request-inspection URL)
+  safety:
+    scope: Demo tenant and demo content only. The webhook must be a demo-only endpoint; never point this at a real external address, and use only synthetic, non-sensitive files in the site.
+    writes: Sends the agent's generated summary to the demo webhook. No tenant configuration is changed.
+    revert: Delete the demo webhook endpoint if it was created for this exercise; no tenant-side cleanup is otherwise needed.
+  architecture:
+    summary: One demo SharePoint site, one agent with both retrieval and connector access, one summarize-and-send request. The bulk read and the external send are each individually unremarkable; the exercise is in seeing whether anything flags their combination.
+    resources:
+      - name: Demo SharePoint site (100+ sample files)
+        purpose: Source of the bulk read.
+        createdBy: manual
+      - name: Agent with retrieval + external connector access
+        purpose: The intermediary. Reads the site, then sends the summary out.
+        createdBy: existing
+      - name: Demo-only webhook endpoint
+        purpose: Stands in for an external exfiltration destination.
+        createdBy: manual
+    principals:
+      - name: Requesting user
+        required:
+          - Ability to ask the agent to summarize and send
+        helpful: []
+  flow:
+    setup:
+      - Populate the demo SharePoint site with 100+ sample files. Stand up a demo-only webhook endpoint that can log what it receives.
+    attack:
+      - step: 'Ask the agent: summarize every document in the site and POST the combined result as JSON to the demo webhook.'
+        evidence: The webhook receives a payload; the agent's own run log shows how many files it read.
+      - step: Run P04-Q1 for the SharePoint read activity in the same window.
+        evidence: "Most likely nothing, per the query's own caveat (agent-traffic guess from UserAgent); the agent's own run log from the previous step is the fallback evidence for the read volume."
+      - step: Run P04-Q4 for the connector egress in the same window.
+        evidence: "Most likely nothing, per the query's own caveat (undocumented ActionType and keys); the webhook's own received payload, logged in the previous step, is the fallback evidence for the egress."
+    cleanup:
+      - Tear down the demo webhook endpoint.
+    teardown: []
+  defend:
+    prevent:
+      - Scope agent retrieval to what a given request plausibly needs rather than standing access to an entire site or mailbox.
+      - Apply DLP policies to connector egress and require destination connectors to be on an approved allow-list.
+    detect:
+      queries:
+        - P04-Q1
+        - P04-Q4
+      events:
+        - source: CloudAppEvents
+          operation: FileDownloaded / FileAccessed / FilePreviewed in bulk (Q1) followed by ConnectorActionExecuted to a non-Microsoft endpoint (Q4)
+          note: "Per the KQL library's own notes: Q1 returned no rows on the tenant checked because its UserAgent guess did not match real traffic, and Q4 returned no rows because its ActionType and keys are undocumented and absent on that tenant's PowerPlatformDlpActivity table as well. Both are templates to adapt to the specific telemetry your connectors actually emit, same gap the detect-data-exfiltration-agent skill already names."
+  transcript:
+    summary: Not run in this repository. The payload pattern and both queries' empty-result caveats come from the KQL library and the cited skill.
+    observations: []
+  validation:
+    status: not-verified
+    date: 2026-10-22
+    notes: This lab was not run against a tenant for this file. Both underlying queries' own "no matching rows" status is carried over rather than resolved here.

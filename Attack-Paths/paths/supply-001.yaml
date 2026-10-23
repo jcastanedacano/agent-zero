@@ -1,0 +1,127 @@
+id: supply-001
+name: Ungoverned Third-Party Agent with Anomalous Behavior
+category: ungoverned-deployment
+severity: high
+platform:
+  - entra-agent-id
+  - foundry
+surface: model-endpoint
+permissions:
+  required:
+    - permission: Ability to install, connect to, or invoke a third-party AI agent, enterprise app, or external MCP server
+      resourceConstraints: Works where consent or installation for third-party AI is not restricted to admins, which is the default for many application-permission consent scenarios; first-party agents go through Entra Agent ID and Copilot Studio governance, third-party ones typically do not.
+description: A partner-built agent in the Agent 365 registry, an enterprise app owned by another tenant, or an external MCP server a first-party agent calls is not covered by the organization's own governance path. If that component is backdoored, or simply degrades or drifts after an update on the vendor's side, nothing in the review process that applies to first-party agents catches it; the only available signal is the deployed agent's own behavior diverging from its declared purpose after the fact.
+graph:
+  nodes:
+    - id: proveedor
+      label: Third-party vendor
+      sub: Agent, enterprise app, or MCP server
+      type: attacker
+      x: 90
+      y: 200
+    - id: componente
+      label: Third-party component in the tenant
+      sub: Not reviewed by first-party governance
+      type: asset
+      x: 420
+      y: 90
+    - id: agente
+      label: Tenant's agent / workflow
+      sub: Calls or depends on the component
+      type: agent
+      x: 420
+      y: 300
+    - id: anomalia
+      label: Behavioral deviation
+      sub: Response pattern shifts from baseline
+      type: victim
+      x: 780
+      y: 200
+  edges:
+    - from: proveedor
+      to: componente
+      label: Ships / updates the component
+    - from: componente
+      to: agente
+      label: Installed or called with no admin review
+    - from: agente
+      to: anomalia
+      label: Output drifts from declared purpose
+recommendation: |-
+  Inventory every active third-party AI agent, enterprise app and external MCP server the organization's agents depend on, assign each a risk level, and apply the controls that already exist for third-party apps (admin consent workflows, periodic access reviews) rather than treating them as covered by first-party governance by default. Because KQL cannot detect supply-chain poisoning directly, use behavioral-deviation monitoring (response length and external-reference rate against a rolling baseline) as an early-warning signal that something changed on the vendor's side, then investigate the specific component.
+
+  Detection rule: none named in the KQL library for this query; P04-Q5c is offered as a behavioral proxy, not a shipped rule, and was not run against live agent traffic.
+detection:
+  library:
+    - P04-Q5c
+  gaps:
+    - No query inspects the third-party component itself (its code, its model weights, its MCP tool definitions); P04-Q5c only watches the deployed agent's output pattern after the fact.
+    - The inventory step (which third-party agents, enterprise apps and MCP servers exist, and who approved them) has no KQL query at all; it is a discovery exercise, covered by discover-third-party-ai-risk, not a detection one.
+references:
+  - skills/discover/discover-third-party-ai-risk/SKILL.md
+frameworks:
+  atlas:
+    - AML.T0010
+  owasp:
+    - ASI04
+validation:
+  status: not-verified
+  date: 2026-10-22
+  notes: Written from the discover-third-party-ai-risk skill (inventory and risk-rating side) and the P04-Q5c query (behavioral-deviation side). Not reproduced for this file; P04-Q5c's own validation run found 0 agent ActionTypes on the tenant checked, so the behavioral baseline it depends on has never actually been populated anywhere in this repository.
+
+lab:
+  kind: tenant-exercise
+  effects: read-only
+  title: Inventory first, then watch for drift
+  objective: Produce a risk-rated inventory of the third-party agents, enterprise apps and external MCP servers a tenant's own agents depend on, then check whether any deployed agent's response pattern has drifted from its own 30-day baseline.
+  estimatedMinutes: 20
+  costEstimate: "None beyond read access to the Agent 365 registry, Entra enterprise apps and existing telemetry. Not measured otherwise."
+  licenses:
+    - Microsoft Agent 365 (the agent inventory API)
+    - Microsoft Defender XDR (AgentsInfo and CloudAppEvents) or an equivalent inventory source
+    - AI Administrator or Global Administrator role for the inventory step; Security Reader is enough to run the behavioral query
+  safety:
+    scope: Demo or production tenant; the inventory and the behavioral query are both read-only.
+    writes: None. This lab only reads the agent registry, enterprise app list and existing telemetry.
+    revert: Nothing to revert.
+  architecture:
+    summary: A read-only pass over what third-party AI components exist (registry entries owned by another tenant, enterprise apps, MCP servers called by first-party agents), followed by a behavioral-deviation check against whichever of those are deployed agents with enough history to baseline.
+    resources:
+      - name: Agent 365 registry / Entra enterprise apps
+        purpose: Source of truth for which agents and apps exist and who owns them. Already exists; nothing new is deployed for this lab.
+        createdBy: existing
+    principals:
+      - name: Reviewer
+        required:
+          - AI Administrator, Global Administrator, or Security Reader, depending on the step
+        helpful: []
+  flow:
+    setup:
+      - Confirm access to the Agent 365 inventory API and to CloudAppEvents in Advanced Hunting or a connected Sentinel workspace.
+    attack:
+      - step: List every agent in the registry whose owning tenant is not this one, and every enterprise app with AI-related permissions.
+        evidence: A table of third-party components with owner, permissions, and whether an admin reviewed the install.
+      - step: For each, check whether it went through an admin consent workflow or was self-service installed.
+        evidence: A yes/no per component; a "no" with sensitive permissions is the governance gap this path describes.
+      - step: Run the behavioral-deviation query (P04-Q5c) against agents with at least 30 days of InvokeAgent history.
+        evidence: "Most likely, nothing on a typical tenant: the query's own validation run found 0 agent ActionTypes, so an empty result is expected, not a failure. A row above the deviation threshold is the signal to investigate that specific agent's recent updates."
+    cleanup: []
+    teardown: []
+  defend:
+    prevent:
+      - Require admin review before any third-party agent, enterprise app, or MCP server with sensitive permissions is connected, instead of leaving it to self-service consent.
+      - Re-review third-party components periodically, not only at install time, since a vendor-side update can change behavior after the fact.
+    detect:
+      queries:
+        - P04-Q5c
+      events:
+        - source: CloudAppEvents
+          operation: InvokeAgent response pattern (length, external-reference rate) deviating from a 30-day per-agent baseline
+          note: "Per the KQL library's own note: this is a proxy signal, not a direct detection of poisoning, and the ActionType and response fields it depends on were not populated on the tenant where it was last checked. Treat a flagged agent as a lead for manual review, not as confirmed compromise."
+  transcript:
+    summary: Not run in this repository. The inventory step mirrors discover-third-party-ai-risk; the behavioral query and its empty-result caveat come from the KQL library.
+    observations: []
+  validation:
+    status: not-verified
+    date: 2026-10-22
+    notes: This lab was not run against a tenant for this file. The underlying behavioral query's own "0 agent ActionTypes observed" status is carried over rather than resolved here.
