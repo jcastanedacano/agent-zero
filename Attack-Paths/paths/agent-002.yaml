@@ -109,7 +109,7 @@ lab:
         evidence: One row per blueprint with the number of agent identities. The blueprint with the most identities is the largest unit of compromise.
       - step: List the owners and sponsors of each blueprint.
         evidence: The people who can modify, re-enable or delete it. Anyone here who does not need it is a finding.
-      - step: Run Q12 over 90 days.
+      - step: "Run Q12. Its AuditLogs window is 7 days (the 90-day lookback only builds the agent-identity lookup table), so changes older than a week won't show."
         evidence: "Rows for credential, owner and sponsor changes on Agent ID objects. A credential operation on an agent identity (not the blueprint) shows Result = failure: a refused attempt, not an added credential."
       - step: Read each credential row on a blueprint.
         evidence: Who added it, when, and whether it was expected. A federated credential stores no secret.
