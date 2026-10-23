@@ -19,7 +19,7 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks: 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fagent-zero%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
-**What this button gives you:** a Log Analytics workspace, Microsoft Sentinel enabled on it, 1 watchlist, and 3 analytics rules aligned with the KQL Library (unowned agent, jailbreak attempt, bulk data retrieval via agent). **What it does not give you:** data connectors or demo data — connect Microsoft 365 / Defender XDR / Purview yourself so the rules have telemetry to evaluate. See [`/ARM-Templates/README.md`](./ARM-Templates/README.md) for the full breakdown.
+**What this button gives you:** a Log Analytics workspace, Microsoft Sentinel enabled on it, 1 watchlist, and 2 analytics rules aligned with the KQL Library (jailbreak attempt, bulk data retrieval via agent); a third one, unowned agent, is optional until `AgentsInfo` exists. **What it does not give you:** data connectors or demo data — connect Microsoft 365 / Defender XDR / Purview yourself so the rules have telemetry to evaluate. See [`/ARM-Templates/README.md`](./ARM-Templates/README.md) for the full breakdown.
 
 **Live series:** Agent Zero is also taught as a six-session live series with [Microsoft User Group Perú](https://www.youtube.com/@MUGdelPeru), every Friday from October 9, 2026 at 7:00 pm Lima time (GMT-5), free on YouTube. Each session includes a live lab.
 

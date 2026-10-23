@@ -5,11 +5,12 @@ Deploy a pre-configured Microsoft Sentinel workspace for Track B and C labs.
 ## What Gets Deployed
 
 - Log Analytics workspace with Microsoft Sentinel enabled
-- 3 Sentinel analytics rules, aligned with the KQL Library: unowned agent (P01), jailbreak attempt (P05-Q1), bulk data retrieval via agent (P04-Q1)
+- 2 Sentinel analytics rules, aligned with the KQL Library: jailbreak attempt (P05-Q1) and bulk data retrieval via agent (P04-Q1)
+- 1 optional rule, unowned agent (P01), off by default: it reads `AgentsInfo`, which does not exist in a new workspace, and Sentinel refuses a rule on a table that does not exist. Deploy it with `deployUnownedAgentRule` set to `true` once `AgentsInfo` has data
 - 1 watchlist: `AgentIdentifiers`, seeded with 3 fictitious `contoso.com` rows for reference
 
 **Not included** — enable these separately before the rules can return real matches:
-- **Data connectors.** This template does not deploy the Microsoft 365, Defender XDR, or Purview connectors. Without them, `AgentsInfo` and `CloudAppEvents` are empty and the rules have nothing to fire on. Connect them from Sentinel → Data connectors in your tenant, or via the demo tenant setup in `/Facilitator-Kit`.
+- **Data connectors.** This template does not deploy the Microsoft 365, Defender XDR, or Purview connectors. Without them, `CopilotActivity` and `CloudAppEvents` are empty and the rules have nothing to fire on, and `AgentsInfo` does not exist at all. Connect them from Sentinel → Data connectors in your tenant, or via the demo tenant setup in `/Facilitator-Kit`.
 - **Demo data.** No sample activity is pre-loaded. The rules run against your tenant's real telemetry once the connectors above are active.
 
 **Schema note:** the analytics rules query `AgentsInfo` (Defender Advanced Hunting / Sentinel). The predecessor table `AIAgentsInfo` was retired 1 July 2026 — if you copy these queries elsewhere, confirm you're on the current schema (`CreatedDateTime`, `LifecycleStatus`, `Owners`, `Name` — note the display-name column is `Name`, not `AgentName`, confirmed live via `getschema` against tenant `AgentsInfo`, Sep 2026), not the old `AIAgentsInfo` column names.
@@ -20,12 +21,12 @@ flowchart TB
         W["Log Analytics workspace<br/>retention in days, default 30"]
         S["Microsoft Sentinel enabled<br/>on the workspace"]
         L["Watchlist AgentIdentifiers<br/>3 fictitious contoso.com rows"]
-        R["3 analytics rules<br/>unowned agent (P01)<br/>jailbreak attempt (P05-Q1)<br/>bulk data retrieval via agent (P04-Q1)"]
+        R["2 analytics rules<br/>jailbreak attempt (P05-Q1)<br/>bulk data retrieval via agent (P04-Q1)<br/>unowned agent (P01): optional"]
     end
     subgraph EXT["Not deployed: you enable them"]
         C["Data connectors<br/>Microsoft 365, Defender XDR, Purview"]
     end
-    T["AgentsInfo and CloudAppEvents<br/>empty until the connectors feed them"]
+    T["CopilotActivity and CloudAppEvents<br/>empty until the connectors feed them<br/>AgentsInfo: created by the connector"]
     W --> S
     S --> L
     S --> R
@@ -40,7 +41,7 @@ flowchart TB
     class C,T orange
 ```
 
-**How to read it.** The blue components are what the template creates, in order: the workspace, Sentinel on top of it, then the watchlist and the three rules. The rules read AgentsInfo and CloudAppEvents, and those tables stay empty until you enable the Microsoft 365, Defender XDR and Purview connectors yourself. No demo data is pre-loaded either, so the rules run against your tenant's real telemetry.
+**How to read it.** The blue components are what the template creates, in order: the workspace, Sentinel on top of it, then the watchlist and the two rules. The rules read CopilotActivity and CloudAppEvents, and those tables stay empty until you enable the Microsoft 365, Defender XDR and Purview connectors yourself. The optional third rule reads AgentsInfo, which only exists once the Defender XDR connector has sent data, so it is off by default. No demo data is pre-loaded either, so the rules run against your tenant's real telemetry.
 
 ## Deploy
 
@@ -53,6 +54,8 @@ flowchart TB
 | `workspaceName` | Sentinel workspace name | `agentic-security-lab` |
 | `location` | Azure region | Resource group location |
 | `retentionDays` | Log retention in days | `30` |
+| `dailyQuotaGb` | Daily ingestion cap in GB | `1` |
+| `deployUnownedAgentRule` | Also deploy the unowned agent rule (needs `AgentsInfo` to exist) | `false` |
 
 ## Cost
 

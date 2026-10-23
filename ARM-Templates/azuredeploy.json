@@ -39,6 +39,13 @@
       "metadata": {
         "description": "Daily ingestion cap in GB. Prevents unexpected cost overruns during lab use."
       }
+    },
+    "deployUnownedAgentRule": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Also deploy the rule 'New Agent Registered Without Owner'. It reads AgentsInfo, a table that exists only after the Microsoft Defender XDR connector (with Microsoft Agent 365) has sent data. Sentinel refuses a rule on a table that does not exist yet, so leave this false on a new workspace and redeploy with true once AgentsInfo has data."
+      }
     }
   },
   "variables": {
@@ -96,6 +103,7 @@
       "type": "Microsoft.SecurityInsights/alertRules",
       "apiVersion": "2023-09-01-preview",
       "name": "[guid('NewUnmanagedAgent', parameters('workspaceName'))]",
+      "condition": "[parameters('deployUnownedAgentRule')]",
       "scope": "[variables('workspaceId')]",
       "kind": "Scheduled",
       "dependsOn": [
@@ -196,7 +204,7 @@
     },
     "sentinelPortalUrl": {
       "type": "string",
-      "value": "[concat('https://portal.azure.com/#blade/Microsoft_Azure_Security_Insights/MainMenuBlade/0/id/', encodeUriComponent(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))))]"
+      "value": "[concat('https://portal.azure.com/#blade/Microsoft_Azure_Security_Insights/MainMenuBlade/0/id/', uriComponent(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))))]"
     }
   }
 }
