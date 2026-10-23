@@ -11,6 +11,14 @@
 
 Seven security domains for agentic AI in the enterprise. Three audience tracks: Track A needs no environment, and Tracks B and C run in a Microsoft 365 E5 demo tenant with an Azure subscription and Microsoft Agent 365 (see [Prerequisites](#prerequisites)).
 
+**In 30 seconds**
+
+- **What:** labs, queries and playbooks to find, govern, secure and monitor AI agents in Microsoft environments.
+- **For whom:** executives (Track A), architects (Track B) and SOC engineers (Track C). [Pick your track](#choose-your-track).
+- **How long:** Track A 3 h 45 min, Track B about 10.5 h of labs, Track C about 9 h. Each track README lists the time of every module.
+- **What you need:** Track A, nothing. Tracks B and C, a Microsoft 365 E5 demo tenant, an Azure subscription and Microsoft Agent 365; Track C also a Sentinel workspace. [Prerequisites](#prerequisites).
+- **What you produce:** a Risk Posture Map and Board Brief (A), a Gap Assessment and 90-day roadmap (B), an agentic incident response playbook (C).
+
 |  |  |
 |---|---|
 | **18 modules** across Executive, Architect, and SOC Engineer tracks | **43 KQL library queries** plus 22 query files bundled with skills, with per-file validation status |
@@ -19,7 +27,7 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks: 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjcastanedacano%2Fagent-zero%2Fmain%2FARM-Templates%2Fazuredeploy.json)
 
-**What this button gives you:** a Log Analytics workspace, Microsoft Sentinel enabled on it, 1 watchlist, and 2 analytics rules aligned with the KQL Library (jailbreak attempt, bulk data retrieval via agent); a third one, unowned agent, is optional until `AgentsInfo` exists. **What it does not give you:** data connectors or demo data — connect Microsoft 365 / Defender XDR / Purview yourself so the rules have telemetry to evaluate. See [`/ARM-Templates/README.md`](./ARM-Templates/README.md) for the full breakdown.
+Deploys a Sentinel workspace for Tracks B and C: what it creates is in [Quick Start](#quick-start).
 
 **Live series:** Agent Zero is also taught as a six-session live series with [Microsoft User Group Perú](https://www.youtube.com/@MUGdelPeru), every Friday from October 9, 2026 at 7:00 pm Lima time (GMT-5), free on YouTube. Each session includes a live lab.
 
@@ -142,7 +150,7 @@ az deployment group create \
   --parameters workspaceName=agentic-security-lab
 ```
 
-The ARM template deploys: Log Analytics workspace + Microsoft Sentinel + 3 pre-configured analytics rules (jailbreak detection, new agent without Entra identity or owner, data exfiltration) + agent watchlist.
+The button and the commands deploy a Log Analytics workspace, Microsoft Sentinel on it, 1 watchlist and 2 analytics rules aligned with the KQL Library (jailbreak attempt, bulk data retrieval via agent). A third rule, unowned agent, is optional until `AgentsInfo` exists (parameter `deployUnownedAgentRule`). They do not give you data connectors or demo data: connect Microsoft 365, Defender XDR and Purview yourself so the rules have telemetry to evaluate. See [`/ARM-Templates/README.md`](./ARM-Templates/README.md) for the full breakdown.
 
 ### Start the workshop
 
@@ -155,7 +163,7 @@ The ARM template deploys: Log Analytics workspace + Microsoft Sentinel + 3 pre-c
 
 ## The seven domains
 
-Every track walks the same seven domains. Each one answers a question the previous one exposes.
+Track B walks all seven domains. Tracks A and C walk domains 01 to 05, and Track C adds a red-team module. Each domain answers a question the previous one exposes.
 
 ```mermaid
 flowchart LR
@@ -194,6 +202,8 @@ flowchart LR
 | 05 | **Detect & Respond** | Is your SOC ready for agentic incidents? | Agents integrated into SOC: unified detection and response |
 | 06 | **Regulatory Compliance** | Which EU AI Act tier applies, and what do DORA, ISO 42001, and NIST AI RMF require? | Compliance gap assessment + Purview Compliance Manager assessment + DORA action plan foundation (ECB/SSM deadline: 31 Oct 2026) |
 | 07 | **Vendor & Third-Party AI Risk** | Which external AI vendors and MCP servers are connected, and have they been assessed? | Vendor scorecard (22 questions) + MCP server audit KQL |
+
+**Terms used in this repository.** A **track** is a learning path by audience (A, B, C). A **domain** is one of the seven areas above, and a **module** is one session on a domain inside a track. A **pillar** is the folder of agent skills for a domain: only domains 01 to 05 have one (`skills/discover`, `govern`, `secure`, `protect`, `detect`), while 06 and 07 are covered by modules and templates. A **skill** is a packaged workflow with its queries and checklist. A **risk vector** is something an attacker does that a control stops ([docs/controls-and-risk-vectors.md](./docs/controls-and-risk-vectors.md)).
 
 ---
 
@@ -258,6 +268,7 @@ agent-zero/
 │   └── references/
 │       └── frameworks.md            ← Cross-reference: ATLAS, D3FEND, NIST AI RMF, NIST CSF
 ├── docs/                            ← full reference list, framework mappings, controls and risk vectors
+│   ├── agent-attack-surface.md      ← the four attack surfaces and which domain closes each
 │   ├── architecture.md              ← reference architecture: telemetry map, Foundry anatomy, agent identity chain
 │   ├── references.md
 │   ├── framework-coverage.md
@@ -327,66 +338,7 @@ Domain 06 is the evidence layer: it has controls but defends no risk vector of i
 
 ## The agent attack surface
 
-Agents introduce four surfaces that traditional security tooling does not cover. Every domain in this framework maps to closing one of them.
-
-```mermaid
-flowchart TB
-    D01["<b>01</b> Discover<br/>inventory · shadow AI · endpoint blind spots"]
-
-    subgraph Untrusted["Attacker-controlled input"]
-        U1[User prompt]
-        U2["SharePoint corpus<br/>documents"]
-        U3["Tool / MCP<br/>responses"]
-        U4["Web content the<br/>agent browses"]
-    end
-
-    subgraph Agent["The agent"]
-        LLM{{"Model<br/><i>cannot distinguish<br/>data from instruction</i>"}}
-        RT["Runtime / SDK"]
-    end
-
-    subgraph Blast["What it can reach"]
-        T1[Declared tools]
-        T2["Connectors<br/>and APIs"]
-        T3["Identity<br/>(Entra Agent ID)"]
-    end
-
-    D01 == "nothing below applies to an agent<br/>that is not in the inventory" ==> Agent
-
-    U1 --> LLM
-    U2 --> LLM
-    U3 --> LLM
-    U4 --> LLM
-    LLM --> RT
-    RT --> T1 & T2 & T3
-
-    RT -. "direct tool invocation<br/>bypasses the model entirely" .-> T1
-
-    C04["<b>04</b> Protect Data<br/>DLP · labels · security trimming"] -.guards.-> Untrusted
-    C07["<b>07</b> Vendor Risk<br/>MCP assessment · APIM allow-list"] -.vets.-> U3
-    C05["<b>05</b> Detect &amp; Respond<br/>Prompt Shield · KQL · Sentinel"] -.watches.-> Agent
-    C03["<b>03</b> Secure Access<br/>CA · least agency · PIM"] -.constrains.-> Blast
-    C02["<b>02</b> Govern<br/>ownership · tiers · kill switch"] -.authorizes.-> Blast
-
-    style D01 fill:#FF8C00,stroke:#333,color:#24292f
-    style LLM fill:#5E2750,stroke:#333,color:#fff
-    style RT fill:#5E2750,stroke:#333,color:#fff
-    style C02 fill:#107C10,stroke:#333,color:#fff
-    style C03 fill:#107C10,stroke:#333,color:#fff
-    style C04 fill:#107C10,stroke:#333,color:#fff
-    style C05 fill:#107C10,stroke:#333,color:#fff
-    style C07 fill:#107C10,stroke:#333,color:#fff
-    style Untrusted fill:#fdecea,stroke:#a8452a,color:#24292f
-    style Blast fill:#fff4e6,stroke:#FF8C00,color:#24292f
-```
-
-**Domain 01 is the precondition, not a peer.** It sits above the others in orange because it does not guard a surface — it establishes that the agent exists at all. An agent absent from the inventory has no Conditional Access policy applied, no owner to escalate to, and no Sentinel rule watching it. Every green control below is silently inapplicable to it.
-
-**Domain 06 (Regulatory) is not on this diagram** because it does not defend a surface either. It is the evidence layer: proving to an auditor or supervisor that the controls above were designed, deployed, and tested. It consumes the output of all seven domains rather than guarding any one of them.
-
-**The dotted line matters most.** Every prompt-layer control assumes the model sits in the execution path. Research presented at BlackHat USA 2026 documented agent runtimes across three major SDKs that execute a supplied tool-call block **with no model invocation in between** — which means Prompt Shield, content filters, and every prompt-scoring KQL query never fire, because they were never in the path. See [Track B Module-02 point 11](./Track-B-Architect/Module-02-Govern.md).
-
-**A convergent naming worth adopting when you brief this to others:** Microsoft's own Agent 365 governance materials describe this same surface with a six-flow shorthand — H2A (human-to-agent prompt), A2H (agent-to-human response), A2A (agent-to-agent invocation), A2LLM (agent-to-model inference), A2App (agent-to-application action), and agent-to-data-source read/write. It maps directly onto the diagram above: H2A/A2H is the user prompt edge, A2A is the direct-tool-invocation and agent-to-agent injection surface (Module 02 points 9 and 11), A2LLM is the model edge itself, and A2App plus the data-source edges are the blast radius on the right. Independent convergence on the same six control points, from a product governance angle rather than a security-research angle, is a reasonable signal that this is the right way to decompose the surface — use whichever vocabulary lands better with the audience in the room.
+Agents introduce four surfaces that traditional security tooling does not cover, and every domain in this framework closes one of them. The diagram that maps each domain to a surface, the dotted line that prompt-layer controls miss, and the six-flow shorthand Microsoft uses for the same surface are in [docs/agent-attack-surface.md](./docs/agent-attack-surface.md).
 
 ---
 

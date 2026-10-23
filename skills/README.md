@@ -1,6 +1,6 @@
 # Agent skills
 
-30 skills in five pillars. Each pillar answers one question about an agent and hands a named artifact to the next one.
+30 skills in five pillars. A pillar is the skill folder of one domain: domains 01 to 05 have one, and 06 and 07 are covered by modules and templates (see the terms in the [main README](../README.md#the-seven-domains)). Each pillar answers one question about an agent and hands a named artifact to the next one.
 
 ```mermaid
 flowchart LR
