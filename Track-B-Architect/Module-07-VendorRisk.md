@@ -17,7 +17,7 @@ By the end of this module, participants will be able to evaluate third-party AI 
 | Time | Activity | Type |
 |------|----------|------|
 | 15 min | The third-party AI attack surface: MCP servers, plugins, model APIs, AI-as-a-service | Presentation |
-| 15 min | Vendor evaluation framework: 5 domains, 22 questions | Presentation |
+| 15 min | Vendor evaluation framework: 5 areas, 22 questions | Presentation |
 | 50 min | Lab: audit existing external AI connections in your tenant + score one vendor | Exercise |
 | 10 min | Remediation roadmap for vendor gaps | Discussion |
 
@@ -27,7 +27,7 @@ By the end of this module, participants will be able to evaluate third-party AI 
 
 1. **Third-party AI risk is supply chain risk:** Every MCP server your agent connects to, every external model API it calls, and every AI plugin it loads is a potential supply chain entry point. The attack surface is wider than traditional software supply chain because: (a) AI model weights can be backdoored before delivery; (b) MCP server tools can be updated remotely without your knowledge; (c) model responses can be manipulated if the provider is compromised. MITRE ATLAS `AML.T0051` (prompt injection via third-party content) and `AML.T0040` (model extraction) are both supply chain vectors.
 
-2. **Azure API Management as MCP server gateway — the enforcement architecture:** Identifying and assessing MCP servers (point 1, Domain D checklist) is necessary but not sufficient without a network enforcement point. The Microsoft-recommended architecture places approved MCP servers **behind Azure API Management (APIM)**: APIM acts as the single entry point for all MCP tool invocations, enforcing: (a) allow-list policy — only MCP servers registered in APIM can be reached by agents, all others are blocked at the network layer; (b) rate limiting per agent identity — preventing a single agent from flooding a tool; (c) authentication enforcement — agents must present a valid token before APIM forwards the request to the MCP server; (d) request/response logging — every tool call is logged in APIM for audit, feeding the same `CloudAppEvents` pipeline that `ExecuteToolByGateway` queries rely on. Without APIM (or an equivalent API gateway), MCP server allow/block decisions exist only as governance policies — an agent can bypass them by connecting directly to an MCP endpoint if it knows the URL. APIM makes the allow-list a technical enforcement boundary, not just a policy statement. Configuration path: Azure API Management → APIs → import MCP server OpenAPI spec → apply `validate-jwt` policy + rate limit + logging.
+2. **Azure API Management as MCP server gateway — the enforcement architecture:** Identifying and assessing MCP servers (point 1, Area D checklist) is necessary but not sufficient without a network enforcement point. The Microsoft-recommended architecture places approved MCP servers **behind Azure API Management (APIM)**: APIM acts as the single entry point for all MCP tool invocations, enforcing: (a) allow-list policy — only MCP servers registered in APIM can be reached by agents, all others are blocked at the network layer; (b) rate limiting per agent identity — preventing a single agent from flooding a tool; (c) authentication enforcement — agents must present a valid token before APIM forwards the request to the MCP server; (d) request/response logging — every tool call is logged in APIM for audit, feeding the same `CloudAppEvents` pipeline that `ExecuteToolByGateway` queries rely on. Without APIM (or an equivalent API gateway), MCP server allow/block decisions exist only as governance policies — an agent can bypass them by connecting directly to an MCP endpoint if it knows the URL. APIM makes the allow-list a technical enforcement boundary, not just a policy statement. Configuration path: Azure API Management → APIs → import MCP server OpenAPI spec → apply `validate-jwt` policy + rate limit + logging.
 
    ```mermaid
    flowchart TB
@@ -59,11 +59,11 @@ By the end of this module, participants will be able to evaluate third-party AI 
 
 4. **Open source AI development platforms as attack surface:** Beyond commercial MCP servers and model APIs, organizations increasingly run open source AI agent platforms — Langflow, Flowise, n8n, Dify, LangGraph — often on internet-accessible infrastructure without hardening. CVE-2025-3248 (Langflow, unauthenticated RCE) demonstrated that AI development platforms left internet-exposed are high-value attack entry points: they provide direct code execution in an environment that already has credentials, model access, and data connections configured. The JadePuffer ransomware campaign (Sysdig, 2026) used this exact entry point to launch a fully autonomous multi-stage attack. Hardening requirements for open source AI platforms: disable unauthenticated endpoints, require MFA for all administrative access, apply network segmentation (no public internet exposure without WAF), treat them as critical infrastructure in the vulnerability management program, and include them in the vendor assessment process even if self-hosted. Add a row to the AI-as-a-service vendor categories table for this risk tier.
 
-5. **Model layer controls for Azure AI Foundry deployments:** When agents use models deployed in Azure AI Foundry, the model layer itself has security controls independent of identity and network: (a) **Prompt shields** — detect jailbreak attempts and indirect prompt injection before the model processes the input; (b) **Content filters** — block harmful outputs across hate, violence, self-harm, and sexual categories with configurable severity thresholds; (c) **Groundedness detection** — flag model responses that are not grounded in the provided context (hallucination detection); (d) **Protected material detection** — identify model outputs that reproduce copyrighted content. These are configured per deployment in Foundry → Safety + Security → Content filters. For vendor assessment: require documentation of equivalent controls from any external model provider (Domain B of the 22-question checklist).
+5. **Model layer controls for Azure AI Foundry deployments:** When agents use models deployed in Azure AI Foundry, the model layer itself has security controls independent of identity and network: (a) **Prompt shields** — detect jailbreak attempts and indirect prompt injection before the model processes the input; (b) **Content filters** — block harmful outputs across hate, violence, self-harm, and sexual categories with configurable severity thresholds; (c) **Groundedness detection** — flag model responses that are not grounded in the provided context (hallucination detection); (d) **Protected material detection** — identify model outputs that reproduce copyrighted content. These are configured per deployment in Foundry → Safety + Security → Content filters. For vendor assessment: require documentation of equivalent controls from any external model provider (Area B of the 22-question checklist).
 
 6. **Model API risk — what you don't control:** When your agent calls an external model API (non-Microsoft), you don't control the model weights, the inference infrastructure, the logging policy, or the data retention. Key questions: Does the provider log your prompts? Does the provider use your data for training? Is the model's safety training documented? Has the model been independently red-teamed? For Microsoft environments: Azure OpenAI and Azure AI Foundry are the approved paths — external model APIs require explicit approval and security assessment.
 
-   > **Coverage update (preview, May 2026):** Purview now supports a data connector for **Anthropic Claude (Enterprise)**, alongside Copilot, Copilot Studio, and ChatGPT Enterprise. Once configured, Claude interactions appear as another monitored AI application in Activity Explorer — who used it, when, and what content was involved — with the same DLP and audit coverage as Microsoft-native AI apps. This narrows, but does not close, the "what you don't control" gap above: it gives visibility into the interaction (prompt/response content, timing, user), not into the provider's training data use or model weight security, which remain contractual and Domain B checklist questions. If Claude Enterprise is a vendor under evaluation, enabling this connector before go-live turns Domain A (Data Security & Privacy) from a paper assessment into one with actual telemetry. Reference: [Use Microsoft Purview to manage data security & compliance for Anthropic Claude (Enterprise)](https://learn.microsoft.com/purview/ai-claude-enterprise), Microsoft Learn.
+   > **Coverage update (preview, May 2026):** Purview now supports a data connector for **Anthropic Claude (Enterprise)**, alongside Copilot, Copilot Studio, and ChatGPT Enterprise. Once configured, Claude interactions appear as another monitored AI application in Activity Explorer — who used it, when, and what content was involved — with the same DLP and audit coverage as Microsoft-native AI apps. This narrows, but does not close, the "what you don't control" gap above: it gives visibility into the interaction (prompt/response content, timing, user), not into the provider's training data use or model weight security, which remain contractual and Area B checklist questions. If Claude Enterprise is a vendor under evaluation, enabling this connector before go-live turns Area A (Data Security & Privacy) from a paper assessment into one with actual telemetry. Reference: [Use Microsoft Purview to manage data security & compliance for Anthropic Claude (Enterprise)](https://learn.microsoft.com/purview/ai-claude-enterprise), Microsoft Learn.
 
 7. **AI-as-a-service vendor categories and their risk profiles:**
 
@@ -80,8 +80,8 @@ By the end of this module, participants will be able to evaluate third-party AI 
    - **EU AI Act Art. 25:** Importers and distributors of high-risk AI systems must verify supplier compliance documentation. For operators (organizations using AI): contractual obligations must require providers to maintain compliance.
    - **NIST AI RMF GOVERN-6.1:** Organizational policies require AI risk management of third-party entities.
    - **ISO 42001 Clause 8.1 and Annex A.10:** Externally provided AI systems and components must be controlled. Documented requirements must be communicated to external providers.
-   - **CIS Controls v8.1 Control 2 (Software Asset Inventory) + AI-BOM:** Agent software stacks — orchestration frameworks, MCP clients/servers, SDKs, LLM clients, tool dependencies — are software assets requiring versioned inventory. A change in a SaaS model or a local library dependency can alter agent decision-making; rigorous tracking of these components is required (CIS Controls AI Agent Companion Guide, 2026, Control 2 — Agent Applicability). The industry standard artifact for this inventory is the **AI Bill of Materials (AI-BOM)** — a machine-readable manifest (JSON or SPDX format) that lists: (a) base model name and version, including quantization or fine-tune applied; (b) training dataset provenance and known data licenses; (c) fine-tuning lineage (what data was used, by whom, and when); (d) orchestration framework and version; (e) MCP servers and tool plugins with their version hashes. An AI-BOM is the AI equivalent of an SBOM (Software BOM) and satisfies the same regulatory intent. Under EU AI Act Article 11 (technical documentation) and NIST AI RMF MAP-4.1, providers of high-risk AI systems must document system components — an AI-BOM is the concrete artifact that satisfies this requirement. Practical step: require AI-BOM delivery as a contract term in Domain B of the 22-question checklist (question B4 — training data provenance). For internal deployments on Azure AI Foundry, the Model Card available in the Azure AI Model Catalog serves as a partial AI-BOM; supplement it with your fine-tuning documentation.
-   - **CIS Controls v8.1 Control 15 (Service Provider Management):** Every external MCP server, foundation model API, and AI-as-a-service provider is a service provider under CIS 15. The 22-question framework in this module (Domains A–E) satisfies the structured assessment requirement. CIS 15.2 requires establishing a process to monitor and validate service provider security controls — map Domain D questions to this ongoing monitoring obligation.
+   - **CIS Controls v8.1 Control 2 (Software Asset Inventory) + AI-BOM:** Agent software stacks — orchestration frameworks, MCP clients/servers, SDKs, LLM clients, tool dependencies — are software assets requiring versioned inventory. A change in a SaaS model or a local library dependency can alter agent decision-making; rigorous tracking of these components is required (CIS Controls AI Agent Companion Guide, 2026, Control 2 — Agent Applicability). The industry standard artifact for this inventory is the **AI Bill of Materials (AI-BOM)** — a machine-readable manifest (JSON or SPDX format) that lists: (a) base model name and version, including quantization or fine-tune applied; (b) training dataset provenance and known data licenses; (c) fine-tuning lineage (what data was used, by whom, and when); (d) orchestration framework and version; (e) MCP servers and tool plugins with their version hashes. An AI-BOM is the AI equivalent of an SBOM (Software BOM) and satisfies the same regulatory intent. Under EU AI Act Article 11 (technical documentation) and NIST AI RMF MAP-4.1, providers of high-risk AI systems must document system components — an AI-BOM is the concrete artifact that satisfies this requirement. Practical step: require AI-BOM delivery as a contract term in Area B of the 22-question checklist (question B4 — training data provenance). For internal deployments on Azure AI Foundry, the Model Card available in the Azure AI Model Catalog serves as a partial AI-BOM; supplement it with your fine-tuning documentation.
+   - **CIS Controls v8.1 Control 15 (Service Provider Management):** Every external MCP server, foundation model API, and AI-as-a-service provider is a service provider under CIS 15. The 22-question framework in this module (Areas A–E) satisfies the structured assessment requirement. CIS 15.2 requires establishing a process to monitor and validate service provider security controls — map Area D questions to this ongoing monitoring obligation.
 
 9. **Availability attacks — Denial-of-Wallet and sponge examples:** Supply chain controls protect the integrity of the model and the data, but there is a class of attack that targets the operating budget and service availability instead. A **sponge example** is an input engineered to maximize inference compute cost: prompts that activate maximum attention paths in the transformer, reasoning chains the model expands indefinitely, or recursive structures that exploit the context window. The result is extreme latency and token consumption far above expectations. A **Denial-of-Wallet** escalates this into a sustained attack: an external actor floods a paid API endpoint (Azure OpenAI billed per token) with high-cost sponge examples, exhausting the monthly budget before a cost alert fires. The difference from a traditional DoS is that the service does not go down — it keeps responding, but accumulated cost can reach tens of thousands of dollars within hours. Applicable controls: (a) **APIM rate limiting per identity** — the tokens-per-minute (TPM) limit configured in Azure APIM per agent identity prevents a single agent or external caller from consuming disproportionate quota; (b) **Azure Cost Management alerts** — real-time alerts when Azure OpenAI consumption exceeds 50% and 80% of the monthly budget; configure in Azure Cost Management + Billing → Cost alerts → Add a budget alert per service; (c) **Input length pre-filter** — Prompt Shield and APIM policies can reject inputs exceeding a token count threshold before they reach the model; (d) **Deployment quotas** — in Azure AI Foundry → deployment settings, configure TPM quotas per deployment to isolate consumption across production, development, and third-party agents. APIM rate limiting (point 2 of this module) is the primary control; cost alerts are the detective control for when rate limiting is not enough. Reference: CLLMSE §1.6 — Availability Attacks; OWASP LLM Top 10 2025 — LLM10 Unbounded Consumption.
 
@@ -102,11 +102,11 @@ By the end of this module, participants will be able to evaluate third-party AI 
 
 ---
 
-## Vendor Evaluation Framework — 5 Domains, 22 Questions
+## Vendor Evaluation Framework — 5 Areas, 22 Questions
 
 Use this checklist before connecting any external AI vendor to your agent environment.
 
-### Domain A — Data Security & Privacy
+### Area A — Data Security & Privacy
 
 | # | Question | Pass criterion |
 |---|----------|----------------|
@@ -115,7 +115,7 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 | A3 | Does the vendor process data in your region? | Data residency matches your compliance requirements |
 | A4 | What is the vendor's data breach notification SLA? | ≤ 72 hours (GDPR requirement) |
 
-### Domain B — Model Security
+### Area B — Model Security
 
 | # | Question | Pass criterion |
 |---|----------|----------------|
@@ -125,7 +125,7 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 | B4 | Is the model supply chain (training data provenance) documented? | Data lineage report available (AI-BOM delivered as a contract term — see point 8) |
 | B5 | What is the provider's documented security posture for model weights? | Isolated weight storage, access logging, insider threat program, data-center egress limits. For open-weight or self-hosted models this responsibility transfers entirely to your organization — score as Fail unless *you* implement it |
 
-### Domain C — Access & Identity
+### Area C — Access & Identity
 
 | # | Question | Pass criterion |
 |---|----------|----------------|
@@ -135,7 +135,7 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 | C4 | Can access be revoked instantly (kill switch)? | Access removed < 5 minutes (identity disabled, credentials removed; tokens already issued expire within their lifetime) |
 | C5 | Can the provider verify and revoke identity at the individual agent level, or only via a shared tenant key? | Per-agent identity attribution and revocation supported. A shared key means no forensic attribution and no granular revocation — document as an accepted gap if unavoidable |
 
-### Domain D — MCP Server Specific (if applicable)
+### Area D — MCP Server Specific (if applicable)
 
 | # | Question | Pass criterion |
 |---|----------|----------------|
@@ -144,7 +144,7 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 | D3 | What data does the MCP server send back to the vendor on tool invocation? | Disclosed in data processing agreement |
 | D4 | Is the MCP server open source or auditable? | Source available or security audit report |
 
-### Domain E — Compliance & Governance
+### Area E — Compliance & Governance
 
 | # | Question | Pass criterion |
 |---|----------|----------------|
@@ -164,7 +164,7 @@ Use this checklist before connecting any external AI vendor to your agent enviro
 ```mermaid
 flowchart TB
     S["External AI vendor or<br/>MCP server: proposed, or<br/>found connected by the<br/>lab queries"]
-    CK["Checklist: domains A to E<br/>22 questions, one point per Pass<br/>Domain D, MCP Server Specific,<br/>only if applicable"]
+    CK["Checklist: areas A to E<br/>22 questions, one point per Pass<br/>Area D, MCP Server Specific,<br/>only if applicable"]
     Q1{"Score 20 to 22?"}
     O1["Approved for<br/>production use"]
     Q2{"Score 16 to 19?"}
@@ -240,7 +240,7 @@ For each MCP server found in Query 1: check whether a vendor assessment exists i
 
 ### Step 2 — Score one vendor using the 22-question checklist
 
-Pick the highest-priority external AI connection from Step 1. Complete the Domain A–E checklist. Document:
+Pick the highest-priority external AI connection from Step 1. Complete the Area A–E checklist. Document:
 
 ```
 Vendor name: ________________
@@ -270,7 +270,7 @@ For each gap identified in Step 2, identify which regulatory obligation it viola
 ## Closing Questions
 
 - Which of the 20 checklist items would be hardest to verify contractually for a foundation model provider? What alternative evidence would you accept?
-- If a vendor fails Domain D (MCP server) but passes all other domains, what conditional approval conditions would you impose?
+- If a vendor fails Area D (MCP server) but passes all other areas, what conditional approval conditions would you impose?
 - An agent in your tenant has an MCP server connection that wasn't in the vendor registry. What is your incident response process?
 
 ---
