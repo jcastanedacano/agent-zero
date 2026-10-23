@@ -4,12 +4,12 @@
 
 [![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
 [![Modules](https://img.shields.io/badge/Modules-18-0078D4)](#choose-your-track)
-[![KQL Library](https://img.shields.io/badge/KQL_Library-38_queries-5E2750)](./KQL-Library/README.md)
+[![KQL Library](https://img.shields.io/badge/KQL_Library-43_queries-5E2750)](./KQL-Library/README.md)
 [![Agent Skills](https://img.shields.io/badge/Agent_Skills-30-2D7D9A)](./skills/)
 [![Frameworks](https://img.shields.io/badge/Frameworks-10%2B_mapped-107C10)](#framework-coverage)
 [![Tracks](https://img.shields.io/badge/Tracks-3-FF8C00)](#choose-your-track)
 
-Seven security domains for agentic AI in the enterprise. Three audience tracks. Everything runs in a Microsoft 365 E5 demo tenant.
+Seven security domains for agentic AI in the enterprise. Three audience tracks: Track A needs no environment, and Tracks B and C run in a Microsoft 365 E5 demo tenant with an Azure subscription and Microsoft Agent 365 (see [Prerequisites](#prerequisites)).
 
 |  |  |
 |---|---|
@@ -32,7 +32,7 @@ Seven security domains for agentic AI in the enterprise. Three audience tracks. 
 
 <br>
 
-A complete framework for securing agentic AI in enterprise Microsoft environments: 18 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 43 production KQL queries in the KQL Library, plus 22 query files bundled with skills (validation status tracked per file), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Top 10 for Agentic Applications (2026, ASI01–ASI10), the OWASP Top 10 for LLM Applications (2026, LLM01–LLM10), the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
+A complete framework for securing agentic AI in enterprise Microsoft environments: 18 instructional modules across 3 audience tracks, 30 agent skills in agentskills.io format, 43 KQL queries in the KQL Library, plus 22 query files bundled with skills (validation status tracked per file), ARM-deployable Sentinel workspace, and a full facilitator kit — covering the OWASP Top 10 for Agentic Applications (2026, ASI01–ASI10), the OWASP Top 10 for LLM Applications (2026, LLM01–LLM10), the OWASP Agentic Skills Top 10 (AST01–AST10), and aligned to MITRE ATLAS, NIST AI RMF, NIST CSF 2.0, ISO 42001, EU AI Act, CIS Controls v8.1 (AI Agent Companion Guide), MAESTRO (CSA 7-layer agentic threat model), PHANTOM-B (Shostack's STRIDE analog for LLMs), and the Microsoft AI Red Team Taxonomy of Failure Modes v2.0 (April 2026). Detection coverage includes behavioral drift monitoring, agent-to-agent prompt injection (multi-agent trust boundaries), canary tokens and honeytokens for RAG corpus integrity, Denial-of-Wallet and sponge example availability attacks, and AI-BOM supply chain provenance — aligned to the CLLMSP and CLLMSE certification bodies (Red Team Leaders / Joas A. Santos). Governance and detection extend to the highly-autonomous threat model: a tested three-level kill switch, sequence-based detection signatures for operations that vary their artifacts on every attempt, agent honeypot design, agent KYC, and an autonomy-graded incident taxonomy — organized against the Delay / Defend / Detect / Disrupt defense-in-depth framework.
 
 </details>
 
@@ -240,7 +240,7 @@ agent-zero/
 │   ├── README.md
 │   ├── SCHEMA.md
 │   └── paths/
-├── KQL-Library/                     ← 43 production-ready queries for Sentinel + Defender XDR
+├── KQL-Library/                     ← 43 queries for Sentinel + Defender XDR, status per file
 │   ├── README.md
 │   ├── P01-Agent-Discovery.kql                  ← Q7 AI applications in use (Copilot, Copilot Studio, third-party)
 │   ├── P02-Governance-Gaps.kql
@@ -299,7 +299,7 @@ Each skill includes: YAML frontmatter (pillar, subdomain, tags, framework mappin
 
 ## KQL Library
 
-43 production-ready queries for Microsoft Sentinel and Defender Advanced Hunting, in five files (P01 to P05). Queries are validated against a live Microsoft 365 tenant using the Microsoft Graph Security `runHuntingQuery` API, with the date of the last validation listed per file (P04 targets Sentinel tables and has no validation date).
+43 queries (counted by unique Q number: a Q5a, Q5b and Q5c count as one) for Microsoft Sentinel and Defender Advanced Hunting, in five files (P01 to P05). The library is validated against a live Microsoft 365 tenant using the Microsoft Graph Security `runHuntingQuery` API, with the date of the last validation listed per file (P04 targets Sentinel tables and has no validation date). A query whose header says NOT VERIFIED has not run against real data: read its status before you rely on it.
 
 Index, usage and per-file validation status: [KQL-Library/README.md](./KQL-Library/README.md#schema-validation-status).
 

@@ -1,6 +1,6 @@
 # KQL Library
 
-Production-ready queries for detecting agentic AI security risks in Microsoft Sentinel and Defender Advanced Hunting.
+Queries for detecting agentic AI security risks in Microsoft Sentinel and Defender Advanced Hunting. Each query says in its header whether it was validated against a tenant or is NOT VERIFIED.
 
 Each file maps to one of the five security domains. Queries are designed to run against standard M365 E5 tables — no custom ingestion required unless noted.
 
