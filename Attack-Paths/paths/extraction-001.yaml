@@ -19,7 +19,7 @@ graph:
       x: 100
       y: 200
     - id: endpoint
-      label: Azure AI Foundry Endpoint
+      label: Microsoft Foundry Endpoint
       sub: Deployed model
       type: asset
       x: 420
@@ -40,54 +40,94 @@ graph:
 workshop:
   estimatedMinutes: 12
   steps:
-    - In the demo Azure AI Foundry environment, locate a deployed model endpoint.
-    - Open Azure Cloud Shell or a local terminal with Azure CLI authenticated.
-    - Run the simulation script (replace <endpoint> and <api-key>).
-    - When the script finishes, check the analytics rule threshold.
+    - In the Foundry portal, open Models, select a deployed model and open its Details page. Copy the Endpoint (it ends in /openai/v1/responses) and note the deployment name.
+    - Open Azure Cloud Shell in Bash (type bash if it opens in PowerShell) or a local terminal.
+    - "Run the simulation script. It asks for the API key without echoing it: paste the Key from the same Details page when prompted, and never put the key in the command line."
+    - When the script finishes, wait a few minutes for the logs to arrive and run the verification query in the Log Analytics workspace that receives the resource's diagnostic logs.
   payload: |-
     # Simulates systematic model extraction (50 queries for the demo)
     # Real extraction uses 500+/hour; this simulates the pattern.
+    # Run in Bash. <endpoint> is the Endpoint copied from the deployment's Details page
+    # (it ends in /openai/v1/responses). <deployment-name> is the deployment's Name.
+    export URL="<endpoint>"
+    export MODEL="<deployment-name>"
+    # Paste the API key when prompted; nothing is displayed.
+    read -rs API_KEY
+    export API_KEY
     for i in $(seq 1 50); do
-      curl -s -X POST "<endpoint>/chat/completions" \
-        -H "api-key: <api-key>" \
-        -H "Content-Type: application/json" \
-        -d "{\"messages\":[{\"role\":\"user\",\"content\":\"Question $i: $(cat /dev/urandom | head -c 20 | base64)\"}],\"max_tokens\":50}" \
-        > /dev/null
+      curl -s -o /dev/null -w "%{http_code}\n" -X POST "$URL" \
+        -H "api-key: $API_KEY" -H "Content-Type: application/json" \
+        -d "{\"model\":\"$MODEL\",\"input\":\"Question $i: $(head -c 20 /dev/urandom | base64)\",\"max_output_tokens\":50,\"store\":false}"
       sleep 1
-    done
+    done | sort | uniq -c
     echo "50 extraction queries sent"
   verificationQuery: |-
-    CloudAppEvents
-    | where TimeGenerated > ago(1h)
-    | where Application in ("Azure AI Foundry", "Azure OpenAI")
-        and ActionType in ("InvokeAgent", "InferenceCall")
-    | summarize QueryCount = count() by bin(TimeGenerated, 1h), AccountDisplayName
-    | where QueryCount > 20  // Lowered for the demo (production threshold: 500)
-  expected: You should see a row with QueryCount around 50 for the identity that ran the script, above the demo’s threshold of 20.
+    // Run in the Log Analytics workspace that receives the resource's diagnostic logs.
+    AzureDiagnostics
+    | where TimeGenerated > ago(30m)
+    | where ResourceProvider == "MICROSOFT.COGNITIVESERVICES"
+    | where OperationName == "create-response"
+    | summarize Calls = count(),
+        Succeeded = countif(ResultSignature == "200"),
+        Throttled429 = countif(ResultSignature == "429")
+        by bin(TimeGenerated, 15m), CallerIPAddress
+    | where Calls > 20  // Demo threshold for this 15-minute bucket, not the production rule: that is 500 calls/hour, so scale both the bucket size and the threshold together, don't just raise this number
+  expected: >-
+    You should see one row for the caller IP of the script with Calls around 50, above the demo's threshold of 20.
+    Requests throttled with HTTP 429 are logged and counted too, so Succeeded plus Throttled429 adds up to Calls.
+    With key authentication the log carries an IP address, not an identity.
   ifItFails:
-    - condition: The script finishes but the query shows no results
-      explanation: 'Confirm Application matches exactly "Azure AI Foundry" or "Azure OpenAI" in your environment: the exact name can vary by diagnostic connector version. Also, this simulation calls the model endpoint directly and is not an agent run: Agent 365 observability telemetry (InvokeAgent, InferenceCall) does not capture it, so check the diagnostic logs of the Azure OpenAI or Foundry resource for the per-caller count.'
+    - condition: The verification query returns no rows
+      explanation: >-
+        Check that a diagnostic setting on the Foundry or Azure OpenAI resource sends its logs to Log Analytics (resource logs are not stored until one exists),
+        allow a few minutes for ingestion and widen the window. The operation name depends on the API route: this script uses the Responses route, which logs as create-response.
+        A call to a different route may log under another operation name (not checked).
+    - condition: A CloudAppEvents query for InvokeAgent or InferenceCall shows nothing for this script
+      explanation: >-
+        Expected. The script calls the model endpoint directly, which is not an agent run, so Agent 365 observability telemetry does not capture it.
+        In the validation tenant the only InvokeAgent and InferenceCall events (92 in 7 days) had Application set to Microsoft 365, not Microsoft Foundry or Azure OpenAI.
+    - condition: The script prints 401 or 403
+      explanation: >-
+        The key may be wrong, or local authentication may be disabled on the resource (check the disableLocalAuth property).
+        Call with an Entra bearer token in an Authorization header instead, as described in the Learn page Authentication and authorization in Microsoft Foundry.
+    - condition: The script prints many 429 responses
+      explanation: >-
+        The deployment quota is throttling the loop, and throttled calls are still logged. Raise the sleep to 3 seconds,
+        or request more quota from the deployment's Details page, if you need every call to return 200.
   documentationQuestions:
     - At what query count did the rule fire?
     - What is the minimum rate an attacker needs to stay under to evade detection?
     - What does that imply for your threshold?
+    - What identifies the caller in the log when the request used a key, and what would identify it if the same call used an Entra token?
   source: Track-C-SOC-Engineer/Module-06-RedTeamPerspective.md
 recommendation: |-
-  Per-identity rate limiting in Azure AI Foundry + a Conditional Access policy that blocks unauthorized identities (Session 03, Secure Access).
+  Disable key authentication on the resource (the disableLocalAuth property, or the Azure Policy "Azure AI Services resources should have key access disabled") so that Microsoft Entra ID is the only way in. Then Azure RBAC and Conditional Access apply to the callers: Conditional Access is evaluated when an identity signs in to Microsoft Entra, which a call authenticated with a key never does. The change can take minutes to hours to propagate.
 
-  Detection rule: Agentic AI Volume Spike Anomaly (compares hourly volume per AgentId against an 8-day moving baseline, fires above 3 standard deviations; see the P05-Q2 exercise in Session 05). P03-Q6 is the fixed-threshold variant (>500 queries/hour) for simpler detection.
+  The throttling seen in the lab came from the deployment quota (HTTP 429), not from a per-caller limit. Per-caller limits were not verified.
+
+  Detection: the signal is in the resource's diagnostic logs (AzureDiagnostics, operation create-response), not in CloudAppEvents. The Agentic AI Volume Spike Anomaly rule groups by AgentId, which a direct call does not carry, so it will not see this traffic. P03-Q6 reads agent ActionTypes in CloudAppEvents: it is the fixed-threshold variant (>500 queries/hour) for agent-mediated volume.
 detection:
   library:
     - P03-Q6
+  gaps:
+    - No KQL-Library query reads the resource's diagnostic logs (AzureDiagnostics); the verification query of this path is the only one. P03-Q6 covers agent-mediated volume in CloudAppEvents, not direct calls to the model endpoint.
 frameworks:
   atlas:
     - AML.T0040
   owasp:
     - LLM06
 validation:
-  status: documented
+  status: observed-in-lab
   date: 2026-10-21
-  notes: Workshop exercise of Track C, Module 06, run against a demo tenant. Per-step evidence is not recorded in this file. The detection query carries its own validation status in the KQL library.
+  notes: >-
+    Run end to end in a demo tenant: 50 requests, one per second, from Cloud Shell (Bash) to a GlobalStandard gpt-4.1-mini deployment through its Responses endpoint, authenticated with an API key.
+    The loop printed 26 responses with 200 and 24 with 429 (deployment quota). The resource's diagnostic logs (AzureDiagnostics, ResourceProvider MICROSOFT.COGNITIVESERVICES)
+    recorded operation create-response with 26 results of 200 and 24 of 429 from a single caller IP, so throttled requests are counted.
+    A second row (operation responses, no IP, no result, 26 entries) was not explained.
+    A CloudAppEvents query for InvokeAgent and InferenceCall over 7 days returned 92 events, all with Application set to Microsoft 365 and none from Microsoft Foundry or Azure OpenAI,
+    so the original verification query would have returned nothing for this script.
+    The aggregated query in this file was assembled from columns and values seen separately and was not run as written.
+    Not checked: the chat-completions route, key authentication disabled, an Entra bearer token (per-identity attribution), a second run, how long the logs take to arrive, any threshold other than 20.
 
 lab:
   kind: tenant-exercise
@@ -95,12 +135,12 @@ lab:
   title: Fifty questions, no agent in sight
   objective: Call a deployed model endpoint directly, 50 times in a tight loop, and see whether the volume-anomaly rule written for agent telemetry notices a caller that never goes through an agent at all.
   estimatedMinutes: 12
-  costEstimate: "Low: 50 small chat-completion calls against a demo deployment. Not measured otherwise."
+  costEstimate: "Low: 50 small Responses API calls against a demo deployment. Not measured otherwise."
   licenses:
-    - Azure AI Foundry with a deployed model endpoint in a demo environment
+    - Microsoft Foundry with a deployed model endpoint in a demo environment
     - An API key or an Entra identity authorized to call the deployment
-    - Azure CLI (Cloud Shell or local) for the query loop
-    - Diagnostic logs enabled on the Foundry or Azure OpenAI resource
+    - Azure Cloud Shell in Bash, or a local terminal with curl
+    - Diagnostic settings on the Foundry or Azure OpenAI resource that send logs to Log Analytics
   safety:
     scope: Demo tenant and demo deployment only. Fifty calls are a small, bounded load; do not point the script at a shared or production endpoint.
     writes: None beyond 50 inference requests and whatever the endpoint logs for them. No data is created or changed.
@@ -108,7 +148,7 @@ lab:
   architecture:
     summary: "One script, run once, calling one deployed model endpoint directly with curl: no agent, no Copilot, no Foundry agent runtime in the loop. That absence is the point: this traffic will not carry an AgentId."
     resources:
-      - name: Azure AI Foundry deployment
+      - name: Microsoft Foundry deployment
         purpose: The target endpoint. Already exists; nothing new is deployed for this lab.
         createdBy: existing
     principals:
@@ -118,32 +158,41 @@ lab:
         helpful: []
   flow:
     setup:
-      - Locate a deployed model endpoint in the demo Foundry environment and confirm you can reach it with curl and either an API key or a bearer token.
-      - Confirm diagnostic logging is enabled on the resource, since that is the only place this traffic is expected to show up.
+      - In the Foundry portal, open the deployment's Details page and copy the Endpoint and the deployment name. Keep the Key out of the command line and out of screenshots; the script reads it with read -rs.
+      - Confirm a diagnostic setting on the resource sends logs to Log Analytics, since that is the only place this traffic is expected to show up. Without one, resource logs are not stored.
     attack:
-      - step: 'Open Cloud Shell or a local terminal with the Azure CLI authenticated, and run a loop of 50 chat-completion requests, each with a distinct random-looking question, one second apart (real extraction uses 500+/hour; 50 is the demo-scale version of the same pattern).'
-        evidence: The script completes and prints a count of 50 sent requests.
-      - step: Query CloudAppEvents for Azure AI Foundry or Azure OpenAI InvokeAgent/InferenceCall activity in the last hour.
+      - step: 'Open Cloud Shell in Bash (type bash if it opens in PowerShell) and run a loop of 50 Responses API requests, each with a distinct random-looking question, one second apart (real extraction uses 500+/hour; 50 is the demo-scale version of the same pattern).'
+        evidence: The loop prints a count per HTTP status. With a small deployment quota it can be mixed, for example 26 with 200 and 24 with 429; both kinds are logged.
+      - step: Query CloudAppEvents for Microsoft Foundry or Azure OpenAI InvokeAgent/InferenceCall activity in the last hour.
         evidence: "Most likely, nothing: this call path does not go through an agent run, so it is not expected to carry Agent 365 observability ActionTypes at all. An empty result here is the expected outcome, not a failure; it is what motivates the next step."
-      - step: Check the Azure OpenAI or Foundry resource's own diagnostic logs for the per-caller request count over the same window.
-        evidence: Approximately 50 requests attributable to the caller identity or key used, in the diagnostic logs rather than in CloudAppEvents.
+      - step: Query the Azure OpenAI or Foundry resource's own diagnostic logs (AzureDiagnostics, operation create-response) for the per-caller request count over the same window.
+        evidence: One row with about 50 calls (successful plus throttled) attributable to the caller IP, in the diagnostic logs rather than in CloudAppEvents. A key carries no identity, so the log shows an IP address.
     cleanup: []
     teardown: []
   defend:
     prevent:
-      - Enforce per-identity rate limiting on the Foundry deployment itself, independent of any agent-layer control.
-      - Pair it with a Conditional Access policy that blocks unauthorized identities from reaching the endpoint at all (demo-tenant equivalent of the Secure Access session referenced in the source module).
+      - Disable key authentication on the resource (disableLocalAuth, or the Azure Policy that requires it) so Microsoft Entra ID is the only way in. The change can take minutes to hours to propagate.
+      - With Entra as the only method, assign the invoke role only to the identities that need it and add a Conditional Access policy for them (demo-tenant equivalent of the Secure Access session referenced in the source module).
+      - Treat the deployment quota as a brake, not as a per-caller limit. The HTTP 429 seen in the lab came from the quota. Per-caller limits were not verified.
     detect:
       queries:
         - P03-Q6
       events:
+        - source: AzureDiagnostics
+          operation: create-response volume above threshold, by caller IP, within a window
+          note: "Observed in the lab: throttled requests (429) are counted, and non-inference operations such as ListKey and Projects_Wildcard_Get also appear in the same table, so the query must filter by operation. With a key the caller is an IP address, not an identity."
         - source: CloudAppEvents
           operation: InvokeAgent / InferenceCall volume above threshold, by caller, within an hour
-          note: "Per the KQL library's own note on P03-Q6: the ActionType values this query depends on are the current Agent 365 observability ones, and this exercise's own direct-endpoint call path is NOT an agent run, so it is not expected to populate them. The actual signal for this attack lives in the Azure OpenAI/Foundry resource's diagnostic logs, not in CloudAppEvents; this query stays correct for genuinely agent-mediated volume spikes, which is a different attack than the one simulated here."
+          note: "Per the KQL library's own note on P03-Q6: the ActionType values this query depends on are the current Agent 365 observability ones, and this exercise's own direct-endpoint call path is NOT an agent run, so it is not expected to populate them. In the validation tenant the only such events (92 in 7 days) had Application set to Microsoft 365, a value the P03-Q6 application filter does not list. This query stays correct for genuinely agent-mediated volume spikes, which is a different attack than the one simulated here."
   transcript:
-    summary: Not run in this repository. The script and the telemetry caveat come from Track C, Module 06 (Attack 3), itself written as instructional content for a demo-tenant workshop.
-    observations: []
+    summary: Run in a demo tenant from Cloud Shell (Bash) against a GlobalStandard gpt-4.1-mini deployment, through its Responses endpoint with an API key.
+    observations:
+      - "50 requests one second apart: 26 returned 200 and 24 returned 429."
+      - "The resource's diagnostic logs (AzureDiagnostics) recorded the calls as operation create-response, 26 with result 200 and 24 with 429, from one caller IP. Throttled requests are counted."
+      - "Over 7 days, CloudAppEvents held 92 InvokeAgent and InferenceCall events, all with Application set to Microsoft 365 and none from Microsoft Foundry or Azure OpenAI. The original verification query returned nothing for this script."
+      - "The same table also held non-inference operations (ListKey, Projects_Wildcard_Get, Files_List) that exceed a threshold of 20 if the query does not filter by operation."
+      - "A second row (operation responses, no caller IP, no result) with 26 entries was not explained."
   validation:
-    status: documented
+    status: observed-in-lab
     date: 2026-10-21
-    notes: This lab restructures the Module 06, Attack 3 exercise into the path/lab schema. It was not independently run for this file; the module's own text already states the validation tenant had no agent ActionTypes in CloudAppEvents in the 30 days checked, and that caveat is carried over rather than resolved here.
+    notes: The loop and the diagnostic-log check were run in a demo tenant with key authentication. Not replayed - an Entra bearer token (per-identity attribution), key authentication disabled, a second run, and the aggregated verification query as written in this file.

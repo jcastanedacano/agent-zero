@@ -82,7 +82,7 @@ workshop:
     - What sensitivity label did the document have?
   source: Track-C-SOC-Engineer/Module-06-RedTeamPerspective.md
 recommendation: |-
-  A sensitivity label on the document + the Purview DLP policy for AI interactions prevent the poisoned content from being indexed or used as a trusted source. As a complementary pre-inference layer, Prompt Shield (indirect mode) in Azure AI Foundry evaluates the full assembled prompt, including retrieved content, before inference.
+  A sensitivity label on the document + the Purview DLP policy for AI interactions prevent the poisoned content from being indexed or used as a trusted source. As a complementary pre-inference layer, Prompt Shield (indirect mode) in Microsoft Foundry evaluates the full assembled prompt, including retrieved content, before inference.
 
   Detection rule: No dedicated rule name in the workshop playbook. Detected with the P04 query (SharePointFileOperation without a sensitivity label).
 detection:
