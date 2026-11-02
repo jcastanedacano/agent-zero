@@ -1,0 +1,83 @@
+id: mcp-001
+name: Tool capability changed after approval (MCP rug pull)
+category: privilege-escalation
+severity: high
+platform: [foundry]
+surface: agent-tool
+
+permissions:
+  required:
+    - permission: Control of, or compromise of, the MCP server a Foundry agent is connected to
+      resourceConstraints: The attacker does not need any permission inside the victim's tenant; the server is reached over server_url, outside Microsoft's trust boundary
+  additional:
+    - permission: None inside the tenant
+      resourceConstraints: This path does not escalate the attacker's own tenant permissions; it escalates what an already-connected agent will do, through a tool it was already allowed to call
+
+description: |
+  A Foundry agent connects to an MCP server with server_url, server_label and an allowed_tools list; require_approval governs each tool by name
+  (always, never, or a per-tool list), with always as the default. The approval decision is made once, at connection or first call, against the
+  tool's definition as presented then. The Model Context Protocol lets a server push a changed definition afterwards through
+  notifications/tools/list_changed, and the specification does not require a client to re-prompt for approval when that happens: a tool approved
+  once, or placed on a never list by name, keeps being invoked under that same name after its description, parameters or behavior change
+  server-side. The agent, and a human reviewing only the tool name, both keep trusting what they approved, not what is now being called.
+
+graph:
+  nodes:
+    - { id: actor, label: Operator of the MCP server, sub: Controls what tools/list returns, type: attacker, x: 90, y: 200 }
+    - { id: approval, label: Tool approved once, sub: By name, under require_approval, type: asset, x: 330, y: 90 }
+    - { id: agent, label: Foundry agent, sub: Keeps calling the tool by name, type: agent, x: 570, y: 200 }
+    - { id: resources, label: Whatever the new definition can reach, sub: Parameters, scope or behavior the original review never saw, type: victim, x: 800, y: 90 }
+  edges:
+    - { from: actor, to: approval, label: Definition approved at connection time }
+    - { from: actor, to: agent, label: Server-side redefinition, no re-approval }
+    - { from: agent, to: resources, label: Keeps invoking the same tool name }
+
+prerequisites:
+  - The agent connects to a remote or self-hosted MCP server not operated by Microsoft or the tenant
+  - require_approval is never for the tool, or was satisfied once under always and the client does not diff the definition on later calls
+  - Nothing outside the approval step verifies that today's tool definition matches the one a human or policy reviewed
+
+limitations: |
+  This path has not been reproduced against a live Foundry agent connected to a real MCP server: that would require operating a server the
+  attacker controls and observing whether Foundry's runtime re-prompts on a changed definition, which not tested here. The decision logic that
+  distinguishes a pinned from an unpinned version and a capability expansion from a routine update was validated twice in a client-side
+  simulation (D3FEND Cyber Range, Desafío 5), 8 of 8 cases both times, but that simulation does not call a real MCP server and its result is not
+  evidence about Foundry's own runtime behavior.
+
+recommendation: |
+  Pin tool versions and hash the approved definition (description, parameters, required scopes) rather than trusting a tool by name; treat a hash
+  mismatch on a later tools/list as a change-control event requiring re-approval, not a routine update. Prefer require_approval: always for any
+  MCP server outside Microsoft's own catalog (the Azure DevOps MCP Server and similar first-party entries), and review what allowed_tools actually
+  permits before relying on a never list. Monitor server_url and server_label changes to agent definitions with the same scrutiny given to a new
+  third-party dependency.
+
+  Detect by diffing the tool definitions an agent has approved against what the server currently returns, since the approval event itself carries
+  no record of what was approved.
+
+detection:
+  library: []
+  gaps:
+    - No query in this repository reads MCP tool definitions or approval events for Foundry agents; whether Foundry logs mcp_approval_request and
+      mcp_approval_response to a queryable source was not checked for this file.
+
+references:
+  - https://learn.microsoft.com/azure/foundry/agents/how-to/tools/model-context-protocol (Foundry's own MCP tool connector and require_approval)
+  - https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview (toolbox versioning for MCP-compatible endpoints)
+  - CSA AI Safety Initiative, "MCP Tool Poisoning: Adversarial Hijacking of AI Agent Workflows" (2026-07-02)
+  - Check Point Research, CVE-2025-54136 "MCPoison" (Cursor IDE MCP approval flow, 2025-07)
+  - Invariant Labs, tool description poisoning and rug-pull proof of concept against production MCP servers (2025-04)
+
+frameworks:
+  owasp: [MCP03:2025]
+  # Schema note: frameworks.owasp is documented for ASI/LLM-prefixed ids only; MCP03:2025 uses OWASP's separate MCP Top 10 project.
+  # Flagged for a schema update rather than silently renamed to LLM03:2025, which is a different OWASP list (Supply Chain, not tool-trust drift).
+
+validation:
+  status: documented
+  date: 2026-11-02
+  notes: >-
+    The mechanism is Microsoft-documented (Foundry's require_approval is evaluated per tool name, not re-verified against the definition on later
+    calls per the public MCP specification) and the attack class is public research with a named CVE (CVE-2025-54136) and multiple 2025-2026
+    write-ups. Not reproduced: a live rug pull against a Foundry-connected MCP server. A client-side simulation of the decision logic exists in the
+    D3FEND Cyber Range (Desafío 5) and was validated 8/8 twice, but it is not a `lab` in this schema's sense (no tenant-exercise, no iac): it calls
+    no real MCP server, so no `lab` block is included here rather than forcing it into tenant-exercise or iac.
