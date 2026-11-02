@@ -1,0 +1,112 @@
+id: inference-001
+name: Membership Inference via Repeated Minimally-Varied Queries
+category: membership-inference
+severity: medium
+platform:
+  - foundry
+surface: model-endpoint
+permissions:
+  required:
+    - permission: Authorized access to call a deployed model endpoint (inference)
+      resourceConstraints: An Entra identity with a role that can invoke the deployment, or a key when local authentication is enabled
+description: |
+  Repeated queries that vary only slightly from each other let an attacker test whether a specific record was part of a model's training data, without extracting
+  the model itself. Where extraction-001 is about volume (many distinct questions, to map behavior broadly), this path is about distinctness: many queries that
+  are nearly identical, each probing the same candidate record, looking for a confidence or phrasing difference that only shows up when that record was seen
+  during training.
+
+graph:
+  nodes:
+    - { id: atacante, label: Attacker, sub: Candidate record in hand, type: attacker, x: 100, y: 200 }
+    - { id: endpoint, label: Microsoft Foundry Endpoint, sub: Deployed model, type: asset, x: 420, y: 200 }
+    - { id: senal, label: Membership signal, sub: Confidence/response drift across near-duplicate prompts, type: victim, x: 740, y: 200 }
+  edges:
+    - { from: atacante, to: endpoint, label: Near-duplicate query loop }
+    - { from: endpoint, to: senal, label: Accumulates a low-distinctness response pattern }
+
+recommendation: |
+  The honest state of this detection is that P03-Q7 is a documented pattern, not a working query: it depends on prompt and response text that Microsoft Learn says advanced hunting
+  does not yet surface for AI inference calls. Until that changes, rely on the same volume-based signal extraction-001 uses (AzureDiagnostics call counts by caller) as a coarse
+  proxy — it will catch a membership-inference campaign's volume, even though it cannot tell a near-duplicate probe from a systematic-extraction probe or from a legitimate
+  high-volume user. Disable key authentication (the disableLocalAuth property) so Conditional Access applies to callers, the same control extraction-001 recommends.
+
+  Detection: AzureDiagnostics (operation create-response) gives volume and caller IP today. P03-Q7's prompt/response-based distinctness scoring is not yet exercisable against
+  real telemetry; treat it as a target to revisit once prompt/response text is surfaced in advanced hunting, not as a working rule.
+detection:
+  library:
+    - P03-Q7
+  gaps:
+    - P03-Q7 needs RawEventData.UserPrompt and RawEventData.AgentResponse from CloudAppEvents; Microsoft Learn lists these as not yet surfaced in advanced hunting, and the validation tenant recorded 0 agent ActionTypes on that table for direct endpoint calls. No query in this library currently separates a membership-inference probe from systematic extraction (P03-Q6) or from a chatty legitimate user, since all three only differ by prompt content, which AzureDiagnostics does not carry.
+    - "P03-Q7 also requires TotalQueries > 200 within a 1-hour bin per caller, independent of the telemetry gap above. This lab's demo (60 requests) would be filtered out by that threshold even if the prompt/response columns existed; treating an empty result as confirmation of the telemetry gap alone, without checking the volume threshold separately, overstates what an empty result actually proves."
+frameworks:
+  atlas:
+    - AML.T0024.000
+validation:
+  status: documented
+  date: 2026-10-22
+  notes: >-
+    Written from the KQL-Library's own documented note on P03-Q7 (ActionType values corrected to InvokeAgent/InferenceCall, prompt/response text not yet surfaced in advanced hunting,
+    0 agent ActionTypes observed in the validation tenant) and from extraction-001's already-validated AzureDiagnostics pattern. Not run end to end against a tenant for this file:
+    no near-duplicate query loop was actually sent, and no diagnostic-log row was captured.
+
+lab:
+  kind: tenant-exercise
+  effects: read-only
+  title: Sixty questions about one record
+  objective: Send a tight loop of near-duplicate queries about a single candidate record against a deployed model endpoint, and see what the resource's own diagnostic logs can and cannot tell you about the attempt.
+  estimatedMinutes: 12
+  costEstimate: "Low: 60 small Responses API calls against a demo deployment. Not measured otherwise."
+  licenses:
+    - Microsoft Foundry with a deployed model endpoint in a demo environment
+    - An API key or an Entra identity authorized to call the deployment
+    - Azure Cloud Shell in Bash, or a local terminal with curl
+    - Diagnostic settings on the Microsoft Foundry resource that send logs to Log Analytics
+  safety:
+    scope: Demo tenant and demo deployment only. Sixty calls are a small, bounded load; do not point the script at a shared or production endpoint, and do not use a real person's identifying details in the probe text.
+    writes: None beyond 60 inference requests and whatever the endpoint logs for them (store:false set on the payload). No data is created or changed.
+    revert: Nothing to revert.
+  architecture:
+    summary: "One script, run once, sending 60 near-duplicate requests to one deployed model endpoint directly with curl. The only variable across requests is which record is named in the probe text; everything else about the loop is identical to extraction-001's."
+    resources:
+      - name: Microsoft Foundry deployment
+        purpose: The target endpoint. Already exists; nothing new is deployed for this lab.
+        createdBy: existing
+    principals:
+      - name: Caller identity or API key
+        required:
+          - Authorization to invoke the deployment (an Entra role that can call it, or a key when local auth is enabled)
+        helpful: []
+  flow:
+    setup:
+      - In the Microsoft Foundry portal, open the deployment's Details page and copy the Endpoint and the deployment name. Keep the Key out of the command line and out of screenshots; the script reads it with read -rs.
+      - Confirm a diagnostic setting on the resource sends logs to Log Analytics, since that is the only place this traffic is expected to show up.
+    attack:
+      - step: 'Open Cloud Shell in Bash and run a loop of 60 Responses API requests, each asking the same yes/no membership question about one candidate record, one second apart.'
+        evidence: The loop prints a count per HTTP status, the same shape as extraction-001's output.
+      - step: Query the resource's own diagnostic logs (AzureDiagnostics, operation create-response) for the per-caller request count over the same window.
+        evidence: One row with about 60 calls attributable to the caller IP, indistinguishable in this log from extraction-001's 50-call systematic-extraction run; AzureDiagnostics has no field that tells the two patterns apart.
+      - step: Attempt to run P03-Q7 (the membership-inference KQL-Library query) against CloudAppEvents for the same window.
+        evidence: "No rows, by design of the exercise, for two independent reasons: this call path does not populate the Application/ActionType/RawEventData fields P03-Q7 depends on, and separately, 60 requests is below the TotalQueries > 200 per-hour threshold the query also requires. Either reason alone would produce an empty result; this exercise cannot distinguish which one is actually at fault, which is itself part of the gap documented above."
+    cleanup: []
+    teardown: []
+  defend:
+    prevent:
+      - Disable key authentication on the resource (disableLocalAuth, or the Azure Policy that requires it) so Microsoft Entra ID is the only way in, the same control as extraction-001.
+      - Rate-limit or alert on volume by caller using the resource's own diagnostic logs, since it is the only signal currently available for this call path, regardless of whether the volume turns out to be extraction, membership inference, or a legitimate heavy user.
+    detect:
+      queries:
+        - P03-Q7
+      events:
+        - source: AzureDiagnostics
+          operation: create-response volume above threshold, by caller IP, within a window
+          note: "The only signal actually exercised for this lab. It confirms volume, not query content, so it cannot by itself confirm membership inference specifically."
+        - source: CloudAppEvents
+          operation: InvokeAgent / InferenceCall prompt-distinctness scoring (P03-Q7)
+          note: "NOT EXERCISABLE today. Depends on RawEventData.UserPrompt and RawEventData.AgentResponse, which Microsoft Learn lists as not yet surfaced in advanced hunting for AI inference calls, and which this call path (a direct endpoint call, not an agent run) would not populate even if it were."
+  transcript:
+    summary: Not run. This lab was written from the KQL-Library's own documented note on P03-Q7 and from extraction-001's validated AzureDiagnostics pattern, not reproduced against a tenant for this file.
+    observations: []
+  validation:
+    status: documented
+    date: 2026-10-22
+    notes: Written from documented sources (the KQL-Library's P03-Q7 note, extraction-001's validated run). No query loop, diagnostic-log check, or CloudAppEvents check was run against a tenant for this file.
