@@ -52,6 +52,7 @@ detection:
     - P03-Q12
   gaps:
     - Q12 does not cover agents whose ids are empty in `AgentsInfo`, which includes Copilot Studio agents created before May 2026 that use an app registration, and it needs `AgentsInfo` ingested next to `AuditLogs`.
+    - Q12 logs a credential addition the same way regardless of credential type (secret, certificate, or federated credential): the audit row alone does not tell a reviewer which kind of credential was just added, even though a secret or certificate carries exposure risk a federated credential does not. Confirming the type needs a separate read of the credential object itself.
 
 references:
   - docs/architecture.md (section 3, the identity chain of an agent)
@@ -71,8 +72,8 @@ lab:
   kind: tenant-exercise
   effects: read-only
   title: Who can add a credential to a blueprint? A read-only check of the detection
-  objective: Check in your own tenant, without creating anything, which agent identity blueprints exist, how many identities hang under each, who can modify them, and whether the credential detection (P03 Q12) sees changes on them.
-  estimatedMinutes: 45
+  objective: "Check in your own tenant, without creating anything, which agent identity blueprints exist, how many identities hang under each, who can modify them, whether the credential detection (P03 Q12) sees changes on them, and whether that detection can tell a federated credential (no secret to steal) apart from a client secret or certificate (which can)."
+  estimatedMinutes: 55
   costEstimate: "None: read-only queries."
   licenses:
     - Microsoft Entra Agent ID
@@ -115,6 +116,8 @@ lab:
         evidence: Who added it, when, and whether it was expected. A federated credential stores no secret.
       - step: Count the agents that Q12 cannot cover.
         evidence: Agents whose ids are empty in AgentsInfo, which includes Copilot Studio agents created before May 2026 that use an app registration. Those need another source.
+      - step: "If the tenant has at least one blueprint using a federated credential (hardened) and at least one using a client secret or certificate (vulnerable), compare their Q12 rows side by side rather than reading only one kind."
+        evidence: "Both kinds log the same way under Q12 (Add service principal credentials / Certificates and secrets management, Result = success on the blueprint): the audit trail does not itself distinguish them. The difference is what the row's content means: a client-secret or certificate row is one whose value could have been exposed at creation time if intercepted; a federated-credential row never carries a secret value to intercept, by design. Record which kind each blueprint in the tenant actually uses, since Q12 alone cannot tell you without reading the credential type field on the object itself."
     cleanup: []
     teardown: []
   defend:
@@ -131,5 +134,5 @@ lab:
           note: There is no agent-specific OperationName, and the display name is chosen by the creator, so match by id, not by name.
   validation:
     status: documented
-    date: 2026-10-21
-    notes: The queries are the validated ones from the KQL library (Q12 validated on a live tenant, Oct 2026). This exercise sequence itself was not replayed end to end for this file.
+    date: 2026-11-04
+    notes: The queries are the validated ones from the KQL library (Q12 validated on a live tenant, Oct 2026). This exercise sequence itself was not replayed end to end for this file. The federated-vs-secret credential comparison added on 2026-11-04 was written from this path's own documented limitation (federated credentials store no secret) and has not itself been exercised against a tenant with both credential types present.
