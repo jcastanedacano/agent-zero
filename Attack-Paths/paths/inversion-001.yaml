@@ -50,35 +50,44 @@ validation:
 
 lab:
   kind: tenant-exercise
-  effects: read-only
+  effects: modifies-resources
   title: Ask it to repeat itself, verbatim
-  objective: Send a loop of reconstruction-style queries against a deployed model endpoint, and see what the resource's own diagnostic logs can and cannot tell you about the attempt.
-  estimatedMinutes: 12
-  costEstimate: "Low: 40 small Responses API calls against a demo deployment. Not measured otherwise."
+  objective: "Send a loop of reconstruction-style queries against a deployed model endpoint, see what the resource's own diagnostic logs can and cannot tell you about the attempt, then enable the Protected Material for Text output filter on the deployment's content filtering configuration and repeat the identical loop, to see whether a filter purpose-built to catch verbatim reproduction in model output actually intercepts what this path's own completions would otherwise return."
+  estimatedMinutes: 20
+  costEstimate: "Low: 40 small Responses API calls against a demo deployment, plus another 40 once the output filter is enabled. Not measured otherwise."
   licenses:
     - Microsoft Foundry with a deployed model endpoint in a demo environment
     - An API key or an Entra identity authorized to call the deployment
     - Azure Cloud Shell in Bash, or a local terminal with curl
     - Diagnostic settings on the Microsoft Foundry resource that send logs to Log Analytics
+    - For the hardened comparison, access to Guardrails + controls in the Foundry portal to create or edit a content filter and assign it to the deployment
   safety:
     scope: Demo tenant and demo deployment only. Forty calls are a small, bounded load; do not point the script at a shared or production endpoint, and do not probe for real people's identifying details.
-    writes: None beyond 40 inference requests and whatever the endpoint logs for them (store:false set on the payload). No data is created or changed.
-    revert: Nothing to revert.
+    writes: "None beyond 40 inference requests and whatever the endpoint logs for them (store:false set on the payload) in the vulnerable run. The hardened run creates or edits one Foundry content filter (Protected Material for Text output filter, enabled) and assigns it to the deployment."
+    revert: Remove or unassign the content filter if it was created solely for this exercise.
   architecture:
-    summary: "One script, run once, sending 40 reconstruction-style requests (4 rotating prompt templates) to one deployed model endpoint directly with curl. Everything about the loop mechanics is identical to extraction-001's and inference-001's; only the prompt content differs."
+    summary: "One script, run once against the deployment's current (default) content filter, then once more after enabling the Protected Material for Text output filter on a content filtering configuration assigned to the same deployment, sending 40 reconstruction-style requests (4 rotating prompt templates) to one deployed model endpoint directly with curl in each run. Everything about the loop mechanics is identical to extraction-001's and inference-001's; only the prompt content and, in the hardened run, the output filter, differ."
     resources:
       - name: Microsoft Foundry deployment
         purpose: The target endpoint. Already exists; nothing new is deployed for this lab.
         createdBy: existing
+      - name: Foundry content filter, Protected Material for Text output filter, enabled and assigned to the deployment
+        purpose: "Per Microsoft Learn: this output filter scans LLM completions (not prompts) for known protected text content and is a special filter that must be explicitly enabled on a content filtering configuration, unlike the default filters that ship on every deployment. It is the one filter in Foundry's catalog whose stated purpose overlaps most directly with this path's premise (the model reproducing content it should not), though it is scoped to known protected text (song lyrics, articles, selected web content), not to arbitrary private or grounding data the reconstruction prompts here are aimed at."
+        createdBy: manual
     principals:
       - name: Caller identity or API key
         required:
           - Authorization to invoke the deployment (an Entra role that can call it, or a key when local auth is enabled)
         helpful: []
+      - name: Agent/Foundry administrator
+        required:
+          - Access to Guardrails + controls in the Foundry portal, to create or edit a content filtering configuration and assign it to the deployment, for the hardened comparison
+        helpful: []
   flow:
     setup:
       - In the Microsoft Foundry portal, open the deployment's Details page and copy the Endpoint and the deployment name. Keep the Key out of the command line and out of screenshots; the script reads it with read -rs.
       - Confirm a diagnostic setting on the resource sends logs to Log Analytics, since that is the only place this traffic is expected to show up.
+      - "For the hardened comparison: in the Foundry portal, go to Guardrails + controls > Content filters, create or edit a content filtering configuration, enable the Protected Material for Text output filter, and assign the configuration to the deployment used in this lab."
     attack:
       - step: 'Open Cloud Shell in Bash and run a loop of 40 Responses API requests, rotating through 4 reconstruction-style prompt templates, one second apart.'
         evidence: The loop prints a count per HTTP status, the same shape as the other two inference-pattern labs.
@@ -86,12 +95,18 @@ lab:
         evidence: One row with about 40 calls attributable to the caller IP, indistinguishable in this log from inference-001's or extraction-001's runs.
       - step: Attempt to run P03-Q8 (the model-inversion KQL-Library query) against CloudAppEvents for the same window.
         evidence: "No rows, by design of the exercise, for two independent reasons: this call path does not populate the Application/ActionType/RawEventData fields P03-Q8 depends on, and separately, this run's score (at most 3) would fall below the ModelInversionScore >= 4 threshold the query also requires. Either reason alone would produce an empty result; this exercise cannot distinguish which one is actually at fault, which is itself part of the gap documented above."
-    cleanup: []
+      - step: With the Protected Material for Text filter now assigned, repeat the identical 40-request loop against the same deployment.
+        evidence: "For any completion the filter classifies as matching known protected text, the response's content_filter_results carries a protected_material_text flag and the completion is withheld or annotated per the filter's configured mode (annotate vs. block), per Microsoft Learn's own documented behavior; a response with no finish_reason indicating filtering, and no flag set, is one the filter did not classify as protected material."
+      - step: Compare the two runs' completions and content_filter_results side by side.
+        evidence: "This filter is scoped to known text the service's own indexer recognizes (song lyrics, articles, selected web content), not to arbitrary private data a specific deployment was grounded on or fine-tuned with; a verbatim reconstruction of content outside that known-text index would not be expected to trip this filter at all, which is itself the honest limit of this control for this path's actual premise."
+    cleanup:
+      - Remove or unassign the content filter if it was created solely for this exercise.
     teardown: []
   defend:
     prevent:
       - Disable key authentication on the resource (disableLocalAuth, or the Azure Policy that requires it) so Microsoft Entra ID is the only way in.
-      - Where the model platform supports it, configure content filtering or system instructions that refuse verbatim-reproduction and "what do you remember" style requests, as a model-side mitigation independent of log-based detection.
+      - "Enable the Protected Material for Text output filter where the platform supports it, understanding its documented scope: it catches known indexed text (lyrics, articles, selected web content), not arbitrary private or grounding data, as the hardened comparison in this lab makes explicit."
+      - Where the model platform supports it, configure system instructions that refuse verbatim-reproduction and "what do you remember" style requests as a complementary, broader model-side mitigation, independent of the output filter's narrower scope.
       - Rate-limit or alert on volume by caller using the resource's own diagnostic logs, since it is the only signal currently available for this call path.
     detect:
       queries:
@@ -104,9 +119,9 @@ lab:
           operation: InvokeAgent / InferenceCall prompt keyword and identifier scoring (P03-Q8)
           note: "NOT EXERCISABLE today. Depends on RawEventData.UserPrompt, which Microsoft Learn lists as not yet surfaced in advanced hunting for AI inference calls, and which this call path (a direct endpoint call, not an agent run) would not populate even if it were."
   transcript:
-    summary: Not run. This lab was written from the KQL-Library's own documented note on P03-Q8 and from extraction-001's validated AzureDiagnostics pattern, not reproduced against a tenant for this file.
+    summary: Not run. This lab was written from the KQL-Library's own documented note on P03-Q8 and from extraction-001's validated AzureDiagnostics pattern, not reproduced against a tenant for this file. The Protected Material for Text comparison added on 2026-11-05 was not run either.
     observations: []
   validation:
     status: documented
-    date: 2026-10-22
-    notes: Written from documented sources (the KQL-Library's P03-Q8 note, extraction-001's validated run). No query loop, diagnostic-log check, or CloudAppEvents check was run against a tenant for this file.
+    date: 2026-11-05
+    notes: Written from documented sources (the KQL-Library's P03-Q8 note, extraction-001's validated run). No query loop, diagnostic-log check, or CloudAppEvents check was run against a tenant for this file. The Protected Material for Text output-filter comparison added on 2026-11-05 was written from Microsoft Learn's own documented scope and behavior of that filter (known-text indexing, English-only, index current through April 6 2023 for code) and has not itself been configured or tested against a tenant.
