@@ -48,6 +48,7 @@ detection:
     - P03-Q13
   gaps:
     - The consent branch of Q13 is NOT VERIFIED (a consent record names its target by display name only, and the only `agentType` value in 90 days on the validation tenant was `notAgentic`); only the app-role branch is validated.
+    - "P03-Q13 reads the grant event, not the blueprint's `inheritablePermissions` configuration: the same grant on the blueprint principal is logged identically whether the target resource application is inheritable (allAllowed) or not (none). The query alone cannot tell a grant that will reach every agent identity's token from one that stays on the principal; confirmed by this path's own lab, which repeats the identical grant against both configurations and gets an identical audit event for each."
 
 references:
   - docs/architecture.md (section 3, the identity chain of an agent)
@@ -66,28 +67,35 @@ lab:
   kind: tenant-exercise
   effects: modifies-resources
   title: A permission the admin center never shows you
-  objective: Grant an application permission on an agent identity blueprint's own service principal, not on any individual agent identity, and show the permission in a minted agent identity's access token even though neither the Entra admin center nor Microsoft Graph lists it against that identity.
-  estimatedMinutes: 30
+  objective: "Grant an application permission on an agent identity blueprint's own service principal, not on any individual agent identity, show the permission in a minted agent identity's access token even though neither the Entra admin center nor Microsoft Graph lists it against that identity, then repeat the identical grant on a second resource application explicitly configured with inheritableScopes/inheritableRoles set to none to confirm that the grant alone is not what propagates: the per-resource inheritable configuration is."
+  estimatedMinutes: 45
   costEstimate: "None beyond the tenant's existing Entra Agent ID and Microsoft Graph PowerShell access. Not measured otherwise."
   licenses:
     - A demo tenant with at least one Microsoft Entra Agent ID blueprint already provisioned (created the normal way, for example by deploying a Foundry or Copilot Studio agent) and at least one resource application configured as inheritable for it
     - An account that can grant consent or assign app roles on the blueprint's service principal (Application Administrator or Cloud Application Administrator, or the specific Graph permission)
-    - Microsoft Graph PowerShell SDK, for both the grant and for minting a token to inspect
+    - An account with AgentIdentityBlueprint.UpdateAuthProperties.All (or equivalent), to configure the second resource application's inheritableScopes/inheritableRoles to none for the hardened comparison
+    - Microsoft Graph PowerShell SDK, for both grants and for minting tokens to inspect
   safety:
-    scope: Demo tenant only. Choose a low-impact permission for the grant (read-only, on a resource that matters only to the demo) so the demonstration itself does not create a real exposure.
-    writes: One consent grant or app role assignment on the blueprint's service principal, and at least one agent identity created under that blueprint if one does not already exist.
-    revert: Remove the grant or assignment from the blueprint principal (see cleanup); this removes it from every agent identity under the blueprint, current and future, in one step.
+    scope: Demo tenant only. Choose low-impact permissions for both grants (read-only, on resources that matter only to the demo) so the demonstration itself does not create a real exposure.
+    writes: Two consent grants or app role assignments on the blueprint's service principal (one on the vulnerable, inheritable resource application, one on the hardened, non-inheritable one), one inheritablePermissions configuration change (setting the second resource application to none), and at least one agent identity created under that blueprint if one does not already exist.
+    revert: Remove both grants from the blueprint principal (see cleanup); removing the vulnerable one removes it from every agent identity under the blueprint, current and future, in one step. Removing the hardened one has no effect on any token, since it was never in one.
   architecture:
-    summary: One blueprint (an application) with its own service principal, one resource application already marked inheritable for that blueprint, and at least one agent identity created from the blueprint. The grant lands on the blueprint principal; the agent identity is only where the effect is observed.
+    summary: One blueprint (an application) with its own service principal, two resource applications on the same blueprint (one with inheritable permissions set to allAllowed, one explicitly set to none, per Microsoft's documented inheritablePermissions pattern), and at least one agent identity created from the blueprint. Both grants land on the blueprint principal the same way; the agent identity's token is where the difference is observed.
     resources:
       - name: Agent identity blueprint (application)
         purpose: Creates agent identities and holds the credentials that sign in as each one.
         createdBy: existing
       - name: Blueprint principal (service principal)
-        purpose: Where the consent or app role grant actually lands; this is the object under test, not any individual agent identity.
+        purpose: Where both the vulnerable and the hardened consent or app role grants actually land; this is the object under test, not any individual agent identity.
         createdBy: existing
+      - name: Resource application (vulnerable, inheritable = allAllowed)
+        purpose: Configured with inheritableScopes and/or inheritableRoles set to allAllowed for this blueprint. A grant here on the blueprint principal reaches every agent identity's token.
+        createdBy: existing
+      - name: Resource application (hardened, inheritable = none)
+        purpose: A second resource app on the same blueprint, with inheritableScopes and inheritableRoles explicitly set to none (Microsoft's documented pattern to disable inheritance for a resource app). A grant here on the blueprint principal stays on the principal and does not reach any agent identity's token.
+        createdBy: manual
       - name: Agent identity
-        purpose: One identity created from the blueprint, used only to read the resulting token claims. Create one if none exists yet.
+        purpose: One identity created from the blueprint, used to read the resulting token claims for both comparisons. Create one if none exists yet.
         createdBy: manual
     principals:
       - name: Account performing the grant
@@ -97,7 +105,8 @@ lab:
           - Read access to Microsoft Entra Agent ID objects, to find the blueprint and confirm which resource application is marked inheritable for it
   flow:
     setup:
-      - Identify the blueprint, its service principal, and confirm which resource application is already configured as inheritable for it; this exercise observes an existing inheritable configuration rather than creating one, since the exact admin-center or Graph path to mark a resource inheritable was not checked for this file.
+      - Identify the blueprint and its service principal, and confirm a resource application already configured with inheritableScopes or inheritableRoles set to allAllowed for it (the vulnerable variant); this exercise observes an existing inheritable configuration for that resource rather than creating one.
+      - "Configure the hardened variant: use Add-EntraInheritablePermissionsToAgentIdentityBlueprint (or a PATCH to the blueprint's inheritablePermissions) to add a second resource application with inheritableScopes and inheritableRoles explicitly set to none."
       - Create (or reuse) one agent identity from the blueprint, and capture a way to request a token on its behalf.
     attack:
       - step: Grant consent, or assign an app role, for the inheritable resource application directly on the blueprint's service principal, not on the agent identity.
@@ -108,14 +117,20 @@ lab:
         evidence: The decoded token's scp (delegated) or roles (application) claim includes the permission granted on the blueprint principal, even though no surface showed it on the identity.
       - step: If a second agent identity can be created from the same blueprint during the exercise, create it and repeat the token check.
         evidence: The new identity's token carries the same inherited permission with no additional grant, confirming the reach extends to future identities, not just the one that existed at grant time.
+      - step: Grant consent, or assign an app role, for the hardened (inheritable = none) resource application on the same blueprint principal, the same way as the vulnerable grant.
+        evidence: The grant appears on the blueprint principal's permissions just like the first one; nothing in the admin center or Graph distinguishes an inheritable grant from a non-inheritable one at this point.
+      - step: Mint a fresh token for the agent identity (or re-decode a newly issued one) and inspect its scp and roles claims.
+        evidence: The permission from the hardened grant is absent from the token, even though the grant itself is present on the blueprint principal, exactly like the vulnerable one was. The difference is entirely in the inheritableScopes/inheritableRoles configuration, not in whether a grant exists.
     cleanup:
-      - Remove the consent grant or app role assignment from the blueprint principal.
+      - Remove the consent grant or app role assignment from the blueprint principal, for both the vulnerable and the hardened resource applications.
+      - Remove the hardened resource application's inheritablePermissions entry if it was added solely for this exercise.
       - Delete any agent identity created solely for this exercise.
     teardown: []
   defend:
     prevent:
       - Review grants at the blueprint principal itself, not only at each agent identity's own permissions view, since the admin center's per-identity view will not show an inherited grant.
       - Treat every resource application marked inheritable for a blueprint as part of that blueprint's full reach, and keep the list of who can grant consent or assign app roles on blueprint principals to a minimum.
+      - Default new resource applications on a blueprint to inheritableScopes/inheritableRoles = none, and require a deliberate, documented decision to set a resource to allAllowed, per Microsoft's own best-practice guidance; the hardened comparison in this lab shows none is the actual control, not merely a smaller version of the same risk.
       - Alert on any new consent or app role grant targeting a blueprint principal specifically, since that single event is the only point where the change is visible before it reaches a token.
     detect:
       queries:
@@ -123,7 +138,7 @@ lab:
       events:
         - source: AuditLogs
           operation: Add app role assignment to service principal, matched to a blueprint principal
-          note: "The app-role branch of this query was validated against the real AuditLogs of this repository's own validation workspace (Oct 2026: 1 row in 30 days). Confirm the same operation names resolve correctly on your tenant before relying on the rule."
+          note: "The app-role branch of this query was validated against the real AuditLogs of this repository's own validation workspace (Oct 2026: 1 row in 30 days). Confirm the same operation names resolve correctly on your tenant before relying on the rule. This lab's hardened comparison also shows the gap below directly: the grant event alone, which is what P03-Q13 reads, is identical in shape whether the target resource application is inheritable or not; the query cannot tell the two apart without also reading the blueprint's inheritablePermissions configuration."
         - source: AuditLogs
           operation: Consent to application, matched to a blueprint principal
           note: "NOT VERIFIED. A consent record names its target by display name only in the validation workspace used for this repository, and the agentType key held only notAgentic for every record checked in 90 days, so matching a consent event to a specific blueprint principal has not been confirmed to work."
@@ -132,5 +147,5 @@ lab:
     observations: []
   validation:
     status: documented
-    date: 2026-10-21
-    notes: Written from the path's description and from documented Entra Agent ID concepts (blueprint, blueprint principal, inheritable resource application). Nothing in this lab (the grant, the token inspection, or the exact admin-center navigation to mark a resource inheritable) was run against a tenant for this file.
+    date: 2026-11-04
+    notes: Written from the path's description and from documented Entra Agent ID concepts (blueprint, blueprint principal, inheritable resource application). Nothing in this lab (the grant, the token inspection, or the exact admin-center navigation to mark a resource inheritable) was run against a tenant for this file. The hardened-variant comparison added on 2026-11-04 (a second resource application with inheritableScopes/inheritableRoles set to none, per Microsoft Learn's "Inheritable permissions and required resource access in Microsoft Entra Agent ID") was written from that same documentation and the Add-EntraInheritablePermissionsToAgentIdentityBlueprint cmdlet reference; it has not itself been configured or tested against a tenant.
