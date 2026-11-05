@@ -179,6 +179,9 @@ lab:
         - source: OfficeActivity
           operation: SharePointFileOperation by an agent user agent on a document with no label
           note: P04 Q3 guesses agent traffic from UserAgent and label events record changes, not the current label; it returned no rows on the validation tenant.
+  transcript:
+    summary: The unlabeled-document steps are the Track C Module 06 exercise and were run against a demo tenant, but per-step evidence was not recorded for this file. The hardened-document comparison added on 2026-11-04 was not run.
+    observations: []
   validation:
     status: documented
     date: 2026-11-04

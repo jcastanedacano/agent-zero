@@ -132,6 +132,9 @@ lab:
         - source: AuditLogs
           operation: Generic application and service principal operations on Agent ID objects, correlated by object id with AgentsInfo
           note: There is no agent-specific OperationName, and the display name is chosen by the creator, so match by id, not by name.
+  transcript:
+    summary: Not run end to end for this file. Q12 itself was validated on a live tenant (Oct 2026, per the KQL library), but this lab's own read-only inventory sequence, and the federated-vs-secret credential comparison added on 2026-11-04, were not reproduced here.
+    observations: []
   validation:
     status: documented
     date: 2026-11-04
