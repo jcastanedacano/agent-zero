@@ -51,30 +51,38 @@ validation:
 
 lab:
   kind: tenant-exercise
-  effects: read-only
+  effects: modifies-resources
   title: Sixty questions about one record
-  objective: Send a tight loop of near-duplicate queries about a single candidate record against a deployed model endpoint, and see what the resource's own diagnostic logs can and cannot tell you about the attempt.
-  estimatedMinutes: 12
-  costEstimate: "Low: 60 small Responses API calls against a demo deployment. Not measured otherwise."
+  objective: "Send a tight loop of near-duplicate queries about a single candidate record against a deployed model endpoint, see what the resource's own diagnostic logs can and cannot tell you about the attempt, then disable key authentication on the resource (disableLocalAuth) and repeat the identical loop with no API key, to confirm that the one control this path actually recommends removes the call path the vulnerable run used, rather than only being recommended."
+  estimatedMinutes: 20
+  costEstimate: "Low: 60 small Responses API calls against a demo deployment, plus 60 more against the same deployment once key authentication is disabled. Not measured otherwise."
   licenses:
     - Microsoft Foundry with a deployed model endpoint in a demo environment
     - An API key or an Entra identity authorized to call the deployment
     - Azure Cloud Shell in Bash, or a local terminal with curl
     - Diagnostic settings on the Microsoft Foundry resource that send logs to Log Analytics
+    - For the hardened comparison, Owner or Contributor rights on the resource (to set disableLocalAuth) and an Entra identity authorized to invoke the deployment
   safety:
     scope: Demo tenant and demo deployment only. Sixty calls are a small, bounded load; do not point the script at a shared or production endpoint, and do not use a real person's identifying details in the probe text.
-    writes: None beyond 60 inference requests and whatever the endpoint logs for them (store:false set on the payload). No data is created or changed.
-    revert: Nothing to revert.
+    writes: "None beyond 60 inference requests and whatever the endpoint logs for them (store:false set on the payload) in the vulnerable run. The hardened run changes one resource property (disableLocalAuth, set to true) on the Microsoft Foundry resource."
+    revert: Set disableLocalAuth back to false (Set-AzCognitiveServicesAccount -DisableLocalAuth $false) if the resource is shared with other exercises that rely on key authentication.
   architecture:
-    summary: "One script, run once, sending 60 near-duplicate requests to one deployed model endpoint directly with curl. The only variable across requests is which record is named in the probe text; everything else about the loop is identical to extraction-001's."
+    summary: "One script, run once with the resource's API key (vulnerable), then once more with disableLocalAuth set to true on the same resource and no key supplied (hardened), sending 60 near-duplicate requests to one deployed model endpoint directly with curl. The only variable across requests is which record is named in the probe text; everything else about the loop is identical to extraction-001's."
     resources:
       - name: Microsoft Foundry deployment
         purpose: The target endpoint. Already exists; nothing new is deployed for this lab.
         createdBy: existing
+      - name: disableLocalAuth property on the Microsoft Foundry resource
+        purpose: "Per Microsoft Learn's own documented behavior, setting this property to true (via Set-AzCognitiveServicesAccount -DisableLocalAuth $true, or the Azure Policy of the same name) makes Microsoft Entra ID the resource's only authentication method, so Conditional Access, which is evaluated at Entra sign-in, can apply to callers that a key-authenticated request never performs."
+        createdBy: manual
     principals:
       - name: Caller identity or API key
         required:
           - Authorization to invoke the deployment (an Entra role that can call it, or a key when local auth is enabled)
+        helpful: []
+      - name: Resource owner
+        required:
+          - Owner or Contributor rights on the Foundry/Cognitive Services resource, to disable local authentication for the hardened comparison
         helpful: []
   flow:
     setup:
@@ -87,11 +95,19 @@ lab:
         evidence: One row with about 60 calls attributable to the caller IP, indistinguishable in this log from extraction-001's 50-call systematic-extraction run; AzureDiagnostics has no field that tells the two patterns apart.
       - step: Attempt to run P03-Q7 (the membership-inference KQL-Library query) against CloudAppEvents for the same window.
         evidence: "No rows, by design of the exercise, for two independent reasons: this call path does not populate the Application/ActionType/RawEventData fields P03-Q7 depends on, and separately, 60 requests is below the TotalQueries > 200 per-hour threshold the query also requires. Either reason alone would produce an empty result; this exercise cannot distinguish which one is actually at fault, which is itself part of the gap documented above."
-    cleanup: []
+      - step: "Set disableLocalAuth to true on the resource (Set-AzCognitiveServicesAccount -DisableLocalAuth $true) and wait a few minutes for the gateway to stop accepting the old key. Confirm with a single probe request using the same key: it should now return HTTP 401."
+        evidence: "The probe returns 401 with an \"Access denied due to invalid subscription key\" error, per Microsoft Learn's own documented verification step, confirming the gateway's cached key acceptance has refreshed."
+      - step: Re-run the identical 60-request loop with no API key, the same way a repeat of this path's attack would have to.
+        evidence: Every one of the 60 calls fails before reaching the model, since the script has no Entra bearer token to present and key authentication is now off.
+      - step: Repeat the loop a third time using an Entra bearer token from an identity authorized to invoke the deployment, instead of a key.
+        evidence: "The calls succeed again, now attributable to a specific Entra identity in the resource's diagnostic logs rather than only a caller IP, and subject to whatever Conditional Access policy the tenant applies to that identity's sign-in."
+    cleanup:
+      - Set disableLocalAuth back to false on the resource if it is shared with exercises that depend on key authentication.
     teardown: []
   defend:
     prevent:
       - Disable key authentication on the resource (disableLocalAuth, or the Azure Policy that requires it) so Microsoft Entra ID is the only way in, the same control as extraction-001.
+      - "Once Entra ID is the only path in, scope the invoke role to the minimum identities that need it and apply a Conditional Access policy to them: as the hardened comparison in this lab shows, this is the concrete change that actually removes the unauthenticated-by-identity call path the vulnerable run used, not only a recommendation."
       - Rate-limit or alert on volume by caller using the resource's own diagnostic logs, since it is the only signal currently available for this call path, regardless of whether the volume turns out to be extraction, membership inference, or a legitimate heavy user.
     detect:
       queries:
@@ -104,9 +120,9 @@ lab:
           operation: InvokeAgent / InferenceCall prompt-distinctness scoring (P03-Q7)
           note: "NOT EXERCISABLE today. Depends on RawEventData.UserPrompt and RawEventData.AgentResponse, which Microsoft Learn lists as not yet surfaced in advanced hunting for AI inference calls, and which this call path (a direct endpoint call, not an agent run) would not populate even if it were."
   transcript:
-    summary: Not run. This lab was written from the KQL-Library's own documented note on P03-Q7 and from extraction-001's validated AzureDiagnostics pattern, not reproduced against a tenant for this file.
+    summary: Not run. This lab was written from the KQL-Library's own documented note on P03-Q7 and from extraction-001's validated AzureDiagnostics pattern, not reproduced against a tenant for this file. The disableLocalAuth comparison added on 2026-11-05 was not run either.
     observations: []
   validation:
     status: documented
-    date: 2026-10-22
-    notes: Written from documented sources (the KQL-Library's P03-Q7 note, extraction-001's validated run). No query loop, diagnostic-log check, or CloudAppEvents check was run against a tenant for this file.
+    date: 2026-11-05
+    notes: Written from documented sources (the KQL-Library's P03-Q7 note, extraction-001's validated run). No query loop, diagnostic-log check, or CloudAppEvents check was run against a tenant for this file. The disableLocalAuth comparison added on 2026-11-05 was written from Microsoft Learn's own documented behavior of the property (including the propagation delay and the 401 verification step) and has not itself been configured or tested against a tenant.
