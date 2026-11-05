@@ -39,6 +39,14 @@ limitations: |
   assignments for this service principal rather than a permanent one; a permanent assignment bypasses this path's mechanism entirely and is a bigger, simpler finding
   on its own (see the governing skill's Query 3).
 
+  A real tension not resolved here: Microsoft Learn ("What is Microsoft Entra Privileged Identity Management?", "Extend or renew Microsoft Entra role assignments")
+  states that a self-service extend or renew request "requires an approval from a Global Administrator or Privileged Role Administrator" as inherent behavior, not a
+  configurable toggle this path's own recommendation ("require approval for any extend/renew request") can meaningfully add on top of. Separately, "Admin initiated
+  extension... don't require approval" when done by that same class of administrator. Since this path's own permissions.required already assumes the actor holds
+  Privileged Role Administrator, the actor already holds the role that both approves self-service requests and can perform an unapproved admin-initiated extension
+  directly — the approval step is circular against the specific threat actor this path describes, not a control that stops them. This was found while researching a
+  hardened-variant comparison for this path's lab; one was not added here because the premise needs resolving first, not assumed.
+
 recommendation: |
   For a service principal, use PIM's time-bound Active assignment (not an eligible one, which service principals cannot activate), with the shortest window the
   workload actually needs, and require approval for any extend/renew request rather than letting it pass automatically. Treat a pattern of repeated renewals on the
