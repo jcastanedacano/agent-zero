@@ -94,19 +94,20 @@ lab:
   kind: tenant-exercise
   effects: modifies-resources
   title: An agent anyone can ship
-  objective: Create and org-wide-share an unrestricted Agent Builder agent as an ordinary licensed user, with no admin in the loop, then check whether its use shows up anywhere a SOC would look.
-  estimatedMinutes: 20
+  objective: Create and org-wide-share an unrestricted Agent Builder agent as an ordinary licensed user, with no admin in the loop, check whether its use shows up anywhere a SOC would look, then submit the same agent to the organization catalog to see the admin-review step that org-wide sharing skipped entirely.
+  estimatedMinutes: 30
   costEstimate: "None beyond the tenant's existing Microsoft 365 Copilot and Agent Builder licensing. Not measured otherwise."
   licenses:
     - Microsoft 365 Copilot with Agent Builder enabled, in a demo tenant
     - A standard licensed user account with no admin role
     - Log Analytics workspace ingesting CopilotActivity, and read access to the Purview audit log (for the witness step)
+    - Admin access to Agent Requests in the Microsoft 365 admin center, to review (or simply observe) the org catalog submission
   safety:
     scope: Demo tenant only. Do not share the test agent org-wide in a production tenant, even briefly.
-    writes: One Agent Builder agent, shared org-wide for the duration of the exercise.
-    revert: Delete the agent from Agent Builder (see cleanup); sharing stops the moment the agent is deleted.
+    writes: One Agent Builder agent, shared org-wide for the duration of the exercise, plus one submission of that same agent to the organization catalog for admin review.
+    revert: Delete the agent from Agent Builder (see cleanup); sharing stops the moment the agent is deleted. Reject or withdraw the catalog submission if it is still pending, or remove it from "Built by your org" if approved.
   architecture:
-    summary: "One ordinary user account creates one agent in Agent Builder and shares it with the whole organization. No second variant exists: the control under test is whatever the tenant's own admin-center sharing restriction is set to, discovered during the exercise rather than configured by it."
+    summary: "One ordinary user account creates one agent in Agent Builder, then takes it through two distribution channels for comparison: org-wide sharing (whatever the tenant's own admin-center sharing restriction is set to, discovered during the exercise rather than configured by it, so still no clean second variant on that specific setting), and submission to the organization catalog, which always requires admin approval regardless of that setting (Microsoft Learn, \"Share and manage agents built in Agent Builder\"), so it is the one real hardened comparison this lab can run without touching any tenant-wide configuration."
     resources:
       - name: red-team-test-agent (Agent Builder agent)
         purpose: An agent with an unrestricted system prompt, created to see how far a standard user can take it with zero admin review.
@@ -135,14 +136,21 @@ lab:
         evidence: "What the query actually returns, against the expectation that it would show AgentName or AgentId for the interaction: on the validation tenant, no Agent Builder interaction populated either field, so an empty result here is itself a finding, not necessarily a failed exercise."
       - step: Search the Purview audit log for the maker's activity around the share time.
         evidence: Whichever operation name (if any) the audit log actually used for the share action, recorded verbatim, since Microsoft documents none.
+      - step: 'On the same agent, open More (...) > Submit to your org catalog instead of (or in addition to) org-wide sharing, and complete the submission.'
+        evidence: The submission is recorded as pending; the agent does not appear under "Built by your org" in the Agent Store yet.
+      - step: As the admin (or by checking Agent Requests in the Microsoft 365 admin center), review the pending submission.
+        evidence: 'The agent''s details, knowledge sources and actions are visible to the admin for review, with Approve and reject options, before anything is published to "Built by your org." This is the step that was entirely absent from org-wide sharing.'
+      - step: Compare the two channels directly rather than inferring the contrast.
+        evidence: Org-wide sharing (if unrestricted in this tenant) put the unreviewed agent in front of every user within seconds; catalog submission put the same agent in front of an admin first, with nothing published until they act, independent of the org-wide sharing setting checked in flow.setup.
     cleanup:
       - Unshare and delete red-team-test-agent from Agent Builder.
+      - If the catalog submission was approved, remove it from "Built by your org" in the Agent Store; if it is still pending, reject or withdraw it.
     teardown:
       - "No additional resources to remove: the agent's deletion in cleanup is the whole teardown."
   defend:
     prevent:
       - Restrict in the Microsoft 365 admin center who can share Agent Builder agents with the organization (open to all users by default); with it restricted, an admin must approve and deploy the agent before anyone else can use it.
-      - Remember submission to the organization catalog is already admin-reviewed by default; the gap this lab targets is org-wide sharing, not catalog listing.
+      - "Where org-wide sharing cannot or should not be restricted tenant-wide, steer distribution toward the organization catalog instead: as this lab's comparison shows, catalog submission requires admin approval unconditionally, independent of the org-wide sharing setting."
     detect:
       queries:
         - P02-Q2
@@ -158,5 +166,5 @@ lab:
     observations: []
   validation:
     status: documented
-    date: 2026-10-21
-    notes: This lab restructures the Module 06, Attack 2 exercise into the path/lab schema. It was not independently run for this file; the module's own text already flags the sharing-audit gap and the untested CopilotActivity fields, and those caveats are carried over rather than resolved here.
+    date: 2026-11-04
+    notes: This lab restructures the Module 06, Attack 2 exercise into the path/lab schema. It was not independently run for this file; the module's own text already flags the sharing-audit gap and the untested CopilotActivity fields, and those caveats are carried over rather than resolved here. The org-catalog-submission comparison added on 2026-11-04 was written from Microsoft Learn's own description of the submission and admin-approval flow ("Share and manage agents built in Agent Builder", "Submit agents from Agent Builder to your org catalog") and has not itself been exercised against a tenant for this file.
