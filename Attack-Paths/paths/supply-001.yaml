@@ -73,22 +73,26 @@ lab:
   kind: tenant-exercise
   effects: read-only
   title: Inventory first, then watch for drift
-  objective: Produce a risk-rated inventory of the third-party agents, enterprise apps and external MCP servers a tenant's own agents depend on, then check whether any deployed agent's response pattern has drifted from its own 30-day baseline.
-  estimatedMinutes: 20
-  costEstimate: "None beyond read access to the Agent 365 registry, Entra enterprise apps and existing telemetry. Not measured otherwise."
+  objective: "Produce a risk-rated inventory of the third-party agents, enterprise apps and external MCP servers a tenant's own agents depend on, check whether any deployed agent's response pattern has drifted from its own 30-day baseline, then read the tenant's actual User consent for applications setting to confirm whether a sensitive-permission third-party component could have reached this tenant through self-service consent at all, rather than assuming the inventory step alone tells you that."
+  estimatedMinutes: 30
+  costEstimate: "None beyond read access to the Agent 365 registry, Entra enterprise apps, existing telemetry, and one tenant-level setting. Not measured otherwise."
   licenses:
     - Microsoft Agent 365 (the agent inventory API)
     - Microsoft Defender XDR (AgentsInfo and CloudAppEvents) or an equivalent inventory source
     - AI Administrator or Global Administrator role for the inventory step; Security Reader is enough to run the behavioral query
+    - Read access to Microsoft Entra ID > Enterprise applications > Consent and permissions, to read (not change) the tenant's user-consent setting
   safety:
-    scope: Demo or production tenant; the inventory and the behavioral query are both read-only.
-    writes: None. This lab only reads the agent registry, enterprise app list and existing telemetry.
+    scope: Demo or production tenant; the inventory, the behavioral query, and the consent-setting read are all read-only.
+    writes: None. This lab only reads the agent registry, enterprise app list, existing telemetry, and one tenant-level consent setting.
     revert: Nothing to revert.
   architecture:
-    summary: A read-only pass over what third-party AI components exist (registry entries owned by another tenant, enterprise apps, MCP servers called by first-party agents), followed by a behavioral-deviation check against whichever of those are deployed agents with enough history to baseline.
+    summary: "A read-only pass over what third-party AI components exist (registry entries owned by another tenant, enterprise apps, MCP servers called by first-party agents), followed by a behavioral-deviation check against whichever of those are deployed agents with enough history to baseline, and a check of whether the tenant's User consent for applications setting is Do not allow user consent (hardened: every component with sensitive permissions must go through the admin consent workflow before it can be installed at all) or Allow user consent for apps (vulnerable: a component whose requested permissions don't require admin consent reaches the tenant with no review, which is the governance gap this path describes in the first place)."
     resources:
       - name: Agent 365 registry / Entra enterprise apps
         purpose: Source of truth for which agents and apps exist and who owns them. Already exists; nothing new is deployed for this lab.
+        createdBy: existing
+      - name: User consent for applications setting (Entra ID > Enterprise applications > Consent and permissions)
+        purpose: "The tenant-level switch that determines whether a third-party component with non-admin-consent permissions can be installed by any user, or must go through the admin consent workflow regardless of what it requests."
         createdBy: existing
     principals:
       - name: Reviewer
@@ -105,11 +109,16 @@ lab:
         evidence: A yes/no per component; a "no" with sensitive permissions is the governance gap this path describes.
       - step: Run the behavioral-deviation query (P04-Q5c) against agents with at least 30 days of InvokeAgent history.
         evidence: "Most likely, nothing on a typical tenant: the query's own validation run found 0 agent ActionTypes, so an empty result is expected, not a failure. A row above the deviation threshold is the signal to investigate that specific agent's recent updates."
+      - step: Read the tenant's current User consent for applications setting (Entra ID > Enterprise applications > Consent and permissions > User consent settings), and separately whether the admin consent workflow is enabled.
+        evidence: "If set to Allow user consent for apps (vulnerable): any component in the inventory from the first step whose permissions don't require admin consent could have been installed by any user with no review, which is exactly how an unreviewed third-party component reaches the tenant in the first place. If set to Do not allow user consent (hardened): every component, regardless of what it requests, needed either a pre-existing admin grant or a completed admin consent workflow request to reach this tenant at all, so a 'no' answer on the per-component admin-review check from the earlier step cannot happen going forward."
+      - step: Cross-reference the per-component admin-review answers from the earlier step against this setting's actual history (when it was last changed, if that is available) rather than assuming the current setting applied when each component was installed.
+        evidence: "Confirmation of whether a component found with no recorded admin review was installed before a Do not allow user consent setting took effect (a historical gap, already closed going forward) or is still reachable today under an Allow user consent for apps setting (an open gap, not just a historical one)."
     cleanup: []
     teardown: []
   defend:
     prevent:
       - Require admin review before any third-party agent, enterprise app, or MCP server with sensitive permissions is connected, instead of leaving it to self-service consent.
+      - "Set User consent for applications to Do not allow user consent and enable the admin consent workflow: as the comparison in this lab shows, this is the concrete tenant setting that turns 'require admin review' from policy into something no self-service install can bypass, regardless of what permissions the component requests."
       - Re-review third-party components periodically, not only at install time, since a vendor-side update can change behavior after the fact.
     detect:
       queries:
@@ -123,5 +132,5 @@ lab:
     observations: []
   validation:
     status: not-verified
-    date: 2026-10-22
-    notes: This lab was not run against a tenant for this file. The underlying behavioral query's own "0 agent ActionTypes observed" status is carried over rather than resolved here.
+    date: 2026-11-04
+    notes: This lab was not run against a tenant for this file. The underlying behavioral query's own "0 agent ActionTypes observed" status is carried over rather than resolved here. The User consent for applications comparison added on 2026-11-04 was written from Microsoft Learn's documented consent settings and admin consent workflow for Microsoft Entra ID enterprise applications, and has not itself been read against a real tenant's configuration or correlated with its consent-change history.
