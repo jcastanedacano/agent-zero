@@ -72,44 +72,59 @@ validation:
 
 lab:
   kind: tenant-exercise
-  effects: read-only
+  effects: modifies-resources
   title: The script that looks like you
-  objective: Run a small script that authenticates as a demo user (a delegated token, not an app-only service principal) and performs a file action through Microsoft Graph, then check whether the resulting CloudAppEvents record shows anything other than the human account.
-  estimatedMinutes: 15
-  costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access and one demo user account. Not measured otherwise."
+  objective: "Run a small script that authenticates as a demo user (a delegated token, not an app-only service principal) and performs a file action through Microsoft Graph, check whether the resulting CloudAppEvents record shows anything other than the human account, then register a dedicated app registration with application permissions and repeat the identical file action through that app-only identity, to confirm that the recommended fix (switch to app-only authentication) actually changes what the audit trail attributes the action to."
+  estimatedMinutes: 25
+  costEstimate: "None beyond the tenant's existing Microsoft Graph PowerShell access, one demo user account, and one app registration created for the comparison. Not measured otherwise."
   licenses:
     - A demo tenant with at least one demo user who has a file in OneDrive or SharePoint to read
     - Microsoft Graph PowerShell SDK, signed in with delegated permissions as that demo user (not app-only / application permissions)
     - Defender for Cloud Apps / CloudAppEvents active in the tenant (Office 365 connector, so file actions are captured)
+    - For the hardened comparison, rights to register an app in Microsoft Entra ID and admin consent to grant it an application permission (such as Files.Read.All)
   safety:
     scope: Demo tenant and demo user only. Use a throwaway or dedicated demo file; the exercise only reads it.
-    writes: None beyond the delegated sign-in and one file-read action.
-    revert: Nothing to revert.
+    writes: "None beyond the delegated sign-in and one file-read action in the vulnerable run. The hardened run registers one app in Microsoft Entra ID, grants it an application permission with admin consent, and creates one client secret for it (removed afterward)."
+    revert: Delete the app registration and its client secret if they were created solely for this exercise.
   architecture:
-    summary: One demo user account, one Microsoft Graph PowerShell session signed in with a delegated (not app-only) token for that user, and one file-read call made through that session.
+    summary: "One demo user account authenticating with a delegated Graph token (vulnerable, matching this path's own premise), and one dedicated app registration authenticating with its own client secret under the application-permission flow (hardened), each performing the identical file-read action through Microsoft Graph, so the two CloudAppEvents records can be compared directly."
     resources:
       - name: Demo user account
-        purpose: Holds the delegated credential the script authenticates as. Already exists; nothing new is deployed for this lab.
+        purpose: Holds the delegated credential the script authenticates as in the vulnerable run. Already exists; nothing new is deployed for this lab.
         createdBy: existing
+      - name: Dedicated app registration with an application permission (such as Files.Read.All)
+        purpose: "Per Microsoft Learn's distinction between application and delegated permissions: an application permission authenticates the app with its own identity (a client ID and secret or certificate), with no signed-in user, so Microsoft Graph activity and CloudAppEvents should attribute the resulting action to the app's own service principal rather than to any human account."
+        createdBy: manual
     principals:
       - name: Demo user
         required:
           - Read access to at least one file in their own OneDrive or SharePoint
         helpful: []
+      - name: Entra administrator
+        required:
+          - Rights to register an app and grant admin consent for an application permission, for the hardened comparison
+        helpful: []
   flow:
     setup:
       - Confirm the demo user has at least one readable file, and that the tenant's Defender for Cloud Apps Office 365 connector is active (file activities are not captured otherwise).
       - Open a terminal with Microsoft Graph PowerShell SDK installed.
+      - "For the hardened comparison: register a new app in Microsoft Entra ID, add the Microsoft Graph application permission Files.Read.All (or a narrower permission scoped to the demo file's location), grant admin consent, and create a client secret for it."
     attack:
       - step: 'Connect-MgGraph -Scopes "Files.Read" using the demo user''s own delegated sign-in (an interactive browser sign-in, not -Identity or a client-secret app-only flow), then set a custom User-Agent on the session before calling Get-MgDriveItem / Get-MgDriveItemContent on the demo file.'
         evidence: The call succeeds and returns the file content or metadata, authenticated entirely as the demo user.
       - step: Run P03-Q2 against CloudAppEvents for the window of the call.
         evidence: "Expected: the record's AccountDisplayName is the demo user, AccountType is Regular, and the match depends entirely on whether the custom User-Agent string happens to contain one of P03-Q2's four substrings. Repeat the call once with the custom header and once with Microsoft Graph PowerShell's own default User-Agent, to see the detection appear and disappear based only on that string, not on anything about what the script actually did."
-    cleanup: []
+      - step: 'Connect-MgGraph -ClientId <app-id> -TenantId <tenant-id> -ClientSecretCredential <secret> using the app registration from setup (an app-only, client-credential flow, no user sign-in), then call Get-MgDriveItem / Get-MgDriveItemContent on the same demo file.'
+        evidence: The call succeeds, authenticated entirely as the app's own service principal, with no delegated user context at all.
+      - step: Read the resulting CloudAppEvents record for this second call and compare its AccountDisplayName, AccountType and OAuthAppId to the delegated run's record.
+        evidence: "Per Microsoft Learn's documented behavior, Microsoft Graph activity and sign-in logs distinguish application-permission (app-only) calls from delegated ones; whether CloudAppEvents specifically attributes this record to the app's service principal rather than to any user account is the actual thing this comparison tests, since this path's own description already notes that CloudAppEvents' per-request client attribution (OAuthAppId) is inconsistently populated and has not been independently verified here."
+    cleanup:
+      - Delete the app registration and its client secret if they were created solely for this exercise.
     teardown: []
   defend:
     prevent:
       - Prefer app-only / application-permission authentication (a dedicated app registration with its own service principal) for any script or RPA job that acts on a schedule or without a human present, so its activity logs under its own identity.
+      - "Confirm the attribution actually changes before relying on it: as the hardened comparison in this lab tests, CloudAppEvents' per-request client attribution is not guaranteed by Microsoft Learn's documentation to be consistently populated, so verify the specific workload's logs show the app's own identity rather than assuming application permissions alone are sufficient."
       - Where delegated authentication by an automation is unavoidable, document the account as a shared/service account in the Pillar 1 risk register and rotate its credential on a schedule.
     detect:
       queries:
@@ -119,9 +134,9 @@ lab:
           operation: File action (FileDownloaded, FileAccessed, FileCopied, SensitiveFileRead) with AccountType = Regular and a UserAgent substring match
           note: "Expected behavior inferred from P03-Q2's own definition, not observed in a tenant for this file: this lab was not run (see transcript and validation.notes below). The query should depend entirely on the UserAgent string the calling script happens to send, not on any property of the action itself. The sibling skill detect-agent-identity-abuse documents the same weakness in its own four rules and removed the equivalent heuristic after validation; P03-Q2 itself still needs that same independent validation before this expectation can be called confirmed."
   transcript:
-    summary: Not run. This lab was written from P03-Q2's own definition and the sibling skill's documented finding about the equivalent heuristic, not reproduced against a tenant for this file.
+    summary: Not run. This lab was written from P03-Q2's own definition and the sibling skill's documented finding about the equivalent heuristic, not reproduced against a tenant for this file. The app-only comparison added on 2026-11-05 was not run either.
     observations: []
   validation:
     status: documented
-    date: 2026-10-22
-    notes: Written from documented sources (kql-library.js's P03-Q2, detect-agent-identity-abuse's SKILL.md Implementation notes). No delegated-auth script, Graph call, or CloudAppEvents check was run against a tenant for this file.
+    date: 2026-11-05
+    notes: Written from documented sources (kql-library.js's P03-Q2, detect-agent-identity-abuse's SKILL.md Implementation notes). No delegated-auth script, Graph call, or CloudAppEvents check was run against a tenant for this file. The app-only / application-permission comparison added on 2026-11-05 was written from Microsoft Learn's documented distinction between application and delegated permissions and has not itself been configured or tested against a tenant; in particular, whether CloudAppEvents' OAuthAppId or AccountType actually differs for the app-only call, as opposed to only Microsoft Graph activity logs or sign-in logs doing so, has not been observed.

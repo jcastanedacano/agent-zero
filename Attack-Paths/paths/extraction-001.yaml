@@ -131,30 +131,38 @@ validation:
 
 lab:
   kind: tenant-exercise
-  effects: read-only
+  effects: modifies-resources
   title: Fifty questions, no agent in sight
-  objective: Call a deployed model endpoint directly, 50 times in a tight loop, and see whether the volume-anomaly rule written for agent telemetry notices a caller that never goes through an agent at all.
-  estimatedMinutes: 12
-  costEstimate: "Low: 50 small Responses API calls against a demo deployment. Not measured otherwise."
+  objective: "Call a deployed model endpoint directly, 50 times in a tight loop, see whether the volume-anomaly rule written for agent telemetry notices a caller that never goes through an agent at all, then disable key authentication on the resource and repeat the loop with no API key, to confirm the control this path recommends actually removes the call path the vulnerable run used."
+  estimatedMinutes: 20
+  costEstimate: "Low: 50 small Responses API calls against a demo deployment, plus another 50 once key authentication is disabled. Not measured otherwise."
   licenses:
     - Microsoft Foundry with a deployed model endpoint in a demo environment
     - An API key or an Entra identity authorized to call the deployment
     - Azure Cloud Shell in Bash, or a local terminal with curl
     - Diagnostic settings on the Foundry or Azure OpenAI resource that send logs to Log Analytics
+    - For the hardened comparison, Owner or Contributor rights on the resource (to set disableLocalAuth) and an Entra identity authorized to invoke the deployment
   safety:
     scope: Demo tenant and demo deployment only. Fifty calls are a small, bounded load; do not point the script at a shared or production endpoint.
-    writes: None beyond 50 inference requests and whatever the endpoint logs for them. No data is created or changed.
-    revert: Nothing to revert.
+    writes: "None beyond 50 inference requests and whatever the endpoint logs for them in the vulnerable run. The hardened run changes one resource property (disableLocalAuth, set to true) on the Foundry or Azure OpenAI resource."
+    revert: Set disableLocalAuth back to false (Set-AzCognitiveServicesAccount -DisableLocalAuth $false) if the resource is shared with other exercises that rely on key authentication.
   architecture:
-    summary: "One script, run once, calling one deployed model endpoint directly with curl: no agent, no Copilot, no Foundry agent runtime in the loop. That absence is the point: this traffic will not carry an AgentId."
+    summary: "One script, run once with the resource's API key (vulnerable), then once more with disableLocalAuth set to true and no key supplied (hardened), calling one deployed model endpoint directly with curl: no agent, no Copilot, no Foundry agent runtime in the loop in either run. That absence is the point: this traffic will not carry an AgentId."
     resources:
       - name: Microsoft Foundry deployment
         purpose: The target endpoint. Already exists; nothing new is deployed for this lab.
         createdBy: existing
+      - name: disableLocalAuth property on the Foundry/Azure OpenAI resource
+        purpose: "Per Microsoft Learn's own documented behavior, setting this property to true (via Set-AzCognitiveServicesAccount -DisableLocalAuth $true, or the Azure Policy \"Azure AI Services resources should have key access disabled\") makes Microsoft Entra ID the resource's only authentication method, which is the recommendation this path already makes, now actually configured."
+        createdBy: manual
     principals:
       - name: Caller identity or API key
         required:
           - Authorization to invoke the deployment (an Entra role that can call it, or a key when local auth is enabled)
+        helpful: []
+      - name: Resource owner
+        required:
+          - Owner or Contributor rights on the Foundry/Cognitive Services resource, to disable local authentication for the hardened comparison
         helpful: []
   flow:
     setup:
@@ -167,12 +175,20 @@ lab:
         evidence: "Most likely, nothing: this call path does not go through an agent run, so it is not expected to carry Agent 365 observability ActionTypes at all. An empty result here is the expected outcome, not a failure; it is what motivates the next step."
       - step: Query the Azure OpenAI or Foundry resource's own diagnostic logs (AzureDiagnostics, operation create-response) for the per-caller request count over the same window.
         evidence: One row with about 50 calls (successful plus throttled) attributable to the caller IP, in the diagnostic logs rather than in CloudAppEvents. A key carries no identity, so the log shows an IP address.
-    cleanup: []
+      - step: "Set disableLocalAuth to true on the resource and wait a few minutes for the gateway's cached configuration to refresh. Confirm with one probe request using the old key: per Microsoft Learn's own verification step, it should now return HTTP 401 (\"Access denied due to invalid subscription key\")."
+        evidence: The probe returns 401, confirming local authentication is actually off, not only set in the control plane.
+      - step: Re-run the identical 50-request loop with the same key.
+        evidence: Every call now fails with 401 before reaching the model; the diagnostic logs still record the attempts, but none succeed.
+      - step: Repeat the loop once more using an Entra bearer token from an authorized identity instead of a key.
+        evidence: The calls succeed again, now attributable to that Entra identity rather than only a caller IP, and subject to whatever Conditional Access policy the tenant applies at that identity's sign-in.
+    cleanup:
+      - Set disableLocalAuth back to false on the resource if it is shared with exercises that depend on key authentication.
     teardown: []
   defend:
     prevent:
       - Disable key authentication on the resource (disableLocalAuth, or the Azure Policy that requires it) so Microsoft Entra ID is the only way in. The change can take minutes to hours to propagate.
       - With Entra as the only method, assign the invoke role only to the identities that need it and add a Conditional Access policy for them (demo-tenant equivalent of the Secure Access session referenced in the source module).
+      - "As the hardened comparison in this lab shows, disabling local authentication is the concrete change that stops the key-authenticated loop used in the vulnerable run from reaching the model at all, not only a recommendation; confirm it with a 401 probe before relying on it."
       - Treat the deployment quota as a brake, not as a per-caller limit. The HTTP 429 seen in the lab came from the quota. Per-caller limits were not verified.
     detect:
       queries:
@@ -185,7 +201,7 @@ lab:
           operation: InvokeAgent / InferenceCall volume above threshold, by caller, within an hour
           note: "Per the KQL library's own note on P03-Q6: the ActionType values this query depends on are the current Agent 365 observability ones, and this exercise's own direct-endpoint call path is NOT an agent run, so it is not expected to populate them. In the validation tenant the only such events (92 in 7 days) had Application set to Microsoft 365, a value the P03-Q6 application filter does not list. This query stays correct for genuinely agent-mediated volume spikes, which is a different attack than the one simulated here."
   transcript:
-    summary: Run in a demo tenant from Cloud Shell (Bash) against a GlobalStandard gpt-4.1-mini deployment, through its Responses endpoint with an API key.
+    summary: Run in a demo tenant from Cloud Shell (Bash) against a GlobalStandard gpt-4.1-mini deployment, through its Responses endpoint with an API key. The disableLocalAuth comparison added on 2026-11-05 was not run.
     observations:
       - "50 requests one second apart: 26 returned 200 and 24 returned 429."
       - "The resource's diagnostic logs (AzureDiagnostics) recorded the calls as operation create-response, 26 with result 200 and 24 with 429, from one caller IP. Throttled requests are counted."
@@ -194,5 +210,5 @@ lab:
       - "A second row (operation responses, no caller IP, no result) with 26 entries was not explained."
   validation:
     status: observed-in-lab
-    date: 2026-10-21
-    notes: The loop and the diagnostic-log check were run in a demo tenant with key authentication. Not replayed - an Entra bearer token (per-identity attribution), key authentication disabled, a second run, and the aggregated verification query as written in this file.
+    date: 2026-11-05
+    notes: The loop and the diagnostic-log check were run in a demo tenant with key authentication. Not replayed - an Entra bearer token (per-identity attribution), key authentication disabled, a second run, and the aggregated verification query as written in this file. The disableLocalAuth hardened-variant comparison added on 2026-11-05 was written from Microsoft Learn's own documented property behavior and 401-verification step, and has not itself been configured or tested against this or any tenant.
