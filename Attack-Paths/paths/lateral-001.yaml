@@ -73,21 +73,25 @@ lab:
   kind: tenant-exercise
   effects: read-only
   title: Which agents can call which other agents, and does anyone check who asked
-  objective: Inventory the declared agent-to-agent trust relationships in the tenant, pick one pair that crosses an ownership or data-scope boundary, and check whether the target agent's own logic re-validates the end user before acting, or only checks that the call came from a recognized agent.
-  estimatedMinutes: 15
-  costEstimate: "None beyond read access to the agent registry and existing telemetry. Not measured otherwise."
+  objective: "Inventory the declared agent-to-agent trust relationships in the tenant, pick one pair that crosses an ownership or data-scope boundary, check whether the target agent's own logic re-validates the end user before acting or only checks that the call came from a recognized agent, then compare that same pair's two possible Agent 365 execution modes (S2S versus OBO) to confirm which one actually ties the call back to the originating user's own permissions."
+  estimatedMinutes: 25
+  costEstimate: "None beyond read access to the agent registry and existing telemetry, plus reading (not changing) one pair's execution-mode configuration. Not measured otherwise."
   licenses:
     - Microsoft Agent 365 (AgentsInfo, ConnectedAgents) or an equivalent registry of agent-to-agent links
     - Read access to CloudAppEvents / Advanced Hunting
+    - Read access to the target agent's configured execution mode (S2S, OBO, or Agentic-User) for the inspected connection
   safety:
-    scope: Demo or production tenant; this lab only reads the agent registry and existing telemetry, and inspects (does not change) one target agent's own authorization logic.
+    scope: Demo or production tenant; this lab only reads the agent registry and existing telemetry, and inspects (does not change) one target agent's own authorization logic or execution mode.
     writes: None.
     revert: Nothing to revert.
   architecture:
-    summary: A read-only inventory of declared agent-to-agent links, followed by a manual check of one cross-boundary pair's actual authorization behavior.
+    summary: "A read-only inventory of declared agent-to-agent links, followed by a manual check of one cross-boundary pair's actual authorization behavior and a comparison of the two Agent 365 execution modes documented for agent-to-agent calls: S2S (the agent acts as its own identity with application permissions and no user context, vulnerable to this path's mechanism) versus OBO (the agent acts for a signed-in user using delegated permissions, so the downstream call is evaluated under that user's own authorization, hardened against it)."
     resources:
       - name: Agent registry (AgentsInfo)
         purpose: Source of declared agent-to-agent connections. Already exists; nothing new is deployed for this lab.
+        createdBy: existing
+      - name: Target agent's configured execution mode for the inspected connection (S2S vs OBO)
+        purpose: "Per Microsoft Learn, S2S uses application permissions with the agent identity as the token subject (no user context to re-check); OBO uses delegated permissions with the user as the token subject and the agent identity as the actor. The mode actually configured on the connection, not the agent's stated intent, is what determines whether an incoming agent-to-agent call carries an authorization the target can evaluate."
         createdBy: existing
     principals:
       - name: Reviewer
@@ -104,12 +108,17 @@ lab:
         evidence: A yes/no, with the specific check (or its absence) quoted from the agent's configuration.
       - step: Run the InvokeAgent correlation query (P04-Q5b) over the last 7 days for that pair.
         evidence: "Most likely, nothing: the query's own validation run found no InvokeAgent events on the tenant checked, so an empty result is expected here, not a failure. Any row is a lead: an actual call between the pair, to correlate against the authorization check from the previous step."
+      - step: Read the calling agent's configured Agent 365 execution mode for this specific connection (S2S, OBO, or Agentic-User).
+        evidence: "If S2S (vulnerable): the agent authenticates with its own client credential, obtains an application-permission token with itself as the subject, and the target agent has nothing of the originating user to re-check, even if its own logic tried to. If OBO (hardened): the agent must hold a signed-in user's access token and exchange it for a delegated token with that user as the subject; the target agent's resource access is then evaluated under the user's own permissions and consent, so an attacker who controls only the calling agent, without a token from a user actually authorized for the target's scope, has no valid call to make at all."
+      - step: If the pair is currently configured S2S, compare what would change under OBO by checking whether the target resource's delegated permission scopes (the ones OBO would require consent for) are narrower than the application permissions the S2S connection currently holds.
+        evidence: "A concrete answer to whether moving this specific pair to OBO would actually shrink what an attacker who only compromises Agent A could reach, versus the two modes ending up equivalent in this tenant because both were granted the same broad scope."
     cleanup: []
     teardown: []
   defend:
     prevent:
       - Require the target agent to re-validate the originating human user's own authorization on every incoming agent-to-agent call, not only that the call came from a recognized agent.
       - Declare and enforce an explicit allow-list of which agents may call which others, instead of leaving any reachable agent free to invoke any other.
+      - "Where the calling agent's task is user-specific rather than a background/scheduled job, configure the Agent 365 connection as OBO rather than S2S: as the execution-mode comparison in this lab shows, OBO ties the downstream call to the originating user's own delegated permissions and consent, which is the re-check this path's recommendation asks for, not a separate control bolted on top."
     detect:
       queries:
         - P04-Q5b
@@ -122,5 +131,5 @@ lab:
     observations: []
   validation:
     status: not-verified
-    date: 2026-10-22
-    notes: This lab was not run against a tenant for this file. The underlying query's own "no InvokeAgent events observed" status is carried over rather than resolved here.
+    date: 2026-11-04
+    notes: This lab was not run against a tenant for this file. The underlying query's own "no InvokeAgent events observed" status is carried over rather than resolved here. The execution-mode comparison (S2S vs OBO) added on 2026-11-04 was written from Microsoft Learn's documented Agent 365 identity execution modes (S2S, OBO, Agentic-User) and the Agent OAuth On-Behalf-Of flow, and has not itself been checked against a tenant's actual connection configuration.
