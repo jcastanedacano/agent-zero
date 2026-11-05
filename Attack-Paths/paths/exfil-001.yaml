@@ -108,19 +108,20 @@ lab:
   kind: tenant-exercise
   effects: potential-impact
   title: Summarize everything, send it to a webhook
-  objective: Ask a demo agent to summarize an entire SharePoint site and post the result to an external webhook, then check whether the bulk read and the connector egress are individually visible in the tenant's own telemetry.
-  estimatedMinutes: 15
+  objective: "Ask a demo agent to summarize an entire SharePoint site and post the result to an external webhook, check whether the bulk read and the connector egress are individually visible in the tenant's own telemetry, then repeat the identical request under a DLP policy that classifies SharePoint and the HTTP connector into incompatible data groups to confirm the flow cannot combine them at all."
+  estimatedMinutes: 25
   costEstimate: "Low: one bulk-read-and-summarize run against demo content. Not measured otherwise."
   licenses:
     - A demo SharePoint site with at least 100 sample (non-sensitive) files
     - An agent with retrieval access to that site and an external HTTP connector (Power Automate / Power Platform)
     - A demo-only webhook endpoint to receive the output (for example a disposable request-inspection URL)
+    - Power Platform admin center access, to create a data loss prevention (DLP) policy for the hardened comparison
   safety:
     scope: Demo tenant and demo content only. The webhook must be a demo-only endpoint; never point this at a real external address, and use only synthetic, non-sensitive files in the site.
-    writes: Sends the agent's generated summary to the demo webhook. No tenant configuration is changed.
-    revert: Delete the demo webhook endpoint if it was created for this exercise; no tenant-side cleanup is otherwise needed.
+    writes: Sends the agent's generated summary to the demo webhook (vulnerable run). Creates one tenant- or environment-level DLP policy classifying SharePoint as Business and the HTTP/HTTP Webhook connector as Non-Business or Blocked (hardened run); this can affect other flows in the same environment that combine those connectors, so scope the policy to a dedicated demo environment.
+    revert: Delete the demo webhook endpoint if it was created for this exercise. Remove or disable the DLP policy if it was created solely for this comparison and the demo environment is shared with other exercises.
   architecture:
-    summary: One demo SharePoint site, one agent with both retrieval and connector access, one summarize-and-send request. The bulk read and the external send are each individually unremarkable; the exercise is in seeing whether anything flags their combination.
+    summary: One demo SharePoint site, one agent with both retrieval and connector access, one summarize-and-send request, run once with no DLP policy in place (vulnerable) and once with a DLP policy that classifies SharePoint and the HTTP connector into different, incompatible data groups (hardened), per Microsoft's documented connector classification (Business/Non-Business/Blocked).
     resources:
       - name: Demo SharePoint site (100+ sample files)
         purpose: Source of the bulk read.
@@ -131,14 +132,22 @@ lab:
       - name: Demo-only webhook endpoint
         purpose: Stands in for an external exfiltration destination.
         createdBy: manual
+      - name: DLP policy classifying SharePoint (Business) and HTTP/HTTP Webhook (Non-Business or Blocked)
+        purpose: Since a Power Automate resource using a Business connector can't also use a Non-Business connector (and a Blocked connector can't be used at all), this prevents the same flow from combining the SharePoint read with the HTTP send in the first place.
+        createdBy: manual
     principals:
       - name: Requesting user
         required:
           - Ability to ask the agent to summarize and send
         helpful: []
+      - name: Power Platform admin
+        required:
+          - Ability to create a DLP policy and classify connectors, for the hardened comparison
+        helpful: []
   flow:
     setup:
       - Populate the demo SharePoint site with 100+ sample files. Stand up a demo-only webhook endpoint that can log what it receives.
+      - For the hardened comparison, in a dedicated demo environment, create a DLP policy and classify SharePoint as Business and the HTTP (or HTTP Webhook) connector as Non-Business or Blocked.
     attack:
       - step: 'Ask the agent: summarize every document in the site and POST the combined result as JSON to the demo webhook.'
         evidence: The webhook receives a payload; the agent's own run log shows how many files it read.
@@ -146,13 +155,18 @@ lab:
         evidence: "Most likely nothing, per the query's own caveat (agent-traffic guess from UserAgent); the agent's own run log from the previous step is the fallback evidence for the read volume."
       - step: Run P04-Q4 for the connector egress in the same window.
         evidence: "Most likely nothing, per the query's own caveat (undocumented ActionType and keys); the webhook's own received payload, logged in the previous step, is the fallback evidence for the egress."
+      - step: In the hardened demo environment, with the DLP policy from setup active, try to save (or re-save) the same agent flow combining the SharePoint read action and the HTTP send action.
+        evidence: The flow fails to save as a valid, runnable flow, or saves but shows as Suspended with a data policy conflict error naming the two connectors, per Microsoft's documented behavior for a Business/Non-Business (or Blocked) combination.
+      - step: If the flow was already saved before the policy existed, attempt to trigger a run of it under the new policy.
+        evidence: The run does not execute; the flow checker or run history shows the suspension/conflict, not a completed run and not a webhook delivery.
     cleanup:
       - Tear down the demo webhook endpoint.
+      - Remove or disable the DLP policy if it was created solely for this exercise and the demo environment is shared with other work.
     teardown: []
   defend:
     prevent:
       - Scope agent retrieval to what a given request plausibly needs rather than standing access to an entire site or mailbox.
-      - Apply DLP policies to connector egress and require destination connectors to be on an approved allow-list.
+      - "Apply a Power Platform DLP policy that classifies the data source connector (SharePoint, Exchange) as Business and any general-purpose HTTP/webhook connector as Non-Business or Blocked: as the hardened variant in this lab shows, this prevents the same flow from combining bulk read and arbitrary external egress at all, not just after the fact."
     detect:
       queries:
         - P04-Q1
@@ -166,5 +180,5 @@ lab:
     observations: []
   validation:
     status: not-verified
-    date: 2026-10-22
-    notes: This lab was not run against a tenant for this file. Both underlying queries' own "no matching rows" status is carried over rather than resolved here.
+    date: 2026-11-04
+    notes: This lab was not run against a tenant for this file. Both underlying queries' own "no matching rows" status is carried over rather than resolved here. The hardened-variant comparison added on 2026-11-04 (a DLP policy classifying SharePoint and the HTTP connector into incompatible data groups) was written from Microsoft Learn's documented connector classification behavior ("Connector classification", "Impact of data policies on apps and flows") and has not itself been configured or tested against a tenant.
