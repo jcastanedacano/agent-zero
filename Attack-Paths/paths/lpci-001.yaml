@@ -106,7 +106,7 @@ validation:
 
 lab:
   kind: tenant-exercise
-  effects: read-only
+  effects: modifies-resources
   title: A tool response with a second agenda
   objective: "Make a demo agent call a tool whose response embeds operator-level phrasing alongside legitimate output, then see whether the agent's own session behavior shifts afterward, whether the LPCI scoring pattern would have caught it if the underlying field were available, and whether a Foundry model connection with the tool response tagged as a document and Prompt Shields for indirect attacks turned on and set to Block actually stops the planted instruction from being treated as directive."
   estimatedMinutes: 25

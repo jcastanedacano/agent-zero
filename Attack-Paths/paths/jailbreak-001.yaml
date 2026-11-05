@@ -89,7 +89,7 @@ validation:
 
 lab:
   kind: tenant-exercise
-  effects: read-only
+  effects: modifies-resources
   title: Four jailbreak framings, one unread flag
   objective: "Send a demo agent four classic jailbreak framings, see which ones bypass the guardrail in the chat itself, confirm whether the platform's own JailbreakDetected signal would have caught any of them if something were watching it, then repeat the identical four prompts against the same agent with a Foundry guardrail explicitly set to Block on User prompt attack, to confirm that setting the action (not just leaving detection On by default) is what actually stops a flagged prompt from reaching the model."
   estimatedMinutes: 20
