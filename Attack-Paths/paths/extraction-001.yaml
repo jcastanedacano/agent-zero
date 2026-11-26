@@ -105,12 +105,17 @@ recommendation: |-
 
   The throttling seen in the lab came from the deployment quota (HTTP 429), not from a per-caller limit. Per-caller limits were not verified.
 
-  Detection: the signal is in the resource's diagnostic logs (AzureDiagnostics, operation create-response), not in CloudAppEvents. The Agentic AI Volume Spike Anomaly rule groups by AgentId, which a direct call does not carry, so it will not see this traffic. P03-Q6 reads agent ActionTypes in CloudAppEvents: it is the fixed-threshold variant (>500 queries/hour) for agent-mediated volume.
+  Detection: the signal is in the resource's diagnostic logs (AzureDiagnostics, operation create-response), not in CloudAppEvents. The Agentic AI Volume Spike Anomaly rule groups by AgentId, which a direct call does not carry, so it will not see this traffic. P03-Q6 reads agent ActionTypes in CloudAppEvents: it is the fixed-threshold variant (>500 queries/hour) for agent-mediated volume. P03-Q6b, Q6c and Q6d read the diagnostic logs for direct calls (burst, low and slow, distributed across callers). They are NOT VERIFIED: the schema was read from Microsoft Learn and none was run as written in a workspace.
 detection:
   library:
     - P03-Q6
+    - P03-Q6b
+    - P03-Q6c
+    - P03-Q6d
   gaps:
-    - No KQL-Library query reads the resource's diagnostic logs (AzureDiagnostics); the verification query of this path is the only one. P03-Q6 covers agent-mediated volume in CloudAppEvents, not direct calls to the model endpoint.
+    - P03-Q6b, Q6c and Q6d read the resource's diagnostic logs (AzureDiagnostics) but are NOT VERIFIED. The columns were read from Microsoft Learn and callerObjectId inside properties_s comes from the validated Q5 of detect-data-exfiltration-agent. None was run as written in a workspace, and the thresholds (500 per hour, 100 per hour for 12 hours, 10 callers) are starting points to calibrate against legitimate traffic.
+    - Q6d only counts distinct callers (identities or IPs) against one deployment. It does not link different accounts that belong to the same operator, which is how a distributed campaign works, so it is a first approximation and not a full answer to that case.
+    - Only the create-response operation is covered. Other API routes (for example chat completions) may log under another OperationName and were not checked.
 frameworks:
   atlas:
     - AML.T0040
@@ -193,6 +198,9 @@ lab:
     detect:
       queries:
         - P03-Q6
+        - P03-Q6b
+        - P03-Q6c
+        - P03-Q6d
       events:
         - source: AzureDiagnostics
           operation: create-response volume above threshold, by caller IP, within a window

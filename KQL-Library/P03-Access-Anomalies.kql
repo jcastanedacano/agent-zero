@@ -2,7 +2,7 @@
 // P03 — SECURE ACCESS
 // Agentic AI Security Labs | KQL Library
 // Target: Microsoft Sentinel / Defender Advanced Hunting
-// Tables: CloudAppEvents, EntraIdSpnSignInEvents, AuditLogs, AgentsInfo, BehaviorInfo, AADAgentRiskEvents
+// Tables: CloudAppEvents, EntraIdSpnSignInEvents, AuditLogs, AgentsInfo, BehaviorInfo, AADAgentRiskEvents, AzureDiagnostics
 // =============================================================================
 
 
@@ -192,6 +192,8 @@ CloudAppEvents
 //       CopilotActivity can supply the volume half only (interaction records per user, without prompt text). On the
 //       validation workspace the busiest user reached 64 interactions in one hour (whole table, 9 active user-hours),
 //       far below the 500 threshold: this threshold targets API traffic, not the Copilot interface.
+//       Direct calls to a Foundry or Azure OpenAI deployment (curl, SDK, key or Entra token) are not agent
+//       runs and do not reach CloudAppEvents: for that path see Q6b, Q6c and Q6d, which read AzureDiagnostics.
 // -----------------------------------------------------------------------------
 CloudAppEvents
 | where TimeGenerated > ago(7d)
@@ -224,6 +226,122 @@ CloudAppEvents
     LastQuery,
     ExtractionNote
 | sort by QueryCount desc
+
+
+// -----------------------------------------------------------------------------
+// Q6b: Direct Model Extraction, Burst of Calls to an Inference Endpoint
+// Use: Detect one caller sending many direct calls to a Foundry or Azure OpenAI deployment within one
+//      hour. Q6 sees only volume mediated by agents in CloudAppEvents; this query sees the calls the
+//      resource itself logged.
+//      Threshold: >500 calls per hour per caller (calibrate to your legitimate traffic)
+// Reference: MITRE ATLAS AML.T0040 (AI Model Inference API Access); OWASP LLM Top 10 2026, LLM06
+//            Unbounded Consumption (LLM10:2025 in the 2025 edition)
+// Source: AzureDiagnostics, the resource logs of the Foundry or Azure OpenAI resource. A diagnostic
+//      setting must send them to the workspace; without one nothing is stored.
+// Schedule (Sentinel analytic rule): every 1 hour over the last 3 hours. Microsoft Learn says diagnostic
+//      logs can take up to 2 hours to arrive (minutes in the extraction-001 lab), so measure your own delay.
+//      Each run re-reads hours the previous run already saw: group alerts into one incident by IP and
+//      AzureResource. Entities: IP = CallerIPAddress, AzureResource = _ResourceId.
+// CallerKey is the caller's object id when the call used an Entra token, and the IP address when it used
+//      a key (a key carries no identity).
+// False positives: a legitimate app with a single egress IP always calls its deployment. Exclude the
+//      expected callers with a watchlist.
+// NOT VERIFIED: the AzureDiagnostics columns were read from the Microsoft Learn table reference on
+//      2026-11-26, and callerObjectId inside properties_s comes from Q5 of
+//      skills/detect/detect-data-exfiltration-agent, which reads the same field (its status is in
+//      docs/validation-status.md). This query was not run as written in a workspace.
+//      The extraction-001 lab (50 calls, 26 with 200 and 24 with 429) confirms that create-response is
+//      logged with the caller IP and that throttled calls are counted, but it does not reach this threshold.
+//      Other API routes may log under another OperationName.
+// -----------------------------------------------------------------------------
+let InferenceOps = dynamic(["create-response"]);   // Verify: other API routes may use another OperationName
+let PerHourThreshold = 500;                          // Calibrate
+AzureDiagnostics
+| where TimeGenerated > ago(3h)
+| where ResourceProvider == "MICROSOFT.COGNITIVESERVICES"
+| where OperationName in (InferenceOps)
+| extend CallerObjectId = tostring(parse_json(properties_s).callerObjectId)
+| extend CallerKey = coalesce(CallerObjectId, CallerIPAddress)
+| summarize
+    Calls = count(),
+    Succeeded = countif(ResultSignature == "200"),
+    Throttled429 = countif(ResultSignature == "429"),
+    CallerIPs = make_set(CallerIPAddress, 10)
+    by Hour = bin(TimeGenerated, 1h), _ResourceId, CallerKey
+| where Calls > PerHourThreshold
+| extend CallerIPAddress = tostring(CallerIPs[0])
+| project Hour, _ResourceId, CallerKey, CallerIPAddress, CallerIPs, Calls, Succeeded, Throttled429
+| sort by Calls desc
+
+
+// -----------------------------------------------------------------------------
+// Q6c: Direct Model Extraction, Low and Slow
+// Use: Detect a caller that stays under the Q6b hourly threshold but keeps a moderate volume for most
+//      of the day, which is how an extraction campaign avoids a burst rule.
+//      Thresholds: at least 100 calls per hour in at least 12 of the last 24 hours (calibrate)
+// Reference: MITRE ATLAS AML.T0040; OWASP LLM Top 10 2026, LLM06 (LLM10:2025 in the 2025 edition)
+// Source: AzureDiagnostics, same prerequisites as Q6b (diagnostic setting, logs can arrive late).
+// Schedule (Sentinel analytic rule): every 6 hours over the last 24 hours.
+//      Entities: IP = CallerIPAddress, AzureResource = _ResourceId.
+// NOT VERIFIED: same basis as Q6b. Not run as written in a workspace, and both thresholds depend on
+//      what your legitimate callers do over a day.
+// -----------------------------------------------------------------------------
+let InferenceOps = dynamic(["create-response"]);   // Verify: other API routes may use another OperationName
+let MinCallsPerHour = 100;                           // Calibrate
+let MinActiveHours = 12;                             // Calibrate: hours of the day with sustained activity
+AzureDiagnostics
+| where TimeGenerated > ago(24h)
+| where ResourceProvider == "MICROSOFT.COGNITIVESERVICES"
+| where OperationName in (InferenceOps)
+| extend CallerObjectId = tostring(parse_json(properties_s).callerObjectId)
+| extend CallerKey = coalesce(CallerObjectId, CallerIPAddress)
+| summarize Calls = count(), AnyIP = take_any(CallerIPAddress)
+    by Hour = bin(TimeGenerated, 1h), _ResourceId, CallerKey
+| summarize
+    ActiveHours = countif(Calls >= MinCallsPerHour),
+    TotalCalls = sum(Calls),
+    CallerIPAddress = take_any(AnyIP)
+    by _ResourceId, CallerKey
+| where ActiveHours >= MinActiveHours
+| project _ResourceId, CallerKey, CallerIPAddress, ActiveHours, TotalCalls
+| sort by TotalCalls desc
+
+
+// -----------------------------------------------------------------------------
+// Q6d: Direct Model Extraction, Distributed Across Many Callers
+// Use: Detect many distinct callers against the same deployment within one hour, each one below the
+//      per-caller ceiling of Q6b. It is a first attempt at correlation across accounts. A real campaign
+//      spreads its queries over thousands of accounts and proxies; this query only counts distinct
+//      callers (identities or IPs) and does not link accounts that belong to the same operator.
+//      Thresholds: at least 10 callers and 2000 total calls in one hour, none above 500 (calibrate)
+// Reference: MITRE ATLAS AML.T0040; OWASP LLM Top 10 2026, LLM06 (LLM10:2025 in the 2025 edition)
+// Source: AzureDiagnostics, same prerequisites as Q6b (diagnostic setting, logs can arrive late).
+// Schedule (Sentinel analytic rule): every 1 hour over the last 3 hours.
+//      Entities: AzureResource = _ResourceId only (SampleCallers is a list, not an entity).
+// False positives: a shared service with many legitimate users behind one deployment. Calibrate
+//      MinCallers and MinTotalCalls to its normal traffic or exclude it with a watchlist.
+// NOT VERIFIED: same basis as Q6b. Not run as written in a workspace.
+// -----------------------------------------------------------------------------
+let InferenceOps = dynamic(["create-response"]);   // Verify: other API routes may use another OperationName
+let PerCallerCeiling = 500;                          // The Q6b threshold: no single caller exceeds it
+let MinCallers = 10;                                 // Calibrate
+let MinTotalCalls = 2000;                            // Calibrate
+AzureDiagnostics
+| where TimeGenerated > ago(3h)
+| where ResourceProvider == "MICROSOFT.COGNITIVESERVICES"
+| where OperationName in (InferenceOps)
+| extend CallerObjectId = tostring(parse_json(properties_s).callerObjectId)
+| extend CallerKey = coalesce(CallerObjectId, CallerIPAddress)
+| summarize Calls = count() by Hour = bin(TimeGenerated, 1h), _ResourceId, CallerKey
+| summarize
+    TotalCalls = sum(Calls),
+    Callers = dcount(CallerKey),
+    MaxPerCaller = max(Calls),
+    SampleCallers = make_set(CallerKey, 20)
+    by Hour, _ResourceId
+| where TotalCalls >= MinTotalCalls and Callers >= MinCallers and MaxPerCaller <= PerCallerCeiling
+| project Hour, _ResourceId, TotalCalls, Callers, MaxPerCaller, SampleCallers
+| sort by TotalCalls desc
 
 
 // -----------------------------------------------------------------------------
