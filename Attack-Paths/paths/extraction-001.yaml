@@ -105,12 +105,17 @@ recommendation: |-
 
   The throttling seen in the lab came from the deployment quota (HTTP 429), not from a per-caller limit. Per-caller limits were not verified.
 
-  Detection: the signal is in the resource's diagnostic logs (AzureDiagnostics, operation create-response), not in CloudAppEvents. The Agentic AI Volume Spike Anomaly rule groups by AgentId, which a direct call does not carry, so it will not see this traffic. P03-Q6 reads agent ActionTypes in CloudAppEvents: it is the fixed-threshold variant (>500 queries/hour) for agent-mediated volume.
+  Detection: the signal is in the resource's diagnostic logs (AzureDiagnostics, operation create-response), not in CloudAppEvents. The Agentic AI Volume Spike Anomaly rule groups by AgentId, which a direct call does not carry, so it will not see this traffic. P03-Q6 reads agent ActionTypes in CloudAppEvents: it is the fixed-threshold variant (>500 queries/hour) for agent-mediated volume. P03-Q6b, Q6c and Q6d read the diagnostic logs for direct calls (burst, low and slow, distributed across callers). They are partly validated: all three ran on the validation workspace on 2026-11-26 and returned no rows with their thresholds as written, and their logic was confirmed on the traffic of this lab with lowered thresholds; the thresholds were never reached by real traffic and only the create-response operation is read.
 detection:
   library:
     - P03-Q6
+    - P03-Q6b
+    - P03-Q6c
+    - P03-Q6d
   gaps:
-    - No KQL-Library query reads the resource's diagnostic logs (AzureDiagnostics); the verification query of this path is the only one. P03-Q6 covers agent-mediated volume in CloudAppEvents, not direct calls to the model endpoint.
+    - P03-Q6b, Q6c and Q6d read the resource's diagnostic logs (AzureDiagnostics) and are partly validated. They ran on the validation workspace on 2026-11-26 and returned no rows with their thresholds as written (no recent create-response traffic); with the window widened and the thresholds lowered they returned the rows of this lab, with CallerKey filled by the object id for token calls and by the IP for key calls. The thresholds (500 per hour, 100 per hour for 12 hours, 10 callers) were never reached by real traffic and are starting points to calibrate against legitimate traffic.
+    - Q6d only counts distinct callers (identities or IPs) against one deployment. It does not link different accounts that belong to the same operator, which is how a distributed campaign works, so it is a first approximation and not a full answer to that case.
+    - Only the create-response operation is covered. On the validation workspace, chat completions are logged as chatcompletions_create (with caller IP) and a create_response with an underscore appears without caller IP; this path does not read them.
 frameworks:
   atlas:
     - AML.T0040
@@ -193,6 +198,9 @@ lab:
     detect:
       queries:
         - P03-Q6
+        - P03-Q6b
+        - P03-Q6c
+        - P03-Q6d
       events:
         - source: AzureDiagnostics
           operation: create-response volume above threshold, by caller IP, within a window
