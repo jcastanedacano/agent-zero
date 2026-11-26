@@ -1,7 +1,7 @@
 # Track B — Security Architect / Consultant
 
 **Audience:** Security architects, security consultants, identity engineers, technical IT leaders  
-**Duration:** 8 hours (full day)  
+**Duration:** 11 hours (full day + half day)  
 **Format:** Hands-on labs in M365 E5 demo tenant with real Microsoft controls  
 **Output:** Completed Gap Assessment + 90-day implementation roadmap
 
