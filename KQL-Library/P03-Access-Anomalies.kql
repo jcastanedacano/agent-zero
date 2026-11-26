@@ -246,13 +246,17 @@ CloudAppEvents
 //      a key (a key carries no identity).
 // False positives: a legitimate app with a single egress IP always calls its deployment. Exclude the
 //      expected callers with a watchlist.
-// NOT VERIFIED: the AzureDiagnostics columns were read from the Microsoft Learn table reference on
-//      2026-11-26, and callerObjectId inside properties_s comes from Q5 of
-//      skills/detect/detect-data-exfiltration-agent, which reads the same field (its status is in
-//      docs/validation-status.md). This query was not run as written in a workspace.
-//      The extraction-001 lab (50 calls, 26 with 200 and 24 with 429) confirms that create-response is
-//      logged with the caller IP and that throttled calls are counted, but it does not reach this threshold.
-//      Other API routes may log under another OperationName.
+// Validated on 2026-11-26 on the Sentinel workspace of the validation tenant: it ran without errors and
+//      returned no rows with the threshold as written (no create-response call in the last 3 hours; the last
+//      one is from 2026-11-03). With the window widened to 90 days and the threshold lowered to 40 it returned
+//      4 rows from the extraction-001 lab (49 or 50 calls per hour per caller, 24 or 25 with 200, 25 or 26 with
+//      429), with CallerKey filled by the object id for the calls made with an Entra token (99 of the 199
+//      create-response rows carry callerObjectId in properties_s) and by the IP for the calls made with a key.
+// NOT VERIFIED: the threshold of 500 was never reached by real traffic (the lab sends 50 calls per hour), so
+//      its behavior at that volume and its false positives are not measured. This query reads only the
+//      create-response operation. On the validation workspace, chat completions are logged as
+//      chatcompletions_create (with caller IP) and a create_response with an underscore appears without
+//      caller IP, so they are not seen by this query.
 // -----------------------------------------------------------------------------
 let InferenceOps = dynamic(["create-response"]);   // Verify: other API routes may use another OperationName
 let PerHourThreshold = 500;                          // Calibrate
@@ -283,8 +287,12 @@ AzureDiagnostics
 // Source: AzureDiagnostics, same prerequisites as Q6b (diagnostic setting, logs can arrive late).
 // Schedule (Sentinel analytic rule): every 6 hours over the last 24 hours.
 //      Entities: IP = CallerIPAddress, AzureResource = _ResourceId.
-// NOT VERIFIED: same basis as Q6b. Not run as written in a workspace, and both thresholds depend on
-//      what your legitimate callers do over a day.
+// Validated on 2026-11-26 on the same workspace as Q6b: it ran without errors and returned no rows with the
+//      thresholds as written (no create-response call in the last 24 hours). With the window widened to 90
+//      days and the thresholds lowered to 40 calls per hour in 2 hours it returned the 2 callers of the
+//      extraction-001 lab (100 and 99 calls).
+// NOT VERIFIED: the thresholds of 100 calls per hour in 12 of 24 hours were never reached by real traffic,
+//      and both depend on what your legitimate callers do over a day. Same OperationName limit as Q6b.
 // -----------------------------------------------------------------------------
 let InferenceOps = dynamic(["create-response"]);   // Verify: other API routes may use another OperationName
 let MinCallsPerHour = 100;                           // Calibrate
@@ -320,7 +328,13 @@ AzureDiagnostics
 //      Entities: AzureResource = _ResourceId only (SampleCallers is a list, not an entity).
 // False positives: a shared service with many legitimate users behind one deployment. Calibrate
 //      MinCallers and MinTotalCalls to its normal traffic or exclude it with a watchlist.
-// NOT VERIFIED: same basis as Q6b. Not run as written in a workspace.
+// Validated on 2026-11-26 on the same workspace as Q6b: it ran without errors and returned no rows with the
+//      thresholds as written. With the window widened to 90 days and the thresholds lowered (2 callers,
+//      100 calls, ceiling 60) it returned the one hour of the extraction-001 lab with 2 callers (100 calls,
+//      at most 50 per caller). The lab's call made with a token and its call made with a key count as two
+//      callers although the same person made them.
+// NOT VERIFIED: the thresholds of 10 callers and 2000 calls were never reached by real traffic. Same
+//      OperationName limit as Q6b.
 // -----------------------------------------------------------------------------
 let InferenceOps = dynamic(["create-response"]);   // Verify: other API routes may use another OperationName
 let PerCallerCeiling = 500;                          // The Q6b threshold: no single caller exceeds it
